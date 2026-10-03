@@ -1,0 +1,45 @@
+### Alle Adressen abrufen
+GET http://localhost:5000/odata/Adressen
+Accept: application/json
+
+### Einzelne Adresse abrufen (Id=1)
+GET http://localhost:5000/odata/Adressen(1)
+Accept: application/json
+
+### Adressen filtern (nur Bern)
+GET http://localhost:5000/odata/Adressen?$filter=Ort eq 'Bern'
+Accept: application/json
+
+### Adressen alphabetisch sortieren
+GET http://localhost:5000/odata/Adressen?$orderby=Name asc
+Accept: application/json
+
+### Neue Adresse erstellen (POST)
+POST http://localhost:5000/odata/Adressen
+Content-Type: application/json
+
+{
+  "Vorname": "Max",
+  "Name": "Muster",
+  "Strasse": "Dorfstrasse",
+  "Strassennummer": "99",
+  "Plz": "6340",
+  "Ort": "Baar"
+}
+
+### Adresse aktualisieren (PATCH)
+PATCH http://localhost:5000/odata/Adressen(1)
+Content-Type: application/json
+
+{
+  "Ort": "Winterthur",
+  "Plz": "8400"
+}
+
+### Adresse löschen (DELETE)
+DELETE http://localhost:5000/odata/Adressen(1)
+Accept: application/json
+
+### OData Metadaten
+GET http://localhost:5000/odata/$metadata
+Accept: application/xml

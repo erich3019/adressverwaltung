@@ -1,0 +1,7 @@
+Your Postman Vault Key (erich.jost@outlook.com)
+
+4dd6a12cfbc4f4791d6f651235a1a34e7f1db29ead566123cab8d89365444999
+
+• Keep this key somewhere safe but accessible.
+• Need more information? Visit https://go.pstmn.io/vault
+• This key was generated on: Oct 03 2026.

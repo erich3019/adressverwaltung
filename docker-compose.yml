@@ -1,0 +1,99 @@
+services:
+
+  # ============================================================
+  # Service 1: PostgreSQL Datenbank
+  # ============================================================
+  db:
+    image: postgres:16-alpine
+    container_name: adressverwaltung-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: adressverwaltung
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: deinPasswort123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================
+  # Service 2: ASP.NET Core Backend (OData API)
+  # ============================================================
+  backend:
+    build:
+      context: ./backend/AdressverwaltungApi
+      dockerfile: Dockerfile
+    container_name: adressverwaltung-backend
+    restart: unless-stopped
+    ports:
+      - "5000:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=adressverwaltung;Username=postgres;Password=deinPasswort123"
+      ASPNETCORE_ENVIRONMENT: Production
+      # JWT-Konfiguration
+      Jwt__Key: BiHpOX5C7UsOaz5/84VDgn++TWwENe0gRumCF9+aFeM=
+      Jwt__Issuer: AdressverwaltungApi
+      Jwt__Audience: AdressverwaltungFrontend
+      Jwt__ExpiresInHours: "8"
+      # SMTP-Einstellungen (optional – nur wenn E-Mail-Benachrichtigungen aktiviert)
+      SmtpSettings__Host: smtp.example.com
+      SmtpSettings__Port: "587"
+      SmtpSettings__Username: user@example.com
+      SmtpSettings__Password: ERSETZE_MIT_SMTP_PASSWORT
+      SmtpSettings__FromAddress: noreply@example.com
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ============================================================
+  # Service 3: Next.js Frontend
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: adressverwaltung-frontend
+    restart: unless-stopped
+    # Kein direkter Port-Export nötig – nginx leitet intern weiter
+    expose:
+      - "3000"
+    environment:
+      # Browser-seitige Requests laufen über nginx (HTTPS)
+      NEXT_PUBLIC_API_URL: https://localhost
+      # Server-seitige Requests (Docker-intern, kein nginx)
+      INTERNAL_API_URL: http://backend:8080
+      # NextAuth-Konfiguration – URL muss mit nginx übereinstimmen
+      NEXTAUTH_URL: https://localhost
+      NEXTAUTH_SECRET: WdLrO5NmQ1SD6mPxrwv7aNCkpkWmccLQWCGZGOrH9dQ=
+      # Google OAuth (optional – leer lassen, um Google-Login zu deaktivieren)
+      GOOGLE_CLIENT_ID: ""
+      GOOGLE_CLIENT_SECRET: ""
+    depends_on:
+      - backend
+
+  # ============================================================
+  # Service 4: nginx Reverse Proxy (HTTP → HTTPS)
+  # ============================================================
+  nginx:
+    image: nginx:alpine
+    container_name: adressverwaltung-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"    # HTTP  → wird auf HTTPS weitergeleitet
+      - "443:443"  # HTTPS → SSL-Terminierung
+    volumes:
+      # nginx-Konfiguration (schreibgeschützt eingebunden)
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # SSL-Zertifikate (schreibgeschützt eingebunden)
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres-data:
