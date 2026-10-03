@@ -1,0 +1,116 @@
+@startuml Sequenzdiagramm
+' ============================================================
+' Sequenzdiagramm – Adressverwaltung v2.2.0
+' Ablauf: Login und Erfassen einer neuen Adresse
+' SVG erzeugen:
+'   docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg /data/Sequenzdiagramm.puml
+' ============================================================
+
+title Adressverwaltung v2.2.0 – Login und neue Adresse erfassen
+
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+skinparam defaultFontSize 13
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 220
+skinparam sequence {
+  ArrowColor #475569
+  LifeLineBorderColor #94A3B8
+  LifeLineBackgroundColor #EFF6FF
+  ParticipantBorderColor #1E40AF
+  ParticipantBackgroundColor #EFF6FF
+  ActorBorderColor #1E40AF
+  ActorBackgroundColor #EFF6FF
+  DatabaseBorderColor #166534
+  DatabaseBackgroundColor #F0FDF4
+  GroupBorderColor #94A3B8
+  GroupBackgroundColor #F1F5F9
+  DividerBorderColor #94A3B8
+  DividerBackgroundColor #F8FAFC
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #FFFBEB
+}
+
+actor "Benutzer" as user
+participant "Browser\n(Client Components)" as browser
+participant "nginx\n:443" as nginx
+participant "Next.js\nNextAuth · /api/auth/*" as next
+participant "Backend\nASP.NET Core · :8080" as api
+database "PostgreSQL" as db
+participant "SMTP-Server" as smtp
+
+autonumber "<b>0"
+
+== Login ==
+
+user -> browser : E-Mail + Passwort\nauf /login eingeben
+browser -> nginx : POST /api/auth/callback/credentials\n(signIn('credentials'))
+nginx -> next : Weiterleitung (alle übrigen Pfade)
+activate next
+next -> api : POST /auth/login\n(direkt über INTERNAL_API_URL, ohne nginx)
+activate api
+api -> db : SELECT Users WHERE Email
+db --> api : User + PasswordHash
+api -> api : Passwort-Hash prüfen (PBKDF2)
+
+alt Anmeldedaten gültig
+  api -> api : JWT signieren (HS256, 8 h)
+  api --> next : 200 { id, name, email, token }
+  next -> next : jwt-Callback:\naccessToken = token
+  next --> nginx : Set-Cookie: Session\n(verschlüsselt, enthält Backend-JWT)
+  nginx --> browser : 200
+  browser -> browser : router.push(callbackUrl)
+else ungültig
+  api --> next : 401 «Ungültige Anmeldedaten.»
+  deactivate api
+  next --> nginx : Fehler (authorize() = null)
+  deactivate next
+  nginx --> browser : Fehlermeldung im Login-Formular
+end
+
+== Neue Adresse erfassen ==
+
+user -> browser : Formular auf /adressen/neu\nausfüllen und speichern
+note right of browser
+  PLZ-Wertehilfe (vorher, ab 2 Zeichen):
+  GET /odata/Cities?$filter=startswith(postalCode,…)
+end note
+
+browser -> nginx : GET /api/auth/session\n(apiFetch → getSession())
+nginx -> next : Weiterleitung
+next --> nginx : Session { user, accessToken }
+nginx --> browser : accessToken
+
+browser -> nginx : POST /odata/Adressen\nAuthorization: Bearer <JWT>
+nginx -> api : Weiterleitung (/odata/*)
+activate api
+api -> api : JWT validieren\n(Signatur, Issuer, Audience, Ablauf)
+
+alt Token gültig
+  api -> api : AdressenController.Post\nModelState prüfen
+  api -> api : SaveChangesAsync → ApplyAuditFields\n(CreateDate, CreatedBy, DateFrom)
+  api -> db : INSERT INTO Adressen
+  db --> api : Id
+
+  group Benachrichtigung (Fehler werden nur geloggt)
+    api -> db : SELECT Settings
+    db --> api : NotificationEmail
+    opt NotificationEmail gesetzt
+      api -> smtp : E-Mail «Neue Adresse erfasst»
+    end
+  end
+
+  api --> nginx : 201 Created (Adresse)
+  nginx --> browser : 201
+  browser -> browser : router.push('/')
+  browser --> user : Adressliste mit neuem Eintrag
+else Token fehlt oder abgelaufen
+  api --> nginx : 401 Unauthorized
+  deactivate api
+  nginx --> browser : 401
+  browser --> user : «Fehler beim Speichern.»
+end
+
+@enduml
