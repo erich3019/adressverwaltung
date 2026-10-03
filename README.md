@@ -22,7 +22,17 @@ nginx verteilt die Anfragen nach Pfad-Präfix:
 | `/odata/*`, `/auth/*`, `/settings` | Backend (`backend:8080`) |
 | alle übrigen Pfade | Frontend (`frontend:3000`) |
 
-Die Quelle des Diagramms liegt in `documentation/Systemarchitektur.puml`.
+### Ablauf: Login und neue Adresse erfassen
+
+![Sequenzdiagramm](documentation/Sequenzdiagramm.svg)
+
+Beim Login stellt das Backend ein JWT aus, das NextAuth im verschlüsselten Session-Cookie ablegt. Bei jedem API-Aufruf liest `apiFetch` das Token aus der Session und sendet es als `Authorization: Bearer` mit.
+
+Die Quellen der Diagramme liegen in `documentation/Systemarchitektur.puml` und `documentation/Sequenzdiagramm.puml`. SVG neu erzeugen:
+
+```bash
+docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg "/data/*.puml"
+```
 
 ## Schnellstart mit Docker
 
