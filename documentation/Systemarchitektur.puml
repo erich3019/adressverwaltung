@@ -1,0 +1,127 @@
+@startuml Systemarchitektur
+' ============================================================
+' Systemarchitektur – Adressverwaltung v2.2.0
+' SVG erzeugen:
+'   docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg /data/Systemarchitektur.puml
+' ============================================================
+
+title Adressverwaltung v2.2.0 – Systemarchitektur
+
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+skinparam defaultFontSize 13
+skinparam componentStyle rectangle
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 60
+skinparam ArrowColor #475569
+skinparam ArrowFontColor #334155
+skinparam ArrowFontSize 11
+skinparam rectangle {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+skinparam node {
+  BorderColor #1E40AF
+  BackgroundColor #EFF6FF
+}
+skinparam component {
+  BorderColor #1E40AF
+  BackgroundColor #FFFFFF
+}
+skinparam database {
+  BorderColor #166534
+  BackgroundColor #F0FDF4
+}
+skinparam cloud {
+  BorderColor #94A3B8
+  BackgroundColor #F8FAFC
+}
+skinparam actor {
+  BorderColor #1E40AF
+  BackgroundColor #EFF6FF
+}
+
+actor "Benutzer\n(Browser)" as user
+
+cloud "Externe Dienste" as ext {
+  component "SMTP-Server" as smtp
+  component "Google OAuth 2.0\n(optional)" as google
+}
+
+rectangle "Docker Compose" as compose {
+
+  node "nginx  (adressverwaltung-nginx)\nnginx:alpine · :80 → :443 · TLS-Terminierung" as nginx {
+    component "Reverse Proxy\nRouting nach Pfad-Präfix" as proxy
+  }
+
+  node "frontend  (adressverwaltung-frontend)\nNext.js 14 · Node 20 · :3000 (nur intern)" as frontend {
+    component "middleware.ts\nRoute-Schutz" as mw
+    component "App Router\nServer + Client Components" as pages
+    component "NextAuth.js\n/api/auth/*\nSession-Cookie (JWT, 8 h)" as nextauth
+    component "lib/api.ts\napiFetch + Bearer-Token" as api
+  }
+
+  node "backend  (adressverwaltung-backend)\nASP.NET Core 8 · :8080 (Host :5000)" as backend {
+    component "JWT-Bearer-\nAuthentifizierung" as jwt
+    component "AuthController\n/auth/login · /auth/register" as authc
+    component "OData-Controller\n/odata/Adressen · /odata/Cities\n(ODataCrudController<T>)" as odata
+    component "SettingsController\n/settings" as settingsc
+    component "EmailNotificationService\n→ EmailService (SMTP)" as notify
+    component "AdresseDbContext\nEF Core 8 · Audit-Felder\nEnsureCreated + DbSeeder" as dbctx
+  }
+
+  database "db  (adressverwaltung-db)\nPostgreSQL 16 · :5432\nVolume: postgres-data" as db {
+    component "Adressen · Cities\nUsers · Settings" as tables
+  }
+}
+
+rectangle "Hilfsskripte (Host)" as scripts {
+  component "create_user.sh\nreset_password.sh" as usersh
+  component "import_cities.py\n(PLZ-Verzeichnis CSV)" as importpy
+}
+
+' ── Eingang ──────────────────────────────────────────────────
+user --> proxy : HTTPS :443\n(HTTP :80 → 301)
+
+' ── nginx-Routing ────────────────────────────────────────────
+proxy --> mw : alle übrigen Pfade\n(Seiten, /api/auth/*)
+proxy --> jwt : /odata/*  ·  /settings
+proxy --> authc : /auth/*
+
+' ── Frontend intern ──────────────────────────────────────────
+mw --> pages : Session vorhanden,\nsonst → /login
+pages --> api
+api ..> nextauth : accessToken\naus Session lesen
+
+' ── Frontend → Backend (Docker-intern, ohne nginx) ──────────
+nextauth --> authc : POST /auth/login\n(INTERNAL_API_URL)
+api --> jwt : Server Components:\nhttp://backend:8080\nAuthorization: Bearer
+nextauth ..> google : OAuth-Login
+
+' ── Backend intern ───────────────────────────────────────────
+jwt --> odata
+jwt --> settingsc
+odata --> notify : POST Adresse
+odata --> dbctx
+settingsc --> dbctx
+authc --> dbctx : Benutzer prüfen,\nJWT ausstellen
+notify --> dbctx : NotificationEmail\nlesen
+notify ..> smtp : E-Mail\n«Neue Adresse»
+
+' ── Persistenz ───────────────────────────────────────────────
+dbctx --> tables : Npgsql
+
+' ── Skripte ──────────────────────────────────────────────────
+usersh ..> tables : docker exec psql
+importpy ..> tables : psycopg2\nlocalhost:5432
+
+legend right
+  |= Linie |= Bedeutung |
+  | durchgezogen | Request-Fluss zur Laufzeit |
+  | gestrichelt | optional / asynchron / Wartung |
+  Client Components rufen /odata, /settings relativ auf
+  (über nginx); Server Components direkt backend:8080.
+endlegend
+
+@enduml
