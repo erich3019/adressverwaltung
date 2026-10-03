@@ -1,0 +1,30 @@
+# Secrets / lokale Konfiguration
+.env
+.env.*
+!.env.example
+nginx/ssl/*.pem
+documentation/Postman_Vault_Key_*.txt
+
+# Logs
+.logs/
+*.log
+
+# .NET
+bin/
+obj/
+*.user
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / Editor
+.DS_Store
+Thumbs.db
