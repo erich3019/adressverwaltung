@@ -4,6 +4,7 @@
 !.env.example
 nginx/ssl/*.pem
 documentation/Postman_Vault_Key_*.txt
+.claude/settings.local.json
 
 # Logs
 .logs/
