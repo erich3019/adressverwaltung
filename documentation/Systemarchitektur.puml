@@ -62,7 +62,7 @@ rectangle "Docker Compose" as compose {
     component "lib/api.ts\napiFetch + Bearer-Token" as api
   }
 
-  node "backend  (adressverwaltung-backend)\nASP.NET Core 8 · :8080 (Host :5000)" as backend {
+  node "backend  (adressverwaltung-backend)\nASP.NET Core 10 · :8080 (Host :5000)" as backend {
     component "JWT-Bearer-\nAuthentifizierung" as jwt
     component "AuthController\n/auth/login · /auth/register" as authc
     component "OData-Controller\n/odata/Adressen · /odata/Cities\n(ODataCrudController<T>)" as odata

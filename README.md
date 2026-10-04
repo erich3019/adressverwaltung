@@ -5,7 +5,7 @@ Adressverwaltungs-WebApp mit Login, CRUD für Adressen und Städte (PLZ-Verzeich
 ## Tech-Stack
 
 - **Frontend:** Next.js 14 (TypeScript, Tailwind CSS, App Router), NextAuth.js
-- **Backend:** ASP.NET Core 8 Web API mit OData v4, JWT-Bearer-Authentifizierung
+- **Backend:** ASP.NET Core 10 Web API mit OData v4, JWT-Bearer-Authentifizierung
 - **Datenbank:** PostgreSQL 16
 - **ORM:** Entity Framework Core 8 (Npgsql)
 - **Reverse Proxy:** nginx (TLS-Terminierung, HTTP → HTTPS)

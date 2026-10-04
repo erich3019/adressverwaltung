@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Adressverwaltung is a tutorial-style address management web app (current version 2.2.0): Next.js 14 frontend, ASP.NET Core 8 OData API, PostgreSQL 16, fronted by nginx. Code comments, identifiers in the domain layer, UI text and documentation are in German (Swiss spelling: `ss` instead of `ß`, e.g. `Strasse`) — keep to that when adding code.
+Adressverwaltung is a tutorial-style address management web app (current version 2.2.0): Next.js 14 frontend, ASP.NET Core 10 OData API, PostgreSQL 16, fronted by nginx. Code comments, identifiers in the domain layer, UI text and documentation are in German (Swiss spelling: `ss` instead of `ß`, e.g. `Strasse`) — keep to that when adding code.
 
 `README.md` is outdated (describes v1.0.0 without auth, nginx, Cities or Settings). Trust the code and `documentation/Aenderungsprotokoll_v2.*.md` over the README.
 
@@ -52,7 +52,7 @@ dotnet test                                              # needs Docker running
 dotnet test --filter "FullyQualifiedName~AdressenODataTests"
 ```
 
-`backend/AdressverwaltungApi.Tests` holds xUnit integration tests for the OData API: `WebApplicationFactory<Program>` against a throwaway PostgreSQL container (Testcontainers), with `IEmailService` replaced by a fake. Tests share one factory (collection `Api`) and `ODataTestBase` empties the tables before each test. The test project targets the installed SDK's framework rather than net8.0, because the TestServer package must match the ASP.NET Core runtime the tests run on. The frontend has no tests.
+`backend/AdressverwaltungApi.Tests` holds xUnit integration tests for the OData API: `WebApplicationFactory<Program>` against a throwaway PostgreSQL container (Testcontainers), with `IEmailService` replaced by a fake. Tests share one factory (collection `Api`) and `ODataTestBase` empties the tables before each test. Both backend projects target net10.0. The frontend has no tests.
 
 `backend/api-tests.http` holds manual REST Client requests (they predate auth, so they need an `Authorization: Bearer` header from `POST /auth/login` to work now).
 
