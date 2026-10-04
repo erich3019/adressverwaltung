@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><title>Schulungsunterlage: Login und Adresserfassung</title>
+<style>
+  @page { size: A4; margin: 2cm 1.8cm; }
+  body, p, li, td, th, h1, h2, h3 { font-family: 'Liberation Sans', Arial, sans-serif; }
+  body { font-size: 10pt; line-height: 1.4; color: #1a1a1a; }
+  h1 { font-size: 20pt; margin: 0 0 4pt 0; }
+  h2 { font-size: 14pt; margin: 18pt 0 6pt 0; }
+  h3 { font-size: 11pt; margin: 14pt 0 3pt 0; }
+  p { margin: 0 0 5pt 0; }
+  p.meta { color: #444; }
+  th, td { font-size: 9pt; text-align: left; }
+  th { background: #e6e6e6; }
+  code { font-family: 'Liberation Mono', monospace; font-size: 8.5pt; }
+</style></head><body>
+
+<h1>Login und Adresserfassung Schritt für Schritt</h1>
+<p class="meta">Schulungsunterlage zur Adressverwaltung v2.2.0 · Technische Dokumentation zum Sequenzdiagramm · Stand 4. Oktober 2026</p>
+
+<h2>1. Ziel dieser Unterlage</h2>
+<p>Diese Unterlage erklärt jeden der 38 nummerierten Schritte im Sequenzdiagramm der Adressverwaltung (<code>documentation/Sequenzdiagramm.svg</code>). Das Diagramm zeigt zwei Abläufe: die Anmeldung (Schritte 1 bis 16) und das Erfassen einer neuen Adresse (Schritte 17 bis 38).</p>
+<p>Nach dem Durcharbeiten können Sie erklären, welchen Weg eine Anfrage vom Browser bis in die Datenbank nimmt, welche Rolle die beiden Tokens spielen und an welcher Stelle im Code jeder Schritt umgesetzt ist.</p>
+<p>Zu jedem Schritt finden Sie drei Angaben: <b>Was passiert</b> beschreibt den Vorgang, <b>Im Code</b> nennt die Datei und die Stelle, <b>Warum so</b> begründet die Lösung oder weist auf eine Stolperfalle hin. Pfade im Frontend beziehen sich auf <code>frontend/</code>, Pfade im Backend auf <code>backend/AdressverwaltungApi/</code>.</p>
+
+<h2>2. So lesen Sie das Diagramm</h2>
+<p>Jede senkrechte Linie steht für einen Beteiligten, die Zeit läuft von oben nach unten. Ein durchgezogener Pfeil ist eine Anfrage, ein gestrichelter Pfeil eine Antwort. Ein Pfeil, der zum selben Beteiligten zurückführt, ist ein interner Arbeitsschritt. Ein Rahmen mit «alt» enthält zwei Alternativen, von denen genau eine abläuft; ein Rahmen mit «opt» läuft nur unter der genannten Bedingung ab.</p>
+
+<h2>3. Die Beteiligten</h2>
+<table border="1" cellpadding="4" cellspacing="0" width="100%"><tr><th width="24%">Beteiligter</th><th width="46%">Aufgabe</th><th width="30%">Im Projekt</th></tr><tr><td valign="top">Benutzer</td><td valign="top">Die Person vor dem Bildschirm.</td><td valign="top">–</td></tr><tr><td valign="top">Browser (Client Components)</td><td valign="top">Führt den React-Code der Seiten aus, zeigt Formulare an und sendet Anfragen.</td><td valign="top"><code>frontend/app</code>, <code>frontend/components</code>, <code>frontend/lib/api.ts</code></td></tr><tr><td valign="top">nginx :443</td><td valign="top">Einziger Zugang von aussen. Beendet TLS und verteilt Anfragen nach Pfad an Next.js oder das Backend.</td><td valign="top"><code>nginx/nginx.conf</code></td></tr><tr><td valign="top">Next.js / NextAuth</td><td valign="top">Liefert die Seiten aus und verwaltet die Sitzung des Frontends unter <code>/api/auth/*</code>.</td><td valign="top"><code>frontend/lib/auth.ts</code>, <code>frontend/middleware.ts</code></td></tr><tr><td valign="top">Backend (ASP.NET Core :8080)</td><td valign="top">Die API: prüft Anmeldedaten, stellt Tokens aus, speichert und liefert Daten über OData.</td><td valign="top"><code>backend/AdressverwaltungApi</code></td></tr><tr><td valign="top">PostgreSQL</td><td valign="top">Speichert Benutzer, Adressen, Städte und Einstellungen.</td><td valign="top">Tabellen <code>Users</code>, <code>Adressen</code>, <code>Cities</code>, <code>Settings</code></td></tr><tr><td valign="top">SMTP-Server</td><td valign="top">Externer Mailserver für die Benachrichtigung bei neuen Adressen.</td><td valign="top">Konfiguration <code>SmtpSettings</code></td></tr></table>
+
+<h2>4. Zwei Grundideen vorab</h2>
+<p><b>Ein Eingang, zwei Ziele.</b> Der Browser spricht ausschliesslich mit nginx unter https://localhost. nginx leitet <code>/odata/*</code>, <code>/auth/*</code> und <code>/settings</code> an das Backend und alles andere an Next.js. Backend und Datenbank sind von aussen nicht direkt erreichbar.</p>
+<p><b>Zwei Tokens.</b> Das Backend stellt beim Login ein JWT aus. NextAuth verpackt dieses JWT in seine eigene, verschlüsselte Sitzung und legt sie als Cookie im Browser ab. Für jeden API-Aufruf holt der Browser das Backend-JWT aus der Sitzung und sendet es im <code>Authorization</code>-Header mit. Beide gelten 8 Stunden.</p>
+
+<h2>5. Ablauf A: Login (Schritte 1 bis 16)</h2>
+<p>Die Schritte 1 bis 7 laufen immer ab. Danach verzweigt der Ablauf: Bei gültigen Anmeldedaten folgen die Schritte 8 bis 13, bei ungültigen die Schritte 14 bis 16.</p>
+<p><img src="Schulungsunterlage_Sequenzdiagramm_Login.png" width="640" height="368"></p>
+
+<h3>Schritt 1: E-Mail und Passwort auf /login eingeben</h3>
+<p class="dir"><b>Beteiligte:</b> Benutzer → Browser</p>
+<p><b>Was passiert:</b> Die Benutzerin öffnet die Anwendung. Weil sie noch keine Sitzung hat, leitet der Seitenschutz sie auf die Login-Seite um. Dort gibt sie E-Mail-Adresse und Passwort ein und klickt auf «Anmelden». Bis hierhin verlässt nichts den Browser: Die Eingaben stehen nur im Zustand der React-Komponente.</p>
+<p><b>Im Code:</b> Der Seitenschutz ist <code>frontend/middleware.ts</code>: Jede Seite ausser <code>/login</code> und <code>/api/auth</code> verlangt eine gültige Sitzung. Das Formular ist <code>app/login/LoginForm.tsx</code>; die Felder sind Controlled Inputs (<code>useState</code>).</p>
+<p><b>Warum so:</b> Das Formular ist eine Client-Komponente, weil es auf Eingaben reagieren muss. Die umgebende Seite <code>app/login/page.tsx</code> bleibt eine Server-Komponente und entscheidet dort, ob die Google-Schaltfläche angezeigt wird.</p>
+
+<h3>Schritt 2: POST /api/auth/callback/credentials</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → nginx</p>
+<p><b>Was passiert:</b> Beim Absenden ruft das Formular die NextAuth-Funktion <code>signIn(&#x27;credentials&#x27;)</code> auf. Sie holt zuerst ein CSRF-Token und sendet dann E-Mail und Passwort per POST an den NextAuth-Endpunkt. Die Verbindung ist mit TLS verschlüsselt und endet bei nginx auf Port 443.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>, Funktion <code>handleCredentials</code>: <code>signIn(&#x27;credentials&#x27;, { email, password, redirect: false, callbackUrl })</code>. <code>redirect: false</code> bewirkt, dass NextAuth nicht selbst weiterleitet, sondern das Ergebnis an das Formular zurückgibt.</p>
+<p><b>Warum so:</b> Das Passwort geht nie direkt vom Browser an das Backend, sondern immer über NextAuth. nginx begrenzt diesen Pfad auf 10 Anfragen pro Minute und Client-IP; wer mehr sendet, erhält die Antwort 429. Das bremst das Durchprobieren von Passwörtern.</p>
+
+<h3>Schritt 3: Weiterleitung an Next.js</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Next.js</p>
+<p><b>Was passiert:</b> nginx entscheidet anhand des Pfads, wohin eine Anfrage gehört. <code>/odata/</code>, <code>/auth/</code> und <code>/settings</code> gehen an das Backend, alles andere an Next.js. <code>/api/auth/callback/credentials</code> fällt unter «alles andere» und landet beim Next.js-Server auf Port 3000.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>: der Block <code>location /api/auth/callback/credentials</code> (mit Ratenbegrenzung) und der allgemeine Block <code>location /</code>.</p>
+<p><b>Warum so:</b> Achtung Verwechslungsgefahr: <code>/api/auth</code> gehört zu NextAuth im Frontend, <code>/auth/</code> zum Backend. Deshalb heisst die Login-Seite <code>/login</code> und die Einstellungsseite <code>/einstellungen</code> – Seiten dürfen nicht mit den Backend-Präfixen kollidieren.</p>
+
+<h3>Schritt 4: POST /auth/login (intern, ohne nginx)</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → Backend</p>
+<p><b>Was passiert:</b> NextAuth ruft für den Credentials-Provider die Funktion <code>authorize()</code> auf. Diese läuft auf dem Next.js-Server und sendet E-Mail und Passwort als JSON an den Login-Endpunkt des Backends. Der Aufruf geht direkt über das Docker-Netzwerk an <code>http://backend:8080</code>, nicht über nginx.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>, <code>authorize()</code> im <code>CredentialsProvider</code>. Die Adresse stammt aus <code>INTERNAL_API_URL</code>. Im Backend nimmt <code>AuthController.Login</code> die Anfrage entgegen; der Body wird auf <code>LoginRequest</code> abgebildet und geprüft (E-Mail-Format, Längen).</p>
+<p><b>Warum so:</b> Server-seitige Aufrufe brauchen kein TLS und keinen Umweg über nginx, weil beide Container im selben internen Netz liegen. Das Backend ist von aussen nur über nginx erreichbar.</p>
+
+<h3>Schritt 5: SELECT Users WHERE Email</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Das Backend sucht den Benutzer anhand der E-Mail-Adresse. Die Suche ignoriert Gross- und Kleinschreibung, indem beide Seiten in Grossbuchstaben verglichen werden.</p>
+<p><b>Im Code:</b> <code>Controllers/AuthController.cs</code>, Methode <code>FindUserByEmailAsync</code>. Entity Framework Core übersetzt den LINQ-Ausdruck in ein parametrisiertes SQL-SELECT auf die Tabelle <code>Users</code>.</p>
+<p><b>Warum so:</b> Die E-Mail wird nie in den SQL-Text eingesetzt, sondern als Parameter übergeben. SQL-Injection ist damit an dieser Stelle ausgeschlossen.</p>
+
+<h3>Schritt 6: User und PasswordHash</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank liefert den Datensatz des Benutzers zurück – oder nichts, wenn die E-Mail unbekannt ist. Im Datensatz steht nicht das Passwort, sondern nur dessen Hash.</p>
+<p><b>Im Code:</b> Modell <code>Models/User.cs</code> mit den Feldern <code>Email, PasswordHash, DisplayName</code>. Der Hash enthält Version, Verfahren, Anzahl Iterationen und Salt, sodass er sich später wieder prüfen lässt.</p>
+<p><b>Warum so:</b> Ein Hash lässt sich nicht zurückrechnen. Selbst wer die Datenbank liest, kennt die Passwörter nicht.</p>
+
+<h3>Schritt 7: Passwort-Hash prüfen (PBKDF2)</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Das Backend berechnet aus dem eingegebenen Passwort und dem gespeicherten Salt erneut den Hash und vergleicht ihn mit dem gespeicherten Wert. PBKDF2 wiederholt die Berechnung viele tausend Mal und ist dadurch absichtlich langsam.</p>
+<p><b>Im Code:</b> <code>Controllers/AuthController.cs</code>: <code>VerifyHashedPassword</code> aus <code>IPasswordHasher&lt;User&gt;</code>. Ist der Benutzer unbekannt, wird gegen einen festen Ersatz-Hash (<code>DummyHash</code>) geprüft.</p>
+<p><b>Warum so:</b> Die Prüfung läuft auch bei unbekannter E-Mail. So dauert die Antwort in beiden Fällen gleich lange, und ein Angreifer kann aus der Antwortzeit nicht ablesen, welche E-Mail-Adressen registriert sind.</p>
+
+<h3>Schritt 8: JWT signieren (HS256, 8 h) – Fall «gültig»</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Stimmen E-Mail und Passwort, stellt das Backend ein JSON Web Token aus. Es enthält die Benutzer-Id (<code>sub</code>), E-Mail, Anzeigenamen, eine eindeutige Token-Id und das Ablaufdatum in 8 Stunden. Das Token wird mit einem geheimen Schlüssel signiert.</p>
+<p><b>Im Code:</b> <code>Services/JwtTokenService.cs</code>, Methode <code>CreateToken</code>. Schlüssel, Aussteller, Empfänger und Laufzeit kommen aus <code>JwtOptions</code> (Abschnitt <code>Jwt</code> der Konfiguration, im Docker-Stack aus <code>env/backend.env</code>).</p>
+<p><b>Warum so:</b> Das Token ist signiert, nicht verschlüsselt: Jeder kann den Inhalt lesen, aber niemand kann ihn ohne den Schlüssel verändern. Deshalb muss der Schlüssel geheim bleiben, und es gehören keine vertraulichen Daten ins Token.</p>
+
+<h3>Schritt 9: 200 { id, name, email, token }</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → Next.js</p>
+<p><b>Was passiert:</b> Das Backend antwortet mit Status 200 und einem JSON-Objekt, das die Benutzerdaten und das eben ausgestellte Token enthält.</p>
+<p><b>Im Code:</b> <code>LoginResponse</code> in <code>Dtos/AuthDtos.cs</code>. Der Passwort-Hash ist bewusst kein Teil dieses Typs.</p>
+<p><b>Warum so:</b> Das Format <code>{ id, name, email }</code> ist das, was NextAuth von <code>authorize()</code> erwartet. Das zusätzliche Feld <code>token</code> transportiert das Backend-JWT.</p>
+
+<h3>Schritt 10: jwt-Callback: accessToken = token</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js (interner Schritt)</p>
+<p><b>Was passiert:</b> NextAuth baut nun seine eigene Sitzung. Im <code>jwt</code>-Callback übernimmt das Frontend die Benutzer-Id und das Backend-JWT in das NextAuth-Token.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>, <code>callbacks.jwt</code>: Beim Login ist <code>user</code> gesetzt, also werden <code>token.id</code> und <code>token.accessToken</code> geschrieben. Die Typen dafür stehen in <code>types/next-auth.d.ts</code>.</p>
+<p><b>Warum so:</b> Hier treffen sich die zwei Token-Schichten: Das NextAuth-Token ist die Sitzung des Frontends, das Backend-JWT darin ist der Ausweis gegenüber der API.</p>
+
+<h3>Schritt 11: Set-Cookie: Session (verschlüsselt)</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → nginx</p>
+<p><b>Was passiert:</b> NextAuth verschlüsselt sein Token mit <code>NEXTAUTH_SECRET</code> und schickt es als Cookie zurück. Das Cookie ist <code>HttpOnly</code>, also für JavaScript im Browser nicht lesbar, und gilt 8 Stunden.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>: <code>session: { strategy: &#x27;jwt&#x27;, maxAge: 8 * 60 * 60 }</code>. Die Verschlüsselung übernimmt NextAuth selbst.</p>
+<p><b>Warum so:</b> Sitzungsdauer im Frontend und Laufzeit des Backend-JWT betragen beide 8 Stunden und müssen gemeinsam geändert werden. Sonst gäbe es eine Sitzung, deren Backend-Token bereits abgelaufen ist.</p>
+
+<h3>Schritt 12: 200</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> nginx reicht die Antwort samt Cookie an den Browser weiter. Der Browser speichert das Cookie und sendet es von nun an bei jeder Anfrage an dieselbe Adresse automatisch mit.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code> ergänzt die Sicherheits-Header (unter anderem <code>Strict-Transport-Security</code> und <code>Content-Security-Policy</code>).</p>
+<p><b>Warum so:</b> Weil alles über dieselbe Adresse (https://localhost) läuft, braucht es keine CORS-Freigaben für den Browser.</p>
+
+<h3>Schritt 13: router.push(callbackUrl)</h3>
+<p class="dir"><b>Beteiligte:</b> Browser (interner Schritt)</p>
+<p><b>Was passiert:</b> Das Formular erhält das Ergebnis von <code>signIn(&#x27;credentials&#x27;)</code> ohne Fehler und navigiert zur Zielseite – normalerweise zur Adressliste, oder zu der Seite, die ursprünglich aufgerufen wurde.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>: <code>router.push(callbackUrl)</code> und <code>router.refresh()</code>. <code>sichereCallbackUrl()</code> lässt nur Pfade innerhalb der eigenen App zu.</p>
+<p><b>Warum so:</b> Ohne diese Prüfung könnte ein präparierter Link nach der Anmeldung auf eine fremde Seite weiterleiten (Open Redirect).</p>
+
+<h3>Schritt 14: 401 «Ungültige Anmeldedaten.» – Fall «ungültig»</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → Next.js</p>
+<p><b>Was passiert:</b> Ist die E-Mail unbekannt oder das Passwort falsch, antwortet das Backend mit Status 401 und einer bewusst allgemeinen Meldung. Es wird kein Token ausgestellt.</p>
+<p><b>Im Code:</b> <code>Controllers/AuthController.cs</code>: <code>return Unauthorized(new { message = &quot;Ungültige Anmeldedaten.&quot; })</code>.</p>
+<p><b>Warum so:</b> Die Meldung verrät nicht, ob die E-Mail oder das Passwort falsch war. Das erschwert das Ausspähen gültiger Konten.</p>
+
+<h3>Schritt 15: Fehler (authorize() = null)</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → nginx</p>
+<p><b>Was passiert:</b> <code>authorize()</code> sieht, dass die Antwort nicht erfolgreich war, und gibt <code>null</code> zurück. Für NextAuth heisst das: Anmeldung abgelehnt. Es wird kein Sitzungs-Cookie gesetzt.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>: <code>if (!response.ok) return null</code>. Auch Netzwerk- und Parse-Fehler führen über den <code>catch</code>-Zweig zu <code>null</code>.</p>
+<p><b>Warum so:</b> Im Zweifel wird die Anmeldung verweigert. Ein nicht erreichbares Backend führt nie zu einer gültigen Sitzung.</p>
+
+<h3>Schritt 16: Fehlermeldung im Login-Formular</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> Der Browser erhält das Ergebnis mit gesetztem Fehler. Das Formular bleibt auf der Login-Seite und zeigt «Ungültige E-Mail-Adresse oder falsches Passwort.» an.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>: <code>result?.error</code> setzt den Zustand <code>fehler</code>; die Komponente <code>Fehlermeldung</code> zeigt ihn an.</p>
+<p><b>Warum so:</b> Die Meldung erscheint im Formular statt in einem Browser-Dialog. So bleibt die Eingabe erhalten und die Benutzerin kann es direkt erneut versuchen.</p>
+
+
+<h2>6. Ablauf B: Neue Adresse erfassen (Schritte 17 bis 38)</h2>
+<p>Die Schritte 17 bis 24 laufen immer ab. Ist das Token gültig, folgen die Schritte 25 bis 35; fehlt es oder ist es abgelaufen, die Schritte 36 bis 38.</p>
+<p><img src="Schulungsunterlage_Sequenzdiagramm_Adresse.png" width="640" height="506"></p>
+
+<h3>Schritt 17: Formular auf /adressen/neu ausfüllen und speichern</h3>
+<p class="dir"><b>Beteiligte:</b> Benutzer → Browser</p>
+<p><b>Was passiert:</b> Die angemeldete Benutzerin öffnet «+ Neue Adresse», füllt Vorname, Name, Strasse, Nummer, PLZ und Ort aus und klickt auf «Adresse speichern». Schon beim Tippen der PLZ hilft die Wertehilfe (gelbe Notiz im Diagramm): Ab zwei Zeichen fragt der Browser passende Städte ab und bietet sie zur Auswahl an; die Auswahl füllt PLZ und Ort.</p>
+<p><b>Im Code:</b> <code>app/adressen/neu/page.tsx</code> mit <code>components/AdresseForm.tsx</code>. Wertehilfe: <code>sucheStaedteNachPlz</code> in <code>frontend/lib/api.ts</code>, nach 300 ms Eingabepause, höchstens 10 Treffer (<code>$filter=startswith(postalCode,&#x27;80&#x27;)&amp;$top=10</code>).</p>
+<p><b>Warum so:</b> Die Verzögerung (Debounce) verhindert, dass bei jedem Tastendruck eine Anfrage ausgelöst wird. Die Wertehilfe ist eine Hilfe, keine Pflicht: PLZ und Ort lassen sich auch frei eingeben.</p>
+
+<h3>Schritt 18: GET /api/auth/session</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → nginx</p>
+<p><b>Was passiert:</b> Bevor die Adresse gesendet wird, braucht der Browser das Backend-JWT. Dieses steckt im verschlüsselten Sitzungs-Cookie, das JavaScript nicht lesen kann. Deshalb fragt die Hilfsfunktion <code>apiFetch</code> die Sitzung bei NextAuth ab; das Cookie geht dabei automatisch mit.</p>
+<p><b>Im Code:</b> <code>frontend/lib/api.ts</code>: <code>apiFetch</code> ruft im Browser <code>getSession()</code> aus <code>next-auth/react</code> auf. Auf dem Server (Server-Komponenten) verwendet dieselbe Funktion stattdessen <code>getServerSession(authOptions)</code>.</p>
+<p><b>Warum so:</b> Alle Backend-Aufrufe laufen über <code>apiFetch</code>. So ist an einer einzigen Stelle geregelt, wie das Token beschafft und angehängt wird.</p>
+
+<h3>Schritt 19: Weiterleitung</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Next.js</p>
+<p><b>Was passiert:</b> Auch <code>/api/auth/session</code> beginnt nicht mit einem Backend-Präfix. nginx leitet die Anfrage an Next.js weiter.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>, Block <code>location /</code>.</p>
+<p><b>Warum so:</b> Gleiche Regel wie in Schritt 3.</p>
+
+<h3>Schritt 20: Session { user, accessToken }</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → nginx</p>
+<p><b>Was passiert:</b> NextAuth entschlüsselt das Cookie mit <code>NEXTAUTH_SECRET</code>, prüft das Ablaufdatum und baut daraus das Sitzungsobjekt. Der <code>session</code>-Callback fügt die Benutzer-Id und das Backend-JWT als <code>accessToken</code> hinzu.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>, <code>callbacks.session</code>: <code>session.accessToken = token.accessToken</code>.</p>
+<p><b>Warum so:</b> Fehlt das Cookie oder ist es abgelaufen, kommt ein leeres Objekt zurück. Dann gibt es kein Token, und der folgende Aufruf endet im Fehlerfall (Schritte 36 bis 38).</p>
+
+<h3>Schritt 21: accessToken</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> Der Browser erhält das Sitzungsobjekt und entnimmt ihm das Backend-JWT.</p>
+<p><b>Im Code:</b> <code>frontend/lib/api.ts</code>: <code>token = session?.accessToken</code>.</p>
+<p><b>Warum so:</b> Ab hier kennt JavaScript im Browser das Backend-JWT. Das ist ein bewusster Kompromiss dieser Architektur: Der Browser spricht direkt mit der API. Eine XSS-Lücke könnte das Token auslesen – deshalb darf die App keine ungeprüften Inhalte als HTML einfügen.</p>
+
+<h3>Schritt 22: POST /odata/Adressen mit Authorization: Bearer</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → nginx</p>
+<p><b>Was passiert:</b> Jetzt sendet der Browser die Adresse als JSON an die API. Das Token steht im Header <code>Authorization: Bearer &lt;JWT&gt;</code>. Die URL ist relativ (<code>/odata/Adressen</code>), geht also an dieselbe Adresse wie die Seite selbst.</p>
+<p><b>Im Code:</b> <code>frontend/lib/api.ts</code>: <code>erstelleAdresse</code> → <code>apiRequest</code> mit <code>jsonRequest(&#x27;POST&#x27;, adresse)</code>. Gesendet wird ein <code>AdresseCreate</code>: die sechs Fachfelder in camelCase, ohne Id und ohne Audit-Felder.</p>
+<p><b>Warum so:</b> Im Browser ist die Basis-URL leer; nginx sorgt für die Weiterleitung. Darum funktionieren die Formulare nur über den nginx-Stack und nicht mit <code>npm run dev</code> allein.</p>
+
+<h3>Schritt 23: Weiterleitung (/odata/*)</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Backend</p>
+<p><b>Was passiert:</b> Der Pfad beginnt mit <code>/odata/</code>. nginx leitet die Anfrage an das Backend (<code>http://backend:8080</code>) weiter und reicht den <code>Authorization: Bearer &lt;JWT&gt;</code>-Header unverändert durch.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>, Block <code>location /odata/</code>.</p>
+<p><b>Warum so:</b> Eine neue Backend-Route mit eigenem Präfix braucht einen eigenen <code>location</code>-Block. Fehlt er, landet die Anfrage bei Next.js und endet mit 404.</p>
+
+<h3>Schritt 24: JWT validieren</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Bevor ein Controller läuft, prüft die Authentifizierungs-Middleware das Token: Stimmt die Signatur mit dem geheimen Schlüssel? Stimmen Aussteller und Empfänger? Ist das Token noch nicht abgelaufen? Aus einem gültigen Token entsteht die Identität des Aufrufers; der Claim <code>name</code> wird zum Benutzernamen.</p>
+<p><b>Im Code:</b> <code>Program.cs</code>: <code>AddJwtBearer</code> mit <code>TokenValidationParameters</code>, danach <code>UseAuthentication()</code> und <code>UseAuthorization()</code>. <code>[Authorize]</code> auf <code>ODataCrudController&lt;TEntity&gt;</code> verlangt die Anmeldung für alle OData-Endpunkte.</p>
+<p><b>Warum so:</b> Das Backend fragt dafür weder die Datenbank noch das Frontend. Es vertraut dem Token, weil nur es selbst den Signaturschlüssel kennt. Das macht die Prüfung schnell, bedeutet aber auch: Ein ausgestelltes Token gilt bis zum Ablauf.</p>
+
+<h3>Schritt 25: AdressenController.Post – ModelState prüfen (Fall «Token gültig»)</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> OData bildet den JSON-Body auf ein <code>Adresse</code>-Objekt ab und ruft die <code>Post</code>-Methode auf. Diese prüft zuerst, ob die Daten gültig sind: Alle sechs Felder sind Pflicht und haben eine Höchstlänge. Bei Verstössen antwortet das Backend mit 400 und nennt die betroffenen Felder.</p>
+<p><b>Im Code:</b> <code>Post</code> ist in der Basisklasse <code>ODataCrudController&lt;TEntity&gt;</code> implementiert; <code>AdressenController</code> erbt sie. Die Regeln stehen als <code>[Required]</code> und <code>[MaxLength]</code> am Modell <code>Models/Adresse.cs</code>.</p>
+<p><b>Warum so:</b> Der Browser prüft die Pflichtfelder zwar auch, aber nur das Backend ist verbindlich: Eine Anfrage kann jederzeit am Formular vorbei gesendet werden.</p>
+
+<h3>Schritt 26: SaveChangesAsync → ApplyAuditFields</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Vor dem Speichern füllt der Datenbankkontext die Audit-Felder: <code>CreateDate</code> mit dem aktuellen Zeitpunkt, <code>CreatedBy</code> mit dem Namen aus dem Token und <code>DateFrom</code> mit dem heutigen Datum, falls nichts übergeben wurde.</p>
+<p><b>Im Code:</b> <code>Data/AdresseDbContext.cs</code>: <code>SaveChangesAsync</code> ruft <code>ApplyAuditFields</code> auf. Der Benutzername kommt aus <code>HttpContext.User.Identity.Name</code>; ohne angemeldeten Benutzer (zum Beispiel beim Seeding) steht dort <code>&quot;system&quot;</code>.</p>
+<p><b>Warum so:</b> Die Felder werden an einer zentralen Stelle gesetzt und gelten für alle Entitäten. Controller setzen sie nie selbst, und Werte aus dem Request werden überschrieben – so lassen sie sich nicht fälschen.</p>
+
+<h3>Schritt 27: INSERT INTO Adressen</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Entity Framework Core erzeugt aus dem Objekt ein parametrisiertes INSERT und sendet es an PostgreSQL.</p>
+<p><b>Im Code:</b> <code>Data/AdresseDbContext.cs</code>: <code>DbSet&lt;Adresse&gt; Adressen</code>; Tabelle <code>Adressen</code>. Zeitstempel werden als <code>timestamp without time zone</code> gespeichert.</p>
+<p><b>Warum so:</b> Deshalb setzt <code>ApplyAuditFields</code> die Zeit mit <code>DateTimeKind.Unspecified</code>: Npgsql lehnt UTC-Zeitwerte für diesen Spaltentyp ab.</p>
+
+<h3>Schritt 28: Id</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank vergibt die neue Id und gibt sie zurück. Entity Framework Core trägt sie in das Objekt ein. Damit ist die Adresse dauerhaft gespeichert.</p>
+<p><b>Im Code:</b> Die Id ist eine automatisch hochgezählte Spalte; der Client übergibt sie nicht.</p>
+<p><b>Warum so:</b> Alles, was jetzt noch folgt, kann das Speichern nicht mehr rückgängig machen – wichtig für die Benachrichtigung im nächsten Block.</p>
+
+<h3>Schritt 29: SELECT Settings (Block «Benachrichtigung»)</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Nach dem Speichern löst der Controller die Benachrichtigung aus. Der Dienst liest zuerst die Einstellungen, um die Empfängeradresse zu erfahren.</p>
+<p><b>Im Code:</b> <code>AdressenController</code>: <code>OnCreatedAsync</code> ruft <code>INotificationService</code> auf; Implementierung <code>EmailNotificationService</code>, Methode <code>NotifyNewAdresseAsync</code>.</p>
+<p><b>Warum so:</b> Der Controller kennt nur die Schnittstelle. Ob per E-Mail, SMS oder Webhook benachrichtigt wird, lässt sich ändern, ohne den Controller anzufassen.</p>
+
+<h3>Schritt 30: NotificationEmail</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Einstellungen bestehen aus einer einzigen Zeile mit der Benachrichtigungs-E-Mail. Sie wird auf der Seite «Einstellungen» gepflegt.</p>
+<p><b>Im Code:</b> Modell <code>Models/Settings.cs</code>; gepflegt über <code>SettingsController</code> (<code>GET/PUT /settings</code>).</p>
+<p><b>Warum so:</b> Gibt es keine Zeile oder ist die Adresse leer, schreibt der Dienst nur einen Log-Eintrag und endet. Schritt 31 entfällt dann (Rahmen «opt» im Diagramm).</p>
+
+<h3>Schritt 31: E-Mail «Neue Adresse erfasst»</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → SMTP-Server</p>
+<p><b>Was passiert:</b> Ist eine Adresse hinterlegt, sendet das Backend eine Text-E-Mail mit Name, Strasse und Ort der neuen Adresse an den SMTP-Server.</p>
+<p><b>Im Code:</b> <code>Services/EmailService.cs</code>, Methode <code>SendAsync</code>; Zugangsdaten aus <code>SmtpOptions</code> (Abschnitt <code>SmtpSettings</code>).</p>
+<p><b>Warum so:</b> Der ganze Block steht in einem <code>try/catch</code>: Schlägt der Versand fehl, wird der Fehler geloggt, aber die Anfrage läuft normal weiter. Ein gestörter Mailserver darf das Erfassen von Adressen nicht verhindern.</p>
+
+<h3>Schritt 32: 201 Created (Adresse)</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → nginx</p>
+<p><b>Was passiert:</b> Das Backend antwortet mit Status 201 und der gespeicherten Adresse als JSON – jetzt mit Id und Audit-Feldern.</p>
+<p><b>Im Code:</b> <code>ODataCrudController&lt;TEntity&gt;</code>: <code>return Created(entity)</code>.</p>
+<p><b>Warum so:</b> 201 bedeutet «neu angelegt» und ist genauer als ein allgemeines 200.</p>
+
+<h3>Schritt 33: 201</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> nginx reicht die Antwort an den Browser weiter.</p>
+<p><b>Im Code:</b> <code>frontend/lib/api.ts</code>: <code>apiRequest</code> prüft <code>response.ok</code>; <code>erstelleAdresse</code> wandelt die Antwort mit <code>normalizeAdresse</code> in den Typ <code>Adresse</code> um.</p>
+<p><b>Warum so:</b> Die <code>normalize*</code>-Funktionen sorgen dafür, dass der Rest des Frontends mit einem festen Typ arbeitet, unabhängig von Details der API-Antwort.</p>
+
+<h3>Schritt 34: router.push(&#x27;/&#x27;)</h3>
+<p class="dir"><b>Beteiligte:</b> Browser (interner Schritt)</p>
+<p><b>Was passiert:</b> Die Seite navigiert zurück zur Adressliste.</p>
+<p><b>Im Code:</b> <code>app/adressen/neu/page.tsx</code>: <code>handleSubmit</code> mit <code>router.push(&#x27;/&#x27;)</code>.</p>
+<p><b>Warum so:</b> Die Navigation geschieht erst nach erfolgreichem Speichern. Bei einem Fehler bleibt das Formular mit den Eingaben stehen.</p>
+
+<h3>Schritt 35: Adressliste mit neuem Eintrag</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → Benutzer</p>
+<p><b>Was passiert:</b> Die Adressliste lädt alle Adressen neu und zeigt den neuen Eintrag. Dieser Abruf läuft wieder nach dem Muster der Schritte 18 bis 24: Sitzung abfragen, dann <code>GET /odata/Adressen</code> mit Bearer-Token.</p>
+<p><b>Im Code:</b> <code>app/page.tsx</code>: <code>ladeDaten</code> ruft <code>getAlleAdressen()</code> auf.</p>
+<p><b>Warum so:</b> Die Liste wird vom Backend geholt und nicht lokal ergänzt. So zeigt sie immer den gespeicherten Stand.</p>
+
+<h3>Schritt 36: 401 Unauthorized – Fall «Token fehlt oder abgelaufen»</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → nginx</p>
+<p><b>Was passiert:</b> Fehlt das Token, ist es abgelaufen oder ist die Signatur ungültig, bricht die Middleware aus Schritt 24 die Anfrage ab. Der Controller wird nicht aufgerufen, es wird nichts gespeichert.</p>
+<p><b>Im Code:</b> <code>[Authorize]</code> zusammen mit der JwtBearer-Middleware in <code>Program.cs</code>.</p>
+<p><b>Warum so:</b> Typischer Auslöser: Die Seite war länger als 8 Stunden offen, oder der Signaturschlüssel wurde seit der Anmeldung geändert.</p>
+
+<h3>Schritt 37: 401</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> nginx gibt die Antwort unverändert weiter.</p>
+<p><b>Im Code:</b> –</p>
+<p><b>Warum so:</b> nginx bewertet Statuscodes des Backends nicht; es leitet nur weiter.</p>
+
+<h3>Schritt 38: «Fehler beim Speichern.»</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → Benutzer</p>
+<p><b>Was passiert:</b> <code>apiRequest</code> erkennt den Fehlerstatus und wirft einen Fehler. Das Formular fängt ihn ab und zeigt «Fehler beim Speichern. Bitte versuche es erneut.» an. Die Eingaben bleiben erhalten.</p>
+<p><b>Im Code:</b> <code>frontend/lib/api.ts</code>: <code>throw new Error(...)</code>; <code>components/AdresseForm.tsx</code>: <code>catch</code>-Zweig in <code>handleSubmit</code>, Anzeige über <code>Fehlermeldung</code>.</p>
+<p><b>Warum so:</b> Die Meldung ist allgemein gehalten. Bei einem abgelaufenen Token hilft erneutes Versuchen nicht – die Benutzerin muss sich neu anmelden.</p>
+
+
+<h2>7. Das Wichtigste in Kürze</h2>
+<ul>
+  <li>Der Browser kennt nur eine Adresse. nginx entscheidet nach dem Pfad, ob Next.js oder das Backend antwortet.</li>
+  <li>Das Passwort wird nur einmal übertragen, beim Login. Danach weist sich der Browser mit dem Token aus.</li>
+  <li>Das Backend vertraut keinem Wert aus dem Request, der sich aus dem Token ergibt: Den Benutzernamen für die Audit-Felder nimmt es aus dem Token.</li>
+  <li>Validierung im Browser ist Komfort, Validierung im Backend ist verbindlich.</li>
+  <li>Die Benachrichtigung ist ein Nebeneffekt. Ihr Scheitern ändert nichts am Ergebnis der Anfrage.</li>
+  <li>Sitzung und Backend-JWT laufen gemeinsam nach 8 Stunden ab.</li>
+</ul>
+
+<h2>8. Kontrollfragen</h2>
+<table border="1" cellpadding="4" cellspacing="0" width="100%"><tr><th width="45%">Frage</th><th width="55%">Antwort</th></tr><tr><td valign="top">1. Warum sendet der Browser das Passwort nicht direkt an <code>/auth/login</code> des Backends?</td><td valign="top">Die Anmeldung läuft über NextAuth, damit das Frontend eine eigene Sitzung (verschlüsseltes Cookie) aufbauen kann. Den Aufruf an das Backend macht der Next.js-Server intern (Schritte 2 bis 4).</td></tr><tr><td valign="top">2. Welche zwei Tokens gibt es, und wer prüft welches?</td><td valign="top">Das Sitzungs-Token von NextAuth im Cookie prüft Next.js (Schritt 20). Das Backend-JWT im <code>Authorization</code>-Header prüft das Backend (Schritt 24).</td></tr><tr><td valign="top">3. Woher weiss das Backend, wer eine Adresse erfasst hat?</td><td valign="top">Aus dem Claim <code>name</code> des geprüften Tokens; <code>ApplyAuditFields</code> schreibt ihn nach <code>CreatedBy</code> (Schritte 24 und 26).</td></tr><tr><td valign="top">4. Was geschieht mit der neuen Adresse, wenn der Mailserver nicht erreichbar ist?</td><td valign="top">Sie bleibt gespeichert und die Antwort ist 201. Der Fehler wird nur geloggt (Schritte 28 bis 32).</td></tr><tr><td valign="top">5. Warum braucht eine neue Backend-Route unter <code>/berichte</code> eine Änderung in nginx?</td><td valign="top">Weil nginx nur <code>/odata/</code>, <code>/auth/</code> und <code>/settings</code> an das Backend leitet. Alles andere geht an Next.js (Schritte 3 und 23).</td></tr><tr><td valign="top">6. Die Benutzerin lässt das Formular über Nacht offen und speichert am Morgen. Was passiert?</td><td valign="top">Sitzung und Backend-JWT sind nach 8 Stunden abgelaufen. Der Aufruf endet mit 401, das Formular zeigt «Fehler beim Speichern.» (Schritte 36 bis 38). Sie muss sich neu anmelden.</td></tr></table>
+
+<h2>9. Glossar</h2>
+<table border="1" cellpadding="4" cellspacing="0" width="100%"><tr><th width="22%">Begriff</th><th width="78%">Bedeutung</th></tr><tr><td valign="top">JWT</td><td valign="top">JSON Web Token: signiertes Datenpaket mit Angaben zum Benutzer und einem Ablaufdatum.</td></tr><tr><td valign="top">Bearer-Token</td><td valign="top">Token, das im Header <code>Authorization: Bearer …</code> mitgesendet wird. Wer es besitzt, gilt als angemeldet.</td></tr><tr><td valign="top">HS256</td><td valign="top">Signaturverfahren mit einem gemeinsamen geheimen Schlüssel (HMAC-SHA256).</td></tr><tr><td valign="top">PBKDF2</td><td valign="top">Verfahren, das aus Passwort und Salt in vielen Wiederholungen einen Hash berechnet.</td></tr><tr><td valign="top">Salt</td><td valign="top">Zufallswert pro Passwort, damit gleiche Passwörter verschiedene Hashes ergeben.</td></tr><tr><td valign="top">NextAuth</td><td valign="top">Bibliothek für Anmeldung und Sitzungen in Next.js.</td></tr><tr><td valign="top">OData</td><td valign="top">Standard für REST-Schnittstellen mit einheitlichen Abfrageoptionen wie <code>$filter</code> und <code>$top</code>.</td></tr><tr><td valign="top">Reverse Proxy</td><td valign="top">Vorgeschalteter Server, der Anfragen entgegennimmt und an interne Dienste verteilt (hier nginx).</td></tr><tr><td valign="top">Claim</td><td valign="top">Einzelne Angabe im Token, zum Beispiel <code>name</code> oder <code>email</code>.</td></tr><tr><td valign="top">Audit-Felder</td><td valign="top">Felder, die festhalten, wer einen Datensatz wann erstellt und geändert hat.</td></tr><tr><td valign="top">Controlled Input</td><td valign="top">Formularfeld, dessen Wert im React-Zustand liegt.</td></tr></table>
+
+</body></html>

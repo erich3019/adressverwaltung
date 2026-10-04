@@ -25,6 +25,7 @@ nginx verteilt die Anfragen nach Pfad-Präfix:
 ### Ablauf: Login und neue Adresse erfassen
 
 ![Sequenzdiagramm](documentation/Sequenzdiagramm.svg)
+\nJeder der 38 Schritte ist in der Schulungsunterlage `documentation/Schulungsunterlage_Sequenzdiagramm.pdf` erläutert.
 
 Beim Login stellt das Backend ein JWT aus, das NextAuth im verschlüsselten Session-Cookie ablegt. Bei jedem API-Aufruf liest `apiFetch` das Token aus der Session und sendet es als `Authorization: Bearer` mit.
 
