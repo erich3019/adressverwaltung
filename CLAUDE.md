@@ -92,25 +92,29 @@ Session lifetime (NextAuth `maxAge`) and backend token lifetime (`Jwt:ExpiresInH
 
 ### Backend
 
-- **OData CRUD**: `ODataCrudController<TEntity>` implements `Get`/`Get(key)`/`Post`/`Patch`/`Delete` with `[Authorize]` and `[EnableQuery]`. A concrete controller only supplies `Entities` and `EntityDisplayName` (see `CitiesController`); `AdressenController` overrides `Post` to trigger a notification. Exposing a new entity over OData takes: model, `DbSet` + configuration in `AdresseDbContext`, `modelBuilder.EntitySet<T>("Name")` in `Program.cs`, and a controller whose name matches the entity set.
-- **Plain REST**: `AuthController` and `SettingsController` are ordinary `[ApiController]`s with DTOs in `Dtos/`. `Settings` is treated as a single row.
+- **OData CRUD**: `ODataCrudController<TEntity>` implements `Get`/`Get(key)`/`Post`/`Patch`/`Delete` with `[Authorize]` and `[EnableQuery]`. A concrete controller only supplies `Entities` and `EntityDisplayName` (see `CitiesController`); `AdressenController` additionally overrides the `OnCreatedAsync` hook to trigger a notification — don't copy `Post`. Exposing a new entity over OData takes: model, `DbSet` + configuration in `AdresseDbContext`, `modelBuilder.EntitySet<T>("Name")` in `Program.cs`, and a controller whose name matches the entity set.
+- **Plain REST**: `AuthController` and `SettingsController` are ordinary `[ApiController]`s with DTOs in `Dtos/`. `Settings` is treated as a single row. Tokens are issued by `ITokenService` (`JwtTokenService`).
+- **Configuration**: the `Jwt` and `SmtpSettings` sections are bound to `Options/JwtOptions.cs` and `Options/SmtpOptions.cs`; inject `IOptions<T>` instead of reading `IConfiguration` keys by string.
+- **Entity configuration**: required/length constraints live as DataAnnotations on the models; `OnModelCreating` only adds table names, indexes and the audit columns.
 - **Casing**: the EDM model uses `EnableLowerCamelCase()` and MVC JSON is camelCase, so payloads and OData query options use camelCase property names (`$filter=startswith(postalCode,'80')`). The `normalize*` functions in `lib/api.ts` still accept PascalCase as a fallback.
 - **Audit fields**: every entity (`Adresse`, `City`, `User`, `Settings`) derives from `AuditableEntity` (`CreateDate`, `CreatedBy`, `ChangeDate`, `ChangedBy`, `DateFrom`, `DateTo`). `AdresseDbContext.SaveChanges[Async]` fills them automatically — user from the JWT name claim, otherwise `"system"` (request headers are deliberately not trusted) — and defaults `DateFrom` to today. Don't set them in controllers. Timestamps are stored as `timestamp without time zone`, so `DateTime` values must have `Kind=Unspecified` (Npgsql rejects UTC kinds for that column type). Scripts that write to the database with raw SQL bypass this and must populate the audit columns themselves, as `create_user.sh` and `import_cities.py` do.
 - **Schema creation**: startup calls `db.Database.EnsureCreated()` followed by `DbSeeder.Seed`, not `Migrate()`. The files in `Migrations/` are not applied at runtime, and `EnsureCreated` does nothing once the database exists — a model change does not reach an existing database (e.g. the `postgres-data` volume) on its own.
-- **Notifications**: `AdressenController.Post` → `INotificationService` (`EmailNotificationService`) → `IEmailService` (SMTP, `SmtpSettings:*`). The recipient is `Settings.NotificationEmail`; failures are logged and swallowed so they never fail the API request.
+- **Notifications**: `AdressenController.OnCreatedAsync` → `INotificationService` (`EmailNotificationService`) → `IEmailService` (SMTP, `SmtpSettings:*`). The recipient is `Settings.NotificationEmail`; failures are logged and swallowed so they never fail the API request.
 - **OData limits**: `SetMaxTop(100)`; `Select`, `Filter`, `OrderBy`, `Count`, `Expand` are enabled.
 
 ### Frontend
 
 - App Router with a mix of rendering modes: `app/cities/page.tsx` is a Server Component (`force-dynamic`), while `app/page.tsx` (address list) and the forms are Client Components. Because `lib/api.ts` is shared by both, anything added there must work in both contexts.
-- `types/` mirrors the backend entities, with `auditable.ts` as the counterpart of `AuditableEntity`. `*Create` / `*Update` types are what gets sent to the API.
+- `types/` mirrors the backend entities, with `auditable.ts` as the counterpart of `AuditableEntity`. `*Create` / `*Update` types are what gets sent to the API; derive them with `CreateOf<T>` / `UpdateOf<T>` from `auditable.ts`.
+- New API functions in `lib/api.ts` go through `apiRequest` (throws on a non-OK status) with `jsonRequest` for bodies. Shared UI pieces: `components/formStyles.ts`, `Fehlermeldung`, `Ladeanzeige`, `ConfirmDialog` — no `alert()`/`confirm()`.
+- The address list is the `/` page; there is no `/adressen` index route, only `/adressen/neu` and `/adressen/[id]/bearbeiten`.
 - `AdresseForm` has a debounced PLZ autocomplete backed by `sucheStaedteNachPlz` (OData `startswith` on `Cities`) that fills PLZ and Ort.
 - Domain-level names are German (`getAlleAdressen`, `erstelleAdresse`, `loescheCity`, `ladeDaten`, `fehler`), technical names English.
 - Formatting per `.vscode/settings.json`: Prettier, 2 spaces, single quotes, semicolons.
 
 ### Code-review reference IDs
 
-Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentation/CleanCode_Analyse.md` (B = backend, F = frontend), which explains the reasoning behind those refactorings.
+Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentation/CleanCode_Analyse.md` (B = backend, F = frontend), which explains the reasoning behind those refactorings. B-09 to B-13 and F-07 to F-12 are in its follow-up section at the end; `CleanCode_Analyse.pdf` predates that section.
 
 ## Repository notes
 
@@ -118,4 +122,3 @@ Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentat
 - `nginx/ssl/*.pem`, `env/*.env`, `frontend/.env.local` and `.env` are git-ignored. A fresh clone has to create them before the stack starts: a self-signed `cert.pem`/`key.pem` pair in `nginx/ssl/` (nginx mounts that directory) and the three env files from their tracked `env/*.env.example` templates.
 - nginx rate-limits `/auth/` and `/api/auth/callback/credentials` (10 requests per minute per client IP) and sets the security headers; `documentation/Sicherheitsbericht.pdf` lists the security findings and what was done about them.
 - `archive/*.zip` are tracked release bundles of earlier versions, not source.
-- `migration/import_cities.py` is a near-duplicate of `scripts/import_cities.py`.

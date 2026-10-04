@@ -6,3 +6,6 @@ namespace AdressverwaltungApi.Dtos;
 public record SettingsUpdateRequest(
     [Required][EmailAddress][MaxLength(256)] string NotificationEmail
 );
+
+/// <summary>Antwort-Body für GET und PUT /settings</summary>
+public record SettingsResponse(string NotificationEmail);

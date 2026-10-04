@@ -204,12 +204,13 @@ adressverwaltung/
 │   ├── Models/           Adresse, City, User, Settings (alle: AuditableEntity)
 │   ├── Data/             AdresseDbContext (inkl. Audit-Felder)
 │   ├── Dtos/             Request-/Response-Typen für Auth und Settings
-│   ├── Services/         E-Mail- und Benachrichtigungsdienst
+│   ├── Options/          Typisierte Konfiguration (JwtOptions, SmtpOptions)
+│   ├── Services/         E-Mail-, Benachrichtigungs- und Token-Dienst
 │   ├── DbSeeder.cs       Admin-Benutzer beim ersten Start
 │   └── Program.cs
 ├── frontend/
-│   ├── app/              Seiten: /, /adressen, /cities, /einstellungen, /login
-│   ├── components/       AdresseForm, CityForm, ConfirmDialog, NavBar
+│   ├── app/              Seiten: / (Adressliste), /adressen/…, /cities, /einstellungen, /login
+│   ├── components/       AdresseForm, CityForm, ConfirmDialog, NavBar, Fehlermeldung, Ladeanzeige
 │   ├── lib/              api.ts (apiFetch), auth.ts (NextAuth)
 │   ├── types/
 │   └── middleware.ts     Route-Schutz

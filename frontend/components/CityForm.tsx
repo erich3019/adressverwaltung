@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { CityCreate } from '@/types/city';
+import Fehlermeldung from '@/components/Fehlermeldung';
+import { inputClass, labelClass, primaryButtonClass } from '@/components/formStyles';
 
 interface Props {
   initialWerte?: Partial<CityCreate>;
@@ -10,41 +12,31 @@ interface Props {
 }
 
 export default function CityForm({ initialWerte = {}, onSubmit, submitLabel }: Props) {
-  const [laden, setLaden]   = useState(false);
-  const [fehler, setFehler] = useState<string | null>(null);
+  const [speichert, setSpeichert] = useState(false);
+  const [fehler, setFehler]       = useState<string | null>(null);
+
+  // F-02: Controlled Inputs wie in AdresseForm (vorher form.elements mit Type-Casts)
+  const [postalCode, setPostalCode] = useState(initialWerte.postalCode ?? '');
+  const [cityName,   setCityName]   = useState(initialWerte.cityName   ?? '');
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFehler(null);
-    setLaden(true);
-
-    const form = e.currentTarget;
-    const daten: CityCreate = {
-      postalCode: (form.elements.namedItem('postalCode') as HTMLInputElement).value.trim(),
-      cityName:   (form.elements.namedItem('cityName')   as HTMLInputElement).value.trim(),
-    };
+    setSpeichert(true);
 
     try {
-      await onSubmit(daten);
+      await onSubmit({ postalCode: postalCode.trim(), cityName: cityName.trim() });
     } catch (err) {
       setFehler('Fehler beim Speichern. Bitte versuche es erneut.');
       console.error(err);
     } finally {
-      setLaden(false);
+      setSpeichert(false);
     }
   }
 
-  const inputClass =
-    'w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white';
-  const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
-
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {fehler && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
-          {fehler}
-        </div>
-      )}
+      <Fehlermeldung meldung={fehler} />
 
       <div>
         <label className={labelClass}>
@@ -55,11 +47,12 @@ export default function CityForm({ initialWerte = {}, onSubmit, submitLabel }: P
           required
           minLength={4}
           maxLength={10}
-          defaultValue={initialWerte.postalCode}
+          value={postalCode}
+          onChange={(e) => setPostalCode(e.target.value)}
           placeholder="z.B. 8001"
           className={inputClass}
         />
-        <p className="text-xs text-gray-500 mt-1">4–10 Zeichen, eindeutig</p>
+        <p className="text-xs text-gray-500 mt-1">4–10 Zeichen</p>
       </div>
 
       <div>
@@ -70,19 +63,16 @@ export default function CityForm({ initialWerte = {}, onSubmit, submitLabel }: P
           name="cityName"
           required
           maxLength={100}
-          defaultValue={initialWerte.cityName}
+          value={cityName}
+          onChange={(e) => setCityName(e.target.value)}
           placeholder="z.B. Zürich"
           className={inputClass}
         />
       </div>
 
       <div className="flex gap-3 pt-2">
-        <button
-          type="submit"
-          disabled={laden}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {laden ? 'Wird gespeichert…' : submitLabel}
+        <button type="submit" disabled={speichert} className={primaryButtonClass}>
+          {speichert ? 'Wird gespeichert…' : submitLabel}
         </button>
       </div>
     </form>

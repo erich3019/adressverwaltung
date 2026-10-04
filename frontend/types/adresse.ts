@@ -1,4 +1,4 @@
-import { AuditFields } from './auditable';
+import { AuditFields, CreateOf, UpdateOf } from './auditable';
 
 /**
  * Repräsentiert eine vollständige Adresse (wie in der Datenbank gespeichert).
@@ -14,20 +14,8 @@ export interface Adresse extends AuditFields {
   ort: string;
 }
 
-/**
- * Typ für das Erstellen einer neuen Adresse.
- * Audit-Felder und id werden weggelassen – das Backend setzt sie automatisch.
- * dateFrom kann optional übergeben werden (Standard: heute).
- * dateTo ist optional (Standard: null = unbegrenzt gültig).
- */
-export type AdresseCreate = Omit<Adresse,
-  'id' | 'createDate' | 'createdBy' | 'changeDate' | 'changedBy' | 'dateFrom' | 'dateTo'
-> & {
-  dateFrom?: string;  // optional – Backend setzt Standard: heute
-  dateTo?: string | null;
-};
+/** Typ für das Erstellen einer neuen Adresse (siehe CreateOf). */
+export type AdresseCreate = CreateOf<Adresse>;
 
-/** Typ für das Aktualisieren (alle Felder optional, Audit-Felder ausgeschlossen). */
-export type AdresseUpdate = Partial<Omit<Adresse,
-  'id' | 'createDate' | 'createdBy' | 'changeDate' | 'changedBy'
->>;
+/** Typ für das Aktualisieren einer Adresse (siehe UpdateOf). */
+export type AdresseUpdate = UpdateOf<Adresse>;

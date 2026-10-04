@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import CityForm from '@/components/CityForm';
+import Fehlermeldung from '@/components/Fehlermeldung';
 import { getCity, aktualisiereCity } from '@/lib/api';
 import type { City, CityCreate } from '@/types/city';
 
@@ -44,11 +45,7 @@ export default function StadtBearbeitenPage() {
           <p className="text-gray-500 text-sm">Wird geladen…</p>
         )}
 
-        {fehler && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
-            {fehler}
-          </div>
-        )}
+        <Fehlermeldung meldung={fehler} />
 
         {city && (
           <CityForm

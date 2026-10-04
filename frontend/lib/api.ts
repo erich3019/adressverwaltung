@@ -48,14 +48,47 @@ async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> 
 }
 
 // ============================================================
+// Hilfsfunktionen: Aufruf mit einheitlicher Fehlerbehandlung
+// F-07: Vorher wiederholte jede API-Funktion fetch, Statusprüfung und throw.
+// ============================================================
+
+type RawEntity = Record<string, unknown>;
+
+// Führt den Aufruf aus und wirft einen Fehler, wenn das Backend keinen Erfolg meldet.
+async function apiRequest(url: string, fehlertext: string, init: RequestInit = {}): Promise<Response> {
+  const response = await apiFetch(url, { cache: 'no-store', ...init });
+
+  if (!response.ok) {
+    throw new Error(`${fehlertext}: ${response.statusText}`);
+  }
+
+  return response;
+}
+
+// Request-Optionen für Aufrufe mit JSON-Body (POST, PATCH, PUT)
+function jsonRequest(method: 'POST' | 'PATCH' | 'PUT', daten: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(daten),
+  };
+}
+
+// OData-Collection ({ value: [...] }) lesen und jede Zeile normalisieren
+async function leseListe<T>(response: Response, normalize: (raw: RawEntity) => T): Promise<T[]> {
+  const data = await response.json() as { value: RawEntity[] };
+  return data.value.map(normalize);
+}
+
+// ============================================================
 // Hilfsfunktionen: OData-Antworten normalisieren
-// OData gibt Properties standardmässig in PascalCase zurück (Id, Vorname...).
-// Die Normalisierung akzeptiert beide Schreibweisen sicher.
+// Das Backend liefert camelCase (EnableLowerCamelCase). PascalCase (Id, Vorname...)
+// wird als Rückfall weiterhin akzeptiert.
 // ============================================================
 
 // F-01: Gemeinsame Audit-Feld-Normalisierung extrahiert (DRY).
 // Vorher war dieser Block 6× in normalizeAdresse und 6× in normalizeCity dupliziert.
-function normalizeAuditFields(raw: Record<string, unknown>) {
+function normalizeAuditFields(raw: RawEntity) {
   return {
     createDate: String(raw['createDate'] ?? raw['CreateDate'] ?? ''),
     createdBy:  String(raw['createdBy']  ?? raw['CreatedBy']  ?? ''),
@@ -66,7 +99,7 @@ function normalizeAuditFields(raw: Record<string, unknown>) {
   };
 }
 
-function normalizeAdresse(raw: Record<string, unknown>): Adresse {
+function normalizeAdresse(raw: RawEntity): Adresse {
   return {
     id:             Number(raw['id']             ?? raw['Id']),
     vorname:        String(raw['vorname']         ?? raw['Vorname']         ?? ''),
@@ -79,7 +112,7 @@ function normalizeAdresse(raw: Record<string, unknown>): Adresse {
   };
 }
 
-function normalizeCity(raw: Record<string, unknown>): City {
+function normalizeCity(raw: RawEntity): City {
   return {
     id:         Number(raw['id']         ?? raw['Id']),
     postalCode: String(raw['postalCode'] ?? raw['PostalCode'] ?? ''),
@@ -94,156 +127,101 @@ function normalizeCity(raw: Record<string, unknown>): City {
 
 // GET /odata/Adressen – Alle Adressen abrufen
 export async function getAlleAdressen(): Promise<Adresse[]> {
-  const response = await apiFetch(`${ODATA_URL}/Adressen`, { cache: 'no-store' });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Abrufen der Adressen: ${response.statusText}`);
-  }
-
-  const data = await response.json() as { value: Record<string, unknown>[] };
-  return data.value.map(normalizeAdresse);
+  const response = await apiRequest(`${ODATA_URL}/Adressen`, 'Fehler beim Abrufen der Adressen');
+  return leseListe(response, normalizeAdresse);
 }
 
 // GET /odata/Adressen(id) – Einzelne Adresse abrufen
 export async function getAdresse(id: number): Promise<Adresse> {
-  const response = await apiFetch(`${ODATA_URL}/Adressen(${id})`, { cache: 'no-store' });
-
-  if (!response.ok) {
-    throw new Error(`Adresse ${id} nicht gefunden: ${response.statusText}`);
-  }
-
-  return normalizeAdresse(await response.json() as Record<string, unknown>);
+  const response = await apiRequest(`${ODATA_URL}/Adressen(${id})`, `Adresse ${id} nicht gefunden`);
+  return normalizeAdresse(await response.json() as RawEntity);
 }
 
 // POST /odata/Adressen – Neue Adresse erstellen
 export async function erstelleAdresse(adresse: AdresseCreate): Promise<Adresse> {
-  const response = await apiFetch(`${ODATA_URL}/Adressen`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(adresse),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Erstellen: ${response.statusText}`);
-  }
-
-  return normalizeAdresse(await response.json() as Record<string, unknown>);
+  const response = await apiRequest(
+    `${ODATA_URL}/Adressen`,
+    'Fehler beim Erstellen',
+    jsonRequest('POST', adresse)
+  );
+  return normalizeAdresse(await response.json() as RawEntity);
 }
 
 // PATCH /odata/Adressen(id) – Adresse aktualisieren
-export async function aktualisiereAdresse(
-  id: number,
-  aenderungen: AdresseUpdate
-): Promise<void> {
-  const response = await apiFetch(`${ODATA_URL}/Adressen(${id})`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(aenderungen),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Aktualisieren: ${response.statusText}`);
-  }
+export async function aktualisiereAdresse(id: number, aenderungen: AdresseUpdate): Promise<void> {
+  await apiRequest(
+    `${ODATA_URL}/Adressen(${id})`,
+    'Fehler beim Aktualisieren',
+    jsonRequest('PATCH', aenderungen)
+  );
 }
 
 // DELETE /odata/Adressen(id) – Adresse löschen
 export async function loescheAdresse(id: number): Promise<void> {
-  const response = await apiFetch(`${ODATA_URL}/Adressen(${id})`, {
-    method: 'DELETE',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Löschen: ${response.statusText}`);
-  }
+  await apiRequest(`${ODATA_URL}/Adressen(${id})`, 'Fehler beim Löschen', { method: 'DELETE' });
 }
 
 // ============================================================
 // CITIES (Städte)
 // ============================================================
 
+// Ab dieser Eingabelänge schlägt die PLZ-Wertehilfe Städte vor
+export const PLZ_SUCHE_MIN_LAENGE = 2;
+const PLZ_SUCHE_MAX_TREFFER = 10;
+
 // GET /odata/Cities – Alle Städte abrufen
 export async function getAlleCities(): Promise<City[]> {
-  const response = await apiFetch(`${ODATA_URL}/Cities`, { cache: 'no-store' });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Abrufen der Städte: ${response.statusText}`);
-  }
-
-  const data = await response.json() as { value: Record<string, unknown>[] };
-  return data.value.map(normalizeCity);
+  const response = await apiRequest(`${ODATA_URL}/Cities`, 'Fehler beim Abrufen der Städte');
+  return leseListe(response, normalizeCity);
 }
 
 // GET /odata/Cities?$filter=startswith(postalCode,'prefix')&$top=10
-// Für die PLZ-Wertehilfe im Adressformular
+// Für die PLZ-Wertehilfe im Adressformular. Liefert bei Fehlern eine leere Liste,
+// damit die Eingabe im Formular nicht blockiert wird.
 export async function sucheStaedteNachPlz(plzPrefix: string): Promise<City[]> {
-  if (!plzPrefix || plzPrefix.length < 2) return [];
+  if (!plzPrefix || plzPrefix.length < PLZ_SUCHE_MIN_LAENGE) return [];
 
-  // OData-Filter: PLZ beginnt mit dem eingegebenen Wert
   // Hochkomma verdoppeln, damit die Eingabe das OData-Stringliteral nicht verlassen kann
   const plzLiteral = plzPrefix.replace(/'/g, "''");
   const filter = encodeURIComponent(`startswith(postalCode,'${plzLiteral}')`);
   const response = await apiFetch(
-    `${ODATA_URL}/Cities?$filter=${filter}&$top=10&$orderby=postalCode`,
+    `${ODATA_URL}/Cities?$filter=${filter}&$top=${PLZ_SUCHE_MAX_TREFFER}&$orderby=postalCode`,
     { cache: 'no-store' }
   );
 
   if (!response.ok) return [];
 
-  const data = await response.json() as { value: Record<string, unknown>[] };
-  return data.value.map(normalizeCity);
+  return leseListe(response, normalizeCity);
 }
 
 // GET /odata/Cities(id) – Einzelne Stadt abrufen
 export async function getCity(id: number): Promise<City> {
-  const response = await apiFetch(`${ODATA_URL}/Cities(${id})`, { cache: 'no-store' });
-
-  if (!response.ok) {
-    throw new Error(`Stadt ${id} nicht gefunden: ${response.statusText}`);
-  }
-
-  return normalizeCity(await response.json() as Record<string, unknown>);
+  const response = await apiRequest(`${ODATA_URL}/Cities(${id})`, `Stadt ${id} nicht gefunden`);
+  return normalizeCity(await response.json() as RawEntity);
 }
 
 // POST /odata/Cities – Neue Stadt erstellen
 export async function erstelleCity(city: CityCreate): Promise<City> {
-  const response = await apiFetch(`${ODATA_URL}/Cities`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(city),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Erstellen: ${response.statusText}`);
-  }
-
-  return normalizeCity(await response.json() as Record<string, unknown>);
+  const response = await apiRequest(
+    `${ODATA_URL}/Cities`,
+    'Fehler beim Erstellen',
+    jsonRequest('POST', city)
+  );
+  return normalizeCity(await response.json() as RawEntity);
 }
 
 // PATCH /odata/Cities(id) – Stadt aktualisieren
-export async function aktualisiereCity(
-  id: number,
-  aenderungen: CityUpdate
-): Promise<void> {
-  const response = await apiFetch(`${ODATA_URL}/Cities(${id})`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(aenderungen),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Aktualisieren: ${response.statusText}`);
-  }
+export async function aktualisiereCity(id: number, aenderungen: CityUpdate): Promise<void> {
+  await apiRequest(
+    `${ODATA_URL}/Cities(${id})`,
+    'Fehler beim Aktualisieren',
+    jsonRequest('PATCH', aenderungen)
+  );
 }
 
 // DELETE /odata/Cities(id) – Stadt löschen
 export async function loescheCity(id: number): Promise<void> {
-  const response = await apiFetch(`${ODATA_URL}/Cities(${id})`, {
-    method: 'DELETE',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Löschen: ${response.statusText}`);
-  }
+  await apiRequest(`${ODATA_URL}/Cities(${id})`, 'Fehler beim Löschen', { method: 'DELETE' });
 }
 
 // ============================================================
@@ -256,26 +234,16 @@ export interface SettingsData {
 
 // GET /settings – Einstellungen lesen
 export async function getSettings(): Promise<SettingsData> {
-  const response = await apiFetch(`${BASE_URL}/settings`, { cache: 'no-store' });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Lesen der Einstellungen: ${response.statusText}`);
-  }
-
+  const response = await apiRequest(`${BASE_URL}/settings`, 'Fehler beim Lesen der Einstellungen');
   return response.json() as Promise<SettingsData>;
 }
 
 // PUT /settings – Einstellungen speichern
 export async function speichereSettings(data: SettingsData): Promise<SettingsData> {
-  const response = await apiFetch(`${BASE_URL}/settings`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fehler beim Speichern der Einstellungen: ${response.statusText}`);
-  }
-
+  const response = await apiRequest(
+    `${BASE_URL}/settings`,
+    'Fehler beim Speichern der Einstellungen',
+    jsonRequest('PUT', data)
+  );
   return response.json() as Promise<SettingsData>;
 }

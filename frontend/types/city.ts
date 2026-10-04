@@ -1,4 +1,4 @@
-import { AuditFields } from './auditable';
+import { AuditFields, CreateOf, UpdateOf } from './auditable';
 
 /**
  * Repräsentiert eine Stadt mit Postleitzahl.
@@ -11,18 +11,8 @@ export interface City extends AuditFields {
   cityName: string;
 }
 
-/**
- * Typ für das Erstellen einer neuen Stadt.
- * Audit-Felder und id werden weggelassen – das Backend setzt sie automatisch.
- */
-export type CityCreate = Omit<City,
-  'id' | 'createDate' | 'createdBy' | 'changeDate' | 'changedBy' | 'dateFrom' | 'dateTo'
-> & {
-  dateFrom?: string;  // optional – Backend setzt Standard: heute
-  dateTo?: string | null;
-};
+/** Typ für das Erstellen einer neuen Stadt (siehe CreateOf). */
+export type CityCreate = CreateOf<City>;
 
-/** Typ für das Aktualisieren (alle Felder optional, Audit-Felder ausgeschlossen). */
-export type CityUpdate = Partial<Omit<City,
-  'id' | 'createDate' | 'createdBy' | 'changeDate' | 'changedBy'
->>;
+/** Typ für das Aktualisieren einer Stadt (siehe UpdateOf). */
+export type CityUpdate = UpdateOf<City>;

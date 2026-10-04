@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OData.Formatter;
 using Microsoft.EntityFrameworkCore;
 using AdressverwaltungApi.Data;
 using AdressverwaltungApi.Models;
@@ -9,9 +7,8 @@ namespace AdressverwaltungApi.Controllers;
 
 /// <summary>
 /// OData-Controller für die Adresse-Entität.
-/// Erbt CRUD-Grundlogik von ODataCrudController (DRY, B-08).
-/// Überschreibt Post, um die E-Mail-Benachrichtigung via INotificationService
-/// auszulösen (SRP, B-03).
+/// Erbt die CRUD-Logik von ODataCrudController (DRY, B-08) und löst nach dem
+/// Erstellen die Benachrichtigung via INotificationService aus (SRP, B-03).
 /// </summary>
 public class AdressenController : ODataCrudController<Adresse>
 {
@@ -19,29 +16,14 @@ public class AdressenController : ODataCrudController<Adresse>
     protected override string EntityDisplayName   => "Adresse";
 
     private readonly INotificationService _notificationService;
-    private readonly ILogger<AdressenController> _logger;
 
     public AdressenController(
         AdresseDbContext context,
-        INotificationService notificationService,
-        ILogger<AdressenController> logger) : base(context)
+        INotificationService notificationService) : base(context)
     {
         _notificationService = notificationService;
-        _logger              = logger;
     }
 
-    // POST /odata/Adressen – überschrieben, um Benachrichtigung auszulösen
-    public override async Task<IActionResult> Post([FromBody] Adresse adresse)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        Entities.Add(adresse);
-        await _context.SaveChangesAsync();
-
-        // E-Mail-Benachrichtigung über INotificationService (B-03: SRP)
-        await _notificationService.NotifyNewAdresseAsync(adresse);
-
-        return Created(adresse);
-    }
+    protected override Task OnCreatedAsync(Adresse adresse)
+        => _notificationService.NotifyNewAdresseAsync(adresse);
 }

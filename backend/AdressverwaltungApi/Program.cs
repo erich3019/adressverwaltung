@@ -8,6 +8,7 @@ using System.Text;
 using AdressverwaltungApi;
 using AdressverwaltungApi.Data;
 using AdressverwaltungApi.Models;
+using AdressverwaltungApi.Options;
 using AdressverwaltungApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +27,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
 // === E-MAIL-DIENST: SMTP-Implementierung (austauschbar via Interface) ===
+builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.SectionName));
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 // === BENACHRICHTIGUNGSDIENST: E-Mail-Implementierung (B-03: SRP) ===
@@ -34,14 +36,21 @@ builder.Services.AddScoped<INotificationService, EmailNotificationService>();
 // === JWT-AUTHENTIFIZIERUNG ===
 // Der Bearer-Token wird vom AuthController ausgestellt und bei jedem
 // geschützten API-Aufruf im Authorization-Header mitgesendet.
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("JWT-Schlüssel (Jwt:Key) ist nicht konfiguriert.");
+var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
+var jwtOptions = jwtSection.Get<JwtOptions>() ?? new JwtOptions();
+
+if (string.IsNullOrWhiteSpace(jwtOptions.Key))
+    throw new InvalidOperationException("JWT-Schlüssel (Jwt:Key) ist nicht konfiguriert.");
 
 // HS256 braucht mindestens 256 Bit; Platzhalter aus Vorlagen werden abgelehnt,
 // weil sich mit einem bekannten Schlüssel beliebige Tokens fälschen lassen.
-if (Encoding.UTF8.GetByteCount(jwtKey) < 32 || jwtKey.StartsWith("dein-geheimer-jwt-schluessel"))
+if (Encoding.UTF8.GetByteCount(jwtOptions.Key) < JwtOptions.MinKeyLength
+    || jwtOptions.Key.StartsWith("dein-geheimer-jwt-schluessel"))
     throw new InvalidOperationException(
         "JWT-Schlüssel (Jwt:Key) ist zu kurz oder ein Platzhalter. Eigenen Schlüssel mit mindestens 32 Zeichen setzen, z.B. mit 'openssl rand -base64 32'.");
+
+builder.Services.Configure<JwtOptions>(jwtSection);
+builder.Services.AddSingleton<ITokenService, JwtTokenService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -52,10 +61,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience         = true,
             ValidateLifetime         = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer              = builder.Configuration["Jwt:Issuer"],
-            ValidAudience            = builder.Configuration["Jwt:Audience"],
+            ValidIssuer              = jwtOptions.Issuer,
+            ValidAudience            = jwtOptions.Audience,
             IssuerSigningKey         = new SymmetricSecurityKey(
-                                           Encoding.UTF8.GetBytes(jwtKey)),
+                                           Encoding.UTF8.GetBytes(jwtOptions.Key)),
             // Claim "name" aus dem Token als Identity.Name verwenden
             // (wird für die Audit-Felder CreatedBy/ChangedBy benötigt)
             NameClaimType            = "name",
@@ -106,7 +115,7 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// === DATENBANK MIGRATION BEIM START ===
+// === DATENBANKSCHEMA UND SEED-DATEN BEIM START ===
 using (var scope = app.Services.CreateScope())
 {
     var db      = scope.ServiceProvider.GetRequiredService<AdresseDbContext>();

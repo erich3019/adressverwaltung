@@ -439,3 +439,39 @@ Der Code zeigt bereits viele gute Clean-Code-Praktiken:
 * **Kommentare**: Erklären das **Warum**, nicht das **Was**
 
 * **TypeScript**: Strikte Typen, keine `any`
+---
+
+## Nachprüfung vom 4. Oktober 2026 (v2.2.0)
+
+Zweite Durchsicht von Backend und Frontend nach der Umsetzung von B-01 bis B-08 und F-01 bis F-06. Die Befunde B-09 bis B-13 und F-07 bis F-12 sind umgesetzt; Verhalten und Datenbankschema bleiben gleich (51 Backend-Tests grün, erzeugtes Schema vor und nach B-12 identisch).
+
+### Backend
+
+| \# | Prinzip | Befund | Massnahme |
+| --- | --- | --- | --- |
+| B-09 | Magic Strings | Konfiguration über Zeichenketten wie `config["Jwt:Key"]` an mehreren Stellen; `double.Parse` und `bool.Parse` ohne Absicherung (wie B-04) | Typisierte Klassen `Options/JwtOptions.cs` und `Options/SmtpOptions.cs` (Options-Pattern) |
+| B-10 | SRP | `AuthController` erzeugte das JWT selbst; die E-Mail-Suche stand doppelt in `Register` und `Login` | `ITokenService` / `JwtTokenService`; private Methode `FindUserByEmailAsync` |
+| B-11 | DRY, toter Code | `AdressenController.Post` kopierte die Basismethode, um die Benachrichtigung anzuhängen; ungenutztes Feld `_logger`; Not-Found-Meldung dreifach | Erweiterungspunkt `OnCreatedAsync` in `ODataCrudController`; Hilfsmethode `EntityNotFound` |
+| B-12 | DRY | Pflichtfelder und Längen standen an den Modellen (B-07) und nochmals in `OnModelCreating` | Doppelte Fluent-Konfiguration entfernt; es bleiben Tabellennamen und Indizes |
+| B-13 | Typsicherheit | `SettingsController` gab an drei Stellen anonyme Objekte zurück | DTO `SettingsResponse`; Zuweisung nur noch an einer Stelle |
+
+Dazu: `migration/import_cities.py` entfernt (identische Kopie von `scripts/import_cities.py`), veraltete Kommentare berichtigt.
+
+### Frontend
+
+| \# | Prinzip | Befund | Massnahme |
+| --- | --- | --- | --- |
+| F-07 | DRY | Jede Funktion in `lib/api.ts` wiederholte Aufruf, Statusprüfung und `throw` | Hilfsfunktionen `apiRequest`, `jsonRequest`, `leseListe`; Konstanten für die PLZ-Suche statt Zahlen im Code |
+| F-08 | DRY | `AdresseCreate`/`CityCreate` und `AdresseUpdate`/`CityUpdate` mit je gleicher `Omit`-Liste | Generische Typen `CreateOf<T>` und `UpdateOf<T>` in `types/auditable.ts` |
+| F-09 | DRY | Formular-Klassen, Fehlerbox und Ladeanzeige als gleiches Markup in mehreren Dateien | `components/formStyles.ts`, `Fehlermeldung.tsx`, `Ladeanzeige.tsx` |
+| F-10 | Konsistenz (F-03) | `DeleteButton` (Städte) und «Adresse bearbeiten» nutzten weiterhin `confirm()`/`alert()` | `ConfirmDialog` und Fehler-State; `ConfirmDialog` mit Prop `bestaetigenLabel` |
+| F-11 | Konsistenz (F-02), Namensgebung | `CityForm` las Werte über `form.elements` mit Type-Casts; `laden` bedeutete in den Formularen «speichert» | Controlled Inputs; Umbenennung in `speichert` |
+| F-12 | Fehler | Der Nav-Link «Adressen» zeigte auf `/adressen`, eine Seite, die es nicht gibt (die Liste liegt auf `/`) | Link auf `/`; aktiv auf `/` und unter `/adressen/…` |
+
+Dazu: `package.json` auf Version 2.2.0, veraltete Abhängigkeit `@types/next-auth` entfernt.
+
+### Nicht umgesetzt
+
+* Die Adressliste ist eine Client-Komponente, die Städteliste eine Server-Komponente. Eine Vereinheitlichung wäre ein Umbau der Datenbeschaffung.
+* Die beiden ausführlichen Fehlerboxen in `app/page.tsx` (mit «Erneut versuchen» bzw. Schliessen-Knopf) bleiben eigenes Markup.
+* Die PascalCase-Rückfallebene in den `normalize*`-Funktionen wird vom Backend nicht mehr benötigt, bleibt aber als Absicherung.

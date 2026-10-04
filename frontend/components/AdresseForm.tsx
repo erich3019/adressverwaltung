@@ -3,7 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AdresseCreate } from '@/types/adresse';
 import { City } from '@/types/city';
-import { sucheStaedteNachPlz } from '@/lib/api';
+import { sucheStaedteNachPlz, PLZ_SUCHE_MIN_LAENGE } from '@/lib/api';
+import Fehlermeldung from '@/components/Fehlermeldung';
+import { inputClass, labelClass, primaryButtonClass } from '@/components/formStyles';
+
+// Wartezeit nach der letzten Eingabe, bevor die PLZ-Suche startet
+const PLZ_SUCHE_VERZOEGERUNG_MS = 300;
 
 interface Props {
   initialWerte?: Partial<AdresseCreate>;
@@ -12,7 +17,7 @@ interface Props {
 }
 
 export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }: Props) {
-  const [laden, setLaden] = useState(false);
+  const [speichert, setSpeichert] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
 
   // F-02: Alle Felder als Controlled Inputs (einheitlich via useState)
@@ -32,9 +37,9 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
   const [sucheLaeuft,   setSucheLaeuft]   = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Debounced PLZ-Suche: API erst nach 300 ms aufrufen
+  // Debounced PLZ-Suche: API erst nach einer kurzen Eingabepause aufrufen
   useEffect(() => {
-    if (plz.length < 2) {
+    if (plz.length < PLZ_SUCHE_MIN_LAENGE) {
       setVorschlaege([]);
       setZeigeDropdown(false);
       return;
@@ -46,7 +51,7 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
       setVorschlaege(treffer);
       setZeigeDropdown(treffer.length > 0);
       setSucheLaeuft(false);
-    }, 300);
+    }, PLZ_SUCHE_VERZOEGERUNG_MS);
 
     return () => clearTimeout(timer);
   }, [plz]);
@@ -73,7 +78,7 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFehler(null);
-    setLaden(true);
+    setSpeichert(true);
 
     const daten: AdresseCreate = {
       vorname:        vorname.trim(),
@@ -90,21 +95,13 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
       setFehler('Fehler beim Speichern. Bitte versuche es erneut.');
       console.error(err);
     } finally {
-      setLaden(false);
+      setSpeichert(false);
     }
   }
 
-  const inputClass =
-    'w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white';
-  const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
-
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {fehler && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
-          {fehler}
-        </div>
-      )}
+      <Fehlermeldung meldung={fehler} />
 
       {/* Vorname / Nachname */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -225,12 +222,8 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
       </div>
 
       <div className="flex gap-3 pt-2">
-        <button
-          type="submit"
-          disabled={laden}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {laden ? 'Wird gespeichert…' : submitLabel}
+        <button type="submit" disabled={speichert} className={primaryButtonClass}>
+          {speichert ? 'Wird gespeichert…' : submitLabel}
         </button>
       </div>
     </form>

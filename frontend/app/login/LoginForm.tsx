@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Fehlermeldung from '@/components/Fehlermeldung';
+import { inputClass, labelClass } from '@/components/formStyles';
 
 // ──────────────────────────────────────────────────────────────
 // LoginForm: Client-Komponente (useSearchParams → Suspense nötig).
@@ -60,10 +62,6 @@ export function LoginForm({ googleEnabled }: LoginFormProps) {
     await signIn('google', { callbackUrl });
   }
 
-  const inputClass =
-    'w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none ' +
-    'focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white';
-
   return (
     <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
       <h1 className="text-2xl font-bold text-gray-800 mb-2">Anmelden</h1>
@@ -71,17 +69,12 @@ export function LoginForm({ googleEnabled }: LoginFormProps) {
         Adressverwaltung – bitte melde dich an
       </p>
 
-      {/* Fehlermeldung */}
-      {fehler && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
-          {fehler}
-        </div>
-      )}
+      <Fehlermeldung meldung={fehler} className="mb-4" />
 
       {/* Credentials-Login */}
       <form onSubmit={handleCredentials} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label>
+          <label className={labelClass}>E-Mail</label>
           <input
             type="email"
             required
@@ -93,7 +86,7 @@ export function LoginForm({ googleEnabled }: LoginFormProps) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Passwort</label>
+          <label className={labelClass}>Passwort</label>
           <div className="relative">
             <input
               type={zeigePw ? 'text' : 'password'}

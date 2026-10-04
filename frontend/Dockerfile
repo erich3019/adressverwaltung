@@ -10,7 +10,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Backend-URL zeigt auf Docker-Service-Namen "backend"
+# Platzhalter für den Build; zur Laufzeit setzt docker-compose.yml die URLs
 ENV NEXT_PUBLIC_API_URL=http://localhost:5000
 RUN npm run build
 

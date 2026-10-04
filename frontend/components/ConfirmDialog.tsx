@@ -6,11 +6,19 @@
 interface Props {
   offen: boolean;
   meldung: string;
+  /** Beschriftung der bestätigenden Schaltfläche. */
+  bestaetigenLabel?: string;
   onBestaetigen: () => void;
   onAbbrechen: () => void;
 }
 
-export default function ConfirmDialog({ offen, meldung, onBestaetigen, onAbbrechen }: Props) {
+export default function ConfirmDialog({
+  offen,
+  meldung,
+  bestaetigenLabel = 'Löschen',
+  onBestaetigen,
+  onAbbrechen,
+}: Props) {
   if (!offen) return null;
 
   return (
@@ -20,7 +28,7 @@ export default function ConfirmDialog({ offen, meldung, onBestaetigen, onAbbrech
       aria-modal="true"
       aria-labelledby="dialog-meldung"
     >
-      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4 text-left">
         <p id="dialog-meldung" className="text-gray-800 mb-6 text-base">
           {meldung}
         </p>
@@ -35,7 +43,7 @@ export default function ConfirmDialog({ offen, meldung, onBestaetigen, onAbbrech
             onClick={onBestaetigen}
             className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium transition-colors"
           >
-            Löschen
+            {bestaetigenLabel}
           </button>
         </div>
       </div>

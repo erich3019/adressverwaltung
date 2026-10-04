@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import AdresseForm from '@/components/AdresseForm';
+import Fehlermeldung from '@/components/Fehlermeldung';
+import Ladeanzeige from '@/components/Ladeanzeige';
 import { getAdresse, aktualisiereAdresse } from '@/lib/api';
 import { Adresse, AdresseCreate } from '@/types/adresse';
 
@@ -14,21 +16,15 @@ export default function AdresseBearbeitenPage() {
 
   const [adresse, setAdresse] = useState<Adresse | null>(null);
   const [ladevorgang, setLadevorgang] = useState(true);
+  const [fehler, setFehler]           = useState<string | null>(null);
 
+  // F-03: Fehler-State statt alert() – gleich wie auf der Seite «Stadt bearbeiten»
   useEffect(() => {
-    async function laden() {
-      try {
-        const daten = await getAdresse(id);
-        setAdresse(daten);
-      } catch {
-        alert('Adresse nicht gefunden.');
-        router.push('/');
-      } finally {
-        setLadevorgang(false);
-      }
-    }
-    laden();
-  }, [id, router]);
+    getAdresse(id)
+      .then(setAdresse)
+      .catch(() => setFehler('Adresse konnte nicht geladen werden.'))
+      .finally(() => setLadevorgang(false));
+  }, [id]);
 
   async function handleSubmit(daten: AdresseCreate) {
     await aktualisiereAdresse(id, daten);
@@ -36,14 +32,7 @@ export default function AdresseBearbeitenPage() {
   }
 
   if (ladevorgang) {
-    return (
-      <div className="flex justify-center items-center min-h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-          <p className="text-gray-500">Adresse wird geladen...</p>
-        </div>
-      </div>
-    );
+    return <Ladeanzeige text="Adresse wird geladen..." />;
   }
 
   return (
@@ -65,6 +54,7 @@ export default function AdresseBearbeitenPage() {
       )}
 
       <div className="bg-white rounded-xl shadow p-6">
+        <Fehlermeldung meldung={fehler} />
         {adresse && (
           <AdresseForm
             initialWerte={adresse}

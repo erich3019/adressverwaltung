@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSettings, speichereSettings, type SettingsData } from '@/lib/api';
+import { getSettings, speichereSettings } from '@/lib/api';
+import Fehlermeldung from '@/components/Fehlermeldung';
+import { inputClass, labelClass, primaryButtonClass } from '@/components/formStyles';
 
 export default function EinstellungenPage() {
   const [email,      setEmail]      = useState('');
@@ -25,8 +27,7 @@ export default function EinstellungenPage() {
     setSpeichern(true);
 
     try {
-      const data: SettingsData = { notificationEmail: email.trim() };
-      await speichereSettings(data);
+      await speichereSettings({ notificationEmail: email.trim() });
       setErfolg(true);
     } catch {
       setFehler('Fehler beim Speichern. Bitte versuche es erneut.');
@@ -54,7 +55,7 @@ export default function EinstellungenPage() {
         {!laden && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className={labelClass}>
                 Benachrichtigungs-E-Mail
               </label>
               <input
@@ -62,18 +63,14 @@ export default function EinstellungenPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="z.B. admin@example.com"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                className={inputClass}
               />
               <p className="text-xs text-gray-400 mt-1">
                 Leer lassen = keine E-Mail-Benachrichtigungen
               </p>
             </div>
 
-            {fehler && (
-              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
-                {fehler}
-              </div>
-            )}
+            <Fehlermeldung meldung={fehler} />
 
             {erfolg && (
               <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg text-sm">
@@ -82,11 +79,7 @@ export default function EinstellungenPage() {
             )}
 
             <div className="pt-2">
-              <button
-                type="submit"
-                disabled={speichern}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <button type="submit" disabled={speichern} className={primaryButtonClass}>
                 {speichern ? 'Wird gespeichert…' : 'Speichern'}
               </button>
             </div>

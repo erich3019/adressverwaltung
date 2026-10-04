@@ -11,12 +11,13 @@ export default function NavBar() {
   // Auf der Login-Seite keine Navigation anzeigen
   if (pathname === '/login') return null;
 
-  const linkClass = (href: string) =>
+  const linkClass = (aktiv: boolean) =>
     `px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-      pathname.startsWith(href)
-        ? 'bg-blue-900 text-white'
-        : 'text-blue-100 hover:bg-blue-700'
+      aktiv ? 'bg-blue-900 text-white' : 'text-blue-100 hover:bg-blue-700'
     }`;
+
+  // Die Adressliste liegt auf «/», Erfassen und Bearbeiten unter «/adressen/…»
+  const adressenAktiv = pathname === '/' || pathname.startsWith('/adressen');
 
   return (
     <header className="bg-blue-800 text-white shadow">
@@ -31,13 +32,13 @@ export default function NavBar() {
 
         {/* Navigation-Links */}
         <nav className="flex items-center gap-2">
-          <Link href="/adressen" className={linkClass('/adressen')}>
+          <Link href="/" className={linkClass(adressenAktiv)}>
             Adressen
           </Link>
-          <Link href="/cities" className={linkClass('/cities')}>
+          <Link href="/cities" className={linkClass(pathname.startsWith('/cities'))}>
             Städte
           </Link>
-          <Link href="/einstellungen" className={linkClass('/einstellungen')}>
+          <Link href="/einstellungen" className={linkClass(pathname.startsWith('/einstellungen'))}>
             Einstellungen
           </Link>
 

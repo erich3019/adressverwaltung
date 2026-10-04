@@ -30,3 +30,19 @@ export interface AuditFields {
   /** Gültig bis (ISO-Datum). null = unbegrenzt gültig. */
   dateTo: string | null;
 }
+
+/** Felder, die das Backend selbst vergibt und die der Client nie sendet. */
+type ServerFields = 'id' | 'createDate' | 'createdBy' | 'changeDate' | 'changedBy';
+
+/**
+ * F-08: Typ für das Erstellen einer Entität.
+ * id und Audit-Felder entfallen; der Gültigkeitszeitraum ist optional
+ * (dateFrom: Standard heute, dateTo: Standard null = unbegrenzt gültig).
+ */
+export type CreateOf<T extends AuditFields> = Omit<T, ServerFields | 'dateFrom' | 'dateTo'> & {
+  dateFrom?: string;
+  dateTo?: string | null;
+};
+
+/** F-08: Typ für das Aktualisieren (alle Felder optional, Server-Felder ausgeschlossen). */
+export type UpdateOf<T extends AuditFields> = Partial<Omit<T, ServerFields>>;

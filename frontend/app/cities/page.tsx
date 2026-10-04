@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getAlleCities } from '@/lib/api';
 import DeleteButton from './DeleteButton';
+import Fehlermeldung from '@/components/Fehlermeldung';
 
 export const dynamic = 'force-dynamic'; // Kein statisches Caching
 
@@ -31,12 +32,7 @@ export default async function CitiesPage() {
         </Link>
       </div>
 
-      {/* Fehlermeldung */}
-      {ladefehler && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-6 text-sm">
-          {ladefehler}
-        </div>
-      )}
+      <Fehlermeldung meldung={ladefehler} className="mb-6" />
 
       {/* Leerer Zustand */}
       {cities.length === 0 && !ladefehler && (

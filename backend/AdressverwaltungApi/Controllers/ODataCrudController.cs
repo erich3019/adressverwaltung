@@ -14,8 +14,9 @@ namespace AdressverwaltungApi.Controllers;
 /// um Duplikation zwischen AdressenController und CitiesController zu vermeiden (DRY).
 ///
 /// Unterklassen definieren:
-///   - Entities      → welches DbSet verwendet wird
+///   - Entities          → welches DbSet verwendet wird
 ///   - EntityDisplayName → für benutzerfreundliche Fehlermeldungen
+///   - OnCreatedAsync    → optional: Folgeaktion nach dem Erstellen
 /// </summary>
 [Authorize]   // Alle abgeleiteten Controller (Adressen, Cities) erfordern gültigen JWT
 public abstract class ODataCrudController<TEntity> : ODataController
@@ -46,7 +47,7 @@ public abstract class ODataCrudController<TEntity> : ODataController
         var entity = await Entities.FindAsync(key);
 
         if (entity is null)
-            return NotFound($"{EntityDisplayName} mit Id {key} wurde nicht gefunden.");
+            return EntityNotFound(key);
 
         return Ok(entity);
     }
@@ -59,6 +60,7 @@ public abstract class ODataCrudController<TEntity> : ODataController
 
         Entities.Add(entity);
         await _context.SaveChangesAsync();
+        await OnCreatedAsync(entity);
 
         return Created(entity);
     }
@@ -74,7 +76,7 @@ public abstract class ODataCrudController<TEntity> : ODataController
         var entity = await Entities.FindAsync(key);
 
         if (entity is null)
-            return NotFound($"{EntityDisplayName} mit Id {key} wurde nicht gefunden.");
+            return EntityNotFound(key);
 
         delta.Patch(entity);
 
@@ -92,11 +94,20 @@ public abstract class ODataCrudController<TEntity> : ODataController
         var entity = await Entities.FindAsync(key);
 
         if (entity is null)
-            return NotFound($"{EntityDisplayName} mit Id {key} wurde nicht gefunden.");
+            return EntityNotFound(key);
 
         Entities.Remove(entity);
         await _context.SaveChangesAsync();
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Erweiterungspunkt: wird nach dem Speichern einer neuen Entität aufgerufen (B-11).
+    /// Unterklassen hängen hier Folgeaktionen an, statt Post zu kopieren.
+    /// </summary>
+    protected virtual Task OnCreatedAsync(TEntity entity) => Task.CompletedTask;
+
+    private IActionResult EntityNotFound(int key)
+        => NotFound($"{EntityDisplayName} mit Id {key} wurde nicht gefunden.");
 }

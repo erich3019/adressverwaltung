@@ -30,12 +30,7 @@ public class SettingsController : ControllerBase
     {
         var settings = await _context.Settings.FirstOrDefaultAsync();
 
-        if (settings is null)
-        {
-            return Ok(new { notificationEmail = "" });
-        }
-
-        return Ok(new { notificationEmail = settings.NotificationEmail });
+        return Ok(new SettingsResponse(settings?.NotificationEmail ?? string.Empty));
     }
 
     // PUT /settings
@@ -52,16 +47,13 @@ public class SettingsController : ControllerBase
         if (settings is null)
         {
             // Einstellungen beim ersten Aufruf erstellen
-            settings = new Settings { NotificationEmail = req.NotificationEmail.Trim() };
+            settings = new Settings();
             _context.Settings.Add(settings);
         }
-        else
-        {
-            settings.NotificationEmail = req.NotificationEmail.Trim();
-        }
 
+        settings.NotificationEmail = req.NotificationEmail.Trim();
         await _context.SaveChangesAsync();
 
-        return Ok(new { notificationEmail = settings.NotificationEmail });
+        return Ok(new SettingsResponse(settings.NotificationEmail));
     }
 }

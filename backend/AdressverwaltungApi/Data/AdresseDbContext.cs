@@ -123,50 +123,26 @@ public class AdresseDbContext : DbContext
             }
         }
 
-        // === Adresse ===
-        modelBuilder.Entity<Adresse>(entity =>
-        {
-            entity.ToTable("Adressen");
-            entity.HasKey(a => a.Id);
-            entity.Property(a => a.Vorname).IsRequired().HasMaxLength(100);
-            entity.Property(a => a.Name).IsRequired().HasMaxLength(100);
-            entity.Property(a => a.Strasse).IsRequired().HasMaxLength(200);
-            entity.Property(a => a.Strassennummer).IsRequired().HasMaxLength(20);
-            entity.Property(a => a.Plz).IsRequired().HasMaxLength(10);
-            entity.Property(a => a.Ort).IsRequired().HasMaxLength(100);
-        });
+        // B-12: Pflichtfelder und Längen stehen als DataAnnotations an den Modellen (B-07).
+        // Hier folgt nur, was sich dort nicht ausdrücken lässt: Tabellennamen und Indizes.
+        modelBuilder.Entity<Adresse>().ToTable("Adressen");
 
-        // === City ===
         modelBuilder.Entity<City>(entity =>
         {
             entity.ToTable("Cities");
-            entity.HasKey(c => c.Id);
-            entity.Property(c => c.PostalCode).IsRequired().HasMaxLength(10);
-            entity.Property(c => c.CityName).IsRequired().HasMaxLength(100);
 
             // Index für schnelle PLZ-Suche
             entity.HasIndex(c => c.PostalCode);
         });
 
-        // === User ===
         modelBuilder.Entity<User>(entity =>
         {
             entity.ToTable("Users");
-            entity.HasKey(u => u.Id);
-            entity.Property(u => u.Email).IsRequired().HasMaxLength(256);
-            entity.Property(u => u.PasswordHash).IsRequired();
-            entity.Property(u => u.DisplayName).IsRequired().HasMaxLength(100);
 
             // E-Mail muss eindeutig sein
             entity.HasIndex(u => u.Email).IsUnique();
         });
 
-        // === Settings ===
-        modelBuilder.Entity<Settings>(entity =>
-        {
-            entity.ToTable("Settings");
-            entity.HasKey(s => s.Id);
-            entity.Property(s => s.NotificationEmail).IsRequired().HasMaxLength(256);
-        });
+        modelBuilder.Entity<Settings>().ToTable("Settings");
     }
 }
