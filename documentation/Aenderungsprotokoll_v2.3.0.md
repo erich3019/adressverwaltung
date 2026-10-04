@@ -181,7 +181,7 @@ Die Zahlen beziehen sich auf den Stand vor diesem Protokoll und vor dem Setzen d
 2. **Datenbankpasswort bei bestehender Datenbank.** `POSTGRES_PASSWORD` wirkt nur beim ersten Start mit leerem Volume. Bei einem bestehenden Volume das Passwort in der Datenbank mit `ALTER USER postgres PASSWORD '…'` auf den Wert aus `.env` setzen.
 3. **Images neu bauen.** `docker compose up --build -d`.
 4. **Neu anmelden.** Mit neuem JWT-Schlüssel und neuem `NEXTAUTH_SECRET` sind bestehende Sitzungen ungültig.
-5. **Admin-Passwort.** In einer bestehenden Datenbank gilt das frühere Standardpasswort weiter. Mit `./scripts/reset_password.sh` ersetzen.
+5. **Admin-Passwort.** In einer bestehenden Datenbank gilt das frühere Standardpasswort weiter. Für die Demo-Anwendung ist das akzeptiert; bei einem Einsatz mit echten Daten mit `./scripts/reset_password.sh` ersetzen.
 6. **Lokale Entwicklung.** .NET SDK 10 installieren. `dotnet run` braucht `Jwt__Key` und `ConnectionStrings__DefaultConnection` aus der Umgebung. Im Frontend `npm ci` statt `npm install`.
 7. **Benutzer anlegen.** Neue Benutzer entstehen über `./scripts/create_user.sh` oder durch einen angemeldeten Benutzer über `/auth/register`.
 
@@ -205,10 +205,17 @@ Nicht im Browser geprüft: die Bedienung der Oberfläche nach dem Upgrade auf Re
 
 ---
 
-## 10. Offene Punkte
+## 10. Akzeptierte Risiken und offene Punkte
 
-* Früheres Standardpasswort des Admin-Benutzers in der bestehenden Datenbank zurücksetzen.
-* Geheimnisse in der Git-History: TLS-Zertifikat neu erzeugen, Postman-Vault-Key ersetzen, das Passwort aus dem früheren Skript-Kommentar überall ändern. Ob die History umgeschrieben wird, ist offen.
+Die Adressverwaltung ist eine Demo-Anwendung ohne schützenswerte Daten. Zwei Punkte sind deshalb bewusst akzeptiert (Entscheid vom 4. Oktober 2026):
+
+* Das frühere Standardpasswort des Admin-Benutzers gilt in der bestehenden Datenbank weiter.
+* In der Git-History auf GitHub liegen alte Geheimnisse (TLS-Schlüssel, `frontend/.env.local`, Postman-Vault-Key, frühere Werte aus `docker-compose.yml`). Die History wird nicht umgeschrieben.
+
+Bei einem Einsatz mit echten Daten sind beide Punkte vor der Inbetriebnahme zu erledigen.
+
+Offen bleiben:
+
 * OData-Listen haben keine Seitengrösse; das verlangt Blättern im Frontend.
 * Keine Rollen, keine Kontosperre, kein Widerruf von Tokens.
 * `npm audit` meldet 7 Einträge in Entwicklungswerkzeugen (über `braces`); behebbar mit Tailwind CSS 4.

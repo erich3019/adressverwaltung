@@ -24,9 +24,9 @@
 <p class="meta">Stand: 4. Oktober 2026 · Version 2.3.0 · Frontend (Next.js), Backend (ASP.NET Core OData API), nginx, Docker Compose, Hilfsskripte</p>
 
 <h2>1. Zusammenfassung</h2>
-<p>Die Prüfung ergab 18 Befunde: 2 kritische, 6 hohe, 5 mittlere und 5 niedrige. 17 sind im Code behoben und am laufenden Stack überprüft. Einer ist nur im Code behoben und verlangt noch eine Handlung: Das bisherige Standardpasswort des Admin-Benutzers gilt in der bestehenden Datenbank weiterhin (S-05).</p>
+<p>Die Prüfung ergab 18 Befunde: 2 kritische, 6 hohe, 5 mittlere und 5 niedrige. 17 sind im Code behoben und am laufenden Stack überprüft. Einer ist nur im Code behoben: Das bisherige Standardpasswort des Admin-Benutzers gilt in der bestehenden Datenbank weiterhin (S-05); das ist bewusst akzeptiert.</p>
 <p>Die zwei kritischen Befunde erlaubten den Zugriff auf alle Daten ohne Anmeldung: Jeder konnte sich über <code>/auth/register</code> selbst ein Konto anlegen, und die eingesetzte Next.js-Version liess sich am Seitenschutz vorbei aufrufen.</p>
-<p>Sieben Punkte bleiben offen, weil sie sich nicht durch eine Codeänderung allein lösen lassen oder eine Entscheidung brauchen (Abschnitt 4). Am dringendsten sind das Zurücksetzen des Admin-Passworts und der Umgang mit den Geheimnissen, die noch in der Git-History auf GitHub liegen.</p>
+<p>Die Adressverwaltung ist eine Demo-Anwendung ohne schützenswerte Daten. Deshalb sind zwei Punkte bewusst akzeptiert (Entscheid vom 4. Oktober 2026): die Geheimnisse in der Git-History auf GitHub und das alte Admin-Passwort in der bestehenden Datenbank. Fünf weitere Punkte bleiben als Restrisiken offen, weil sie sich nicht durch eine kleine Codeänderung lösen lassen (Abschnitt 4).</p>
 
 <h2>2. Umfang und Vorgehen</h2>
 <ul>
@@ -54,7 +54,7 @@
   <tr><td nowrap valign="top">S-03</td><td valign="top">Hoch</td>
     <td valign="top">Geheimnisse im Repository: JWT-Schlüssel, NextAuth-Secret und Datenbankpasswort standen im Klartext in <code>docker-compose.yml</code>. Mit dem JWT-Schlüssel lassen sich gültige Tokens für beliebige Benutzer fälschen.</td>
     <td valign="top">Geheimnisse in die Datei <code>.env</code> ausgelagert (git-ignoriert, Vorlage <code>.env.example</code>); <code>docker-compose.yml</code> setzt sie als Variablen ein. Alle drei Werte neu erzeugt; das Datenbankpasswort wurde in der laufenden Datenbank geändert.</td>
-    <td valign="top">Behoben (History: O-01)</td></tr>
+    <td valign="top">Behoben (History: O-01, akzeptiert)</td></tr>
 
   <tr><td nowrap valign="top">S-04</td><td valign="top">Hoch</td>
     <td valign="top">Platzhalter-JWT-Schlüssel in <code>appsettings.json</code>, der ohne eigene Konfiguration stillschweigend verwendet wurde; dazu das Datenbankpasswort in derselben Datei.</td>
@@ -64,7 +64,7 @@
   <tr><td nowrap valign="top">S-05</td><td valign="top">Hoch</td>
     <td valign="top">Festes Standardpasswort für <code>admin@example.com</code> im Quellcode (<code>DbSeeder.cs</code>) und im README. Compose setzte kein eigenes Passwort, der Stack lief also mit diesem bekannten Zugang.</td>
     <td valign="top">Kein Standardpasswort mehr: Ohne <code>Seed:AdminPassword</code> erzeugt das Backend ein Zufallspasswort und schreibt es einmalig ins Log. Das gilt nur für eine leere Datenbank – in der bestehenden funktioniert das alte Passwort weiterhin (geprüft).</td>
-    <td valign="top">Code behoben, Handlung nötig (O-02)</td></tr>
+    <td valign="top">Code behoben; Altpasswort akzeptiert (O-02)</td></tr>
 
   <tr><td nowrap valign="top">S-06</td><td valign="top">Hoch</td>
     <td valign="top">PostgreSQL (5432) und Backend (5000, ohne TLS) waren auf allen Netzwerkschnittstellen des Hosts veröffentlicht und damit am nginx vorbei erreichbar.</td>
@@ -129,21 +129,22 @@
   <tr><td nowrap valign="top">S-18</td><td valign="top">Niedrig</td>
     <td valign="top">Ein echt wirkendes Passwort stand als «Standard» im Kommentar von <code>migration/import_cities.py</code>.</td>
     <td valign="top">Aus der Datei entfernt.</td>
-    <td valign="top">Behoben (History: O-01)</td></tr>
+    <td valign="top">Behoben (History: O-01, akzeptiert)</td></tr>
 </table>
 
-<h2>4. Offene Punkte und Restrisiken</h2>
+<h2>4. Akzeptierte Risiken und offene Punkte</h2>
+<p>O-01 und O-02 sind für die Demo-Anwendung akzeptiert. Bei einem Einsatz mit echten Daten sind sie vor der Inbetriebnahme zu erledigen. O-03 bis O-07 sind offene Restrisiken.</p>
 
 <table border="1" cellpadding="4" cellspacing="0" width="100%">
-  <tr><th style="width:7%">Nr.</th><th style="width:33%">Punkt</th><th style="width:60%">Empfehlung</th></tr>
+  <tr><th style="width:7%">Nr.</th><th style="width:33%">Punkt</th><th style="width:60%">Stand und Empfehlung</th></tr>
 
   <tr><td nowrap valign="top">O-01</td>
     <td valign="top">Geheimnisse in der Git-History auf GitHub: <code>nginx/ssl/key.pem</code>, <code>frontend/.env.local</code>, Postman-Vault-Key, die alten Werte aus <code>docker-compose.yml</code> und das Passwort aus S-18.</td>
-    <td valign="top">Als bekannt betrachten. JWT-Schlüssel, NextAuth-Secret und Datenbankpasswort sind bereits ersetzt. Noch zu tun: TLS-Zertifikat neu erzeugen, Postman-Vault-Key ersetzen, das Passwort aus S-18 überall ändern, wo es verwendet wird. Das Umschreiben der History ist danach optional und nicht umkehrbar.</td></tr>
+    <td valign="top"><b>Akzeptiert (Demo-Anwendung).</b> JWT-Schlüssel, NextAuth-Secret und Datenbankpasswort sind dennoch bereits ersetzt. Bei einem Einsatz mit echten Daten: TLS-Zertifikat neu erzeugen und Postman-Vault-Key ersetzen. Unabhängig von der Demo-Anwendung gilt: Wird das Passwort aus S-18 an anderer Stelle verwendet, ist es dort zu ändern.</td></tr>
 
   <tr><td nowrap valign="top">O-02</td>
     <td valign="top">Das frühere Standardpasswort von <code>admin@example.com</code> gilt in der bestehenden Datenbank noch.</td>
-    <td valign="top"><code>./scripts/reset_password.sh</code> ausführen.</td></tr>
+    <td valign="top"><b>Akzeptiert (Demo-Anwendung).</b> Bei einem Einsatz mit echten Daten <code>./scripts/reset_password.sh</code> ausführen.</td></tr>
 
   <tr><td nowrap valign="top">O-03</td>
     <td valign="top">OData-Listen ohne Seitengrösse: <code>GET /odata/Cities</code> liefert alle rund 4000 Zeilen in einer Antwort; <code>MaxTop</code> begrenzt nur ausdrückliche <code>$top</code>-Angaben.</td>
@@ -181,7 +182,7 @@
   <tr><td valign="top">Antwort-Header auf <code>/login</code></td><td valign="top">alle neuen Header vorhanden, <code>Server: nginx</code> ohne Version</td></tr>
   <tr><td valign="top">Veröffentlichte Ports</td><td valign="top">5000 und 5432 nur an 127.0.0.1; 80/443 offen</td></tr>
   <tr><td valign="top">Benutzer in den Containern</td><td valign="top">Backend UID 1654 (<code>app</code>), Frontend <code>node</code></td></tr>
-  <tr><td valign="top">Anmeldung mit dem alten Standardpasswort an der bestehenden Datenbank</td><td valign="top">weiterhin möglich (O-02)</td></tr>
+  <tr><td valign="top">Anmeldung mit dem alten Standardpasswort an der bestehenden Datenbank</td><td valign="top">weiterhin möglich (O-02, akzeptiert)</td></tr>
 </table>
 
 <p>Nicht im Browser geprüft: das Verhalten des Login-Formulars bei einer manipulierten <code>callbackUrl</code> (S-09) und die Bedienung der Formulare nach dem Upgrade auf React 19. Beides ist nur durch den erfolgreichen Build und die Aufrufe per <code>curl</code> abgedeckt.</p>
