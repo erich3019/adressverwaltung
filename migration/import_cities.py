@@ -17,7 +17,7 @@ Konfiguration via Umgebungsvariablen (oder direkte Anpassung der DEFAULTS):
   DB_PORT   Port                (Standard: 5432)
   DB_NAME   Datenbankname       (Standard: adressverwaltung)
   DB_USER   Datenbankbenutzer   (Standard: postgres)
-  DB_PASS   Passwort            (Standard: Gnus1Mas.)
+  DB_PASS   Passwort            (Standard: – muss gesetzt werden)
   CSV_PATH  Pfad zur CSV-Datei  (Standard: AMTOVZ_CSV_LV95.csv)
   CREATED_BY  Wert für CreatedBy (Standard: import_script)
 

@@ -37,6 +37,12 @@ builder.Services.AddScoped<INotificationService, EmailNotificationService>();
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT-Schlüssel (Jwt:Key) ist nicht konfiguriert.");
 
+// HS256 braucht mindestens 256 Bit; Platzhalter aus Vorlagen werden abgelehnt,
+// weil sich mit einem bekannten Schlüssel beliebige Tokens fälschen lassen.
+if (Encoding.UTF8.GetByteCount(jwtKey) < 32 || jwtKey.StartsWith("dein-geheimer-jwt-schluessel"))
+    throw new InvalidOperationException(
+        "JWT-Schlüssel (Jwt:Key) ist zu kurz oder ein Platzhalter. Eigenen Schlüssel mit mindestens 32 Zeichen setzen, z.B. mit 'openssl rand -base64 32'.");
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -113,7 +119,7 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 
     // B-01: Seed-Logik ausgelagert in DbSeeder (SRP)
-    DbSeeder.Seed(db, hasher, config);
+    DbSeeder.Seed(db, hasher, config, app.Logger);
 }
 
 // === MIDDLEWARE PIPELINE ===

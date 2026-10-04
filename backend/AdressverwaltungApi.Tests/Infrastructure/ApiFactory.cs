@@ -2,8 +2,10 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AdressverwaltungApi.Data;
+using AdressverwaltungApi.Models;
 using AdressverwaltungApi.Services;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +38,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         builder.UseEnvironment("Testing");
 
+        // appsettings.json enthält keine Geheimnisse mehr
+        builder.UseSetting("Jwt:Key", "nur-fuer-tests-0123456789-abcdefghijklmnopqrstuvwxyz");
+        builder.UseSetting("Seed:AdminPassword", "Seed-Passwort-Tests-1!");
+
         builder.ConfigureTestServices(services =>
         {
             // Datenbank: Container statt ConnectionStrings:DefaultConnection
@@ -57,7 +63,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await _database.DisposeAsync();
     }
 
-    /// <summary>HTTP-Client mit gültigem JWT (über /auth/register + /auth/login bezogen).</summary>
+    /// <summary>HTTP-Client mit gültigem JWT (über /auth/login bezogen).</summary>
     public async Task<HttpClient> CreateAuthenticatedClientAsync()
     {
         var client = CreateClient();
@@ -84,15 +90,19 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await action(scope.ServiceProvider.GetRequiredService<AdresseDbContext>());
     }
 
-    private static async Task<string> LoginAsync(HttpClient client)
+    private async Task<string> LoginAsync(HttpClient client)
     {
-        var register = await client.PostAsJsonAsync("/auth/register", new
+        // /auth/register verlangt selbst ein JWT, deshalb wird der Testbenutzer
+        // direkt in der Datenbank angelegt.
+        await WithDbContextAsync(async db =>
         {
-            email       = TestUserEmail,
-            password    = TestUserPassword,
-            displayName = TestUserName,
+            if (await db.Users.AnyAsync(u => u.Email == TestUserEmail)) return;
+
+            var user = new User { Email = TestUserEmail, DisplayName = TestUserName };
+            user.PasswordHash = new PasswordHasher<User>().HashPassword(user, TestUserPassword);
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
         });
-        register.EnsureSuccessStatusCode();
 
         var login = await client.PostAsJsonAsync("/auth/login", new
         {

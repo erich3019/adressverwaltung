@@ -4,10 +4,10 @@ Adressverwaltungs-WebApp mit Login, CRUD für Adressen und Städte (PLZ-Verzeich
 
 ## Tech-Stack
 
-- **Frontend:** Next.js 14 (TypeScript, Tailwind CSS, App Router), NextAuth.js
+- **Frontend:** Next.js 15 (TypeScript, Tailwind CSS, App Router), NextAuth.js
 - **Backend:** ASP.NET Core 10 Web API mit OData v4, JWT-Bearer-Authentifizierung
 - **Datenbank:** PostgreSQL 16
-- **ORM:** Entity Framework Core 8 (Npgsql)
+- **ORM:** Entity Framework Core 10 (Npgsql)
 - **Reverse Proxy:** nginx (TLS-Terminierung, HTTP → HTTPS)
 - **Container:** Docker / Docker Compose
 
@@ -47,7 +47,17 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -subj "/CN=localhost"
 ```
 
-### 2. Services starten
+### 2. Geheimnisse anlegen
+
+Passwörter und Schlüssel liegen in `env/*.env` und sind nicht im Repository enthalten. Vorlagen kopieren und die Platzhalter ersetzen:
+
+```bash
+for f in db backend frontend; do cp env/$f.env.example env/$f.env; done
+openssl rand -hex 24      # Datenbankpasswort (in db.env und backend.env identisch eintragen)
+openssl rand -base64 48   # je ein Wert für Jwt__Key und NEXTAUTH_SECRET
+```
+
+### 3. Services starten
 
 ```bash
 # Alle vier Services (db, backend, frontend, nginx) bauen und starten
@@ -63,9 +73,11 @@ Nach dem Start:
 - **Backend direkt:** http://localhost:5000 (z.B. `/odata/Adressen`, erfordert Bearer-Token)
 - **PostgreSQL:** `localhost:5432`, Datenbank `adressverwaltung`
 
-### 3. Anmelden
+Backend und PostgreSQL sind nur an `127.0.0.1` gebunden; aus dem Netzwerk ist ausschliesslich nginx erreichbar.
 
-Beim ersten Start mit leerer `Users`-Tabelle wird ein Admin-Benutzer angelegt. Die Zugangsdaten stammen aus `Seed:AdminEmail` / `Seed:AdminPassword`; ohne Konfiguration gelten die Standardwerte aus `DbSeeder.cs` (`admin@example.com` / `Test-1234!`). Das Passwort sollte nach dem ersten Login geändert werden:
+### 4. Anmelden
+
+Beim ersten Start mit leerer `Users`-Tabelle wird ein Admin-Benutzer angelegt (`Seed:AdminEmail`, Standard `admin@example.com`). Das Passwort stammt aus `Seed__AdminPassword` in `env/backend.env`; fehlt der Wert, erzeugt das Backend ein Zufallspasswort und schreibt es einmalig ins Log (`docker compose logs backend`). Das Passwort lässt sich jederzeit neu setzen:
 
 ```bash
 ./scripts/reset_password.sh
@@ -75,7 +87,7 @@ Weitere Benutzer lassen sich mit `./scripts/create_user.sh` anlegen.
 
 ## Konfiguration
 
-Die Konfiguration des Docker-Stacks steht direkt in `docker-compose.yml`:
+Die Konfiguration des Docker-Stacks steht in `docker-compose.yml`, Geheimnisse (Datenbankpasswort, `Jwt__Key`, `NEXTAUTH_SECRET`, SMTP- und Google-Zugangsdaten) in `env/*.env`:
 
 | Variable | Service | Bedeutung |
 |----------|---------|-----------|
@@ -86,7 +98,9 @@ Die Konfiguration des Docker-Stacks steht direkt in `docker-compose.yml`:
 | `INTERNAL_API_URL` | frontend | Backend-URL für serverseitige Aufrufe (`http://backend:8080`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | frontend | Google-Login (optional, leer = deaktiviert) |
 
-Die in `docker-compose.yml` und `appsettings.json` eingetragenen Schlüssel und Passwörter sind Beispielwerte für die lokale Entwicklung und müssen für jeden anderen Einsatz ersetzt werden (z.B. `openssl rand -base64 32`).
+`appsettings.json` enthält keine Geheimnisse. Das Backend startet nicht, wenn `Jwt:Key` fehlt, kürzer als 32 Zeichen oder ein Platzhalter ist.
+
+Der Sicherheitsbericht mit allen Befunden und Korrekturen liegt unter `documentation/Sicherheitsbericht.pdf`.
 
 ## Funktionen
 
@@ -105,7 +119,7 @@ DB_PASS=<passwort> CSV_PATH=migration/AMTOVZ_CSV_LV95.csv python3 scripts/import
 
 ## API
 
-Alle Endpunkte ausser `/auth/*` erfordern den Header `Authorization: Bearer <token>`.
+Alle Endpunkte ausser `/auth/login` erfordern den Header `Authorization: Bearer <token>`.
 
 ### Token beziehen
 
@@ -123,7 +137,7 @@ curl -s http://localhost:5000/odata/Adressen -H "Authorization: Bearer <JWT>"
 | Methode | URL | Beschreibung |
 |---------|-----|--------------|
 | POST | `/auth/login` | Anmelden, liefert JWT |
-| POST | `/auth/register` | Benutzer registrieren |
+| POST | `/auth/register` | Benutzer registrieren (nur mit Bearer-Token) |
 | GET | `/odata/Adressen` | Alle Adressen |
 | GET | `/odata/Adressen(1)` | Adresse mit Id 1 |
 | GET | `/odata/Adressen?$filter=ort eq 'Bern'` | Gefiltert |
@@ -142,14 +156,16 @@ Property-Namen sind in Payloads und OData-Abfragen camelCase (`ort`, `postalCode
 ### Voraussetzungen
 
 - Node.js 20 LTS
-- .NET SDK 8
+- .NET SDK 10
 - PostgreSQL 16
 
 ### Backend starten
 
 ```bash
 cd backend/AdressverwaltungApi
-# appsettings.json anpassen (Datenbankpasswort, Jwt:Key)
+# Geheimnisse kommen aus der Umgebung, nicht aus appsettings.json
+export Jwt__Key="$(openssl rand -base64 48)"
+export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=adressverwaltung;Username=postgres;Password=<passwort>"
 ASPNETCORE_ENVIRONMENT=Development dotnet run
 # Backend:    http://localhost:5000
 # Swagger UI: http://localhost:5000/swagger (nur in Development)
@@ -170,7 +186,7 @@ dotnet test
 
 ```bash
 cd frontend
-npm install
+npm ci           # installiert exakt die Versionen aus package-lock.json
 npm run dev      # http://localhost:3000
 npm run lint
 ```

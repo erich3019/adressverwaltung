@@ -55,8 +55,8 @@ if [ -z "$DISPLAY_NAME" ]; then
     exit 1
 fi
 
-if [ ${#NEW_PASSWORD} -lt 6 ]; then
-    echo "❌ Fehler: Passwort muss mindestens 6 Zeichen lang sein."
+if [ ${#NEW_PASSWORD} -lt 8 ]; then
+    echo "❌ Fehler: Passwort muss mindestens 8 Zeichen lang sein."
     exit 1
 fi
 
@@ -98,8 +98,12 @@ fi
 # ── Prüfen ob E-Mail bereits existiert ──────────────────────
 echo "⏳ Prüfe ob E-Mail bereits vergeben ist..."
 
-EMAIL_EXISTS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAc \
-    "SELECT COUNT(*) FROM \"Users\" WHERE \"Email\" = '$NEW_EMAIL';")
+# Werte als psql-Variablen übergeben (:'name' quotet sicher) statt sie ins SQL einzusetzen
+EMAIL_EXISTS=$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tA \
+    -v ON_ERROR_STOP=1 -v email="$NEW_EMAIL" <<'SQL'
+SELECT COUNT(*) FROM "Users" WHERE "Email" = :'email';
+SQL
+)
 
 if [ "$EMAIL_EXISTS" -gt 0 ]; then
     echo "❌ Fehler: Ein Benutzer mit der E-Mail '$NEW_EMAIL' existiert bereits."
@@ -110,10 +114,11 @@ fi
 # ── Hash generieren (Python, PBKDF2-HMAC-SHA256, ASP.NET Core V3) ──
 echo "⏳ Generiere Passwort-Hash..."
 
-NEW_HASH=$(python3 - <<PYEOF
+# Passwort über die Umgebung übergeben, nicht in den Python-Quelltext einsetzen
+NEW_HASH=$(NEW_PASSWORD="$NEW_PASSWORD" python3 - <<'PYEOF'
 import struct, os, hashlib, base64
 
-password = """$NEW_PASSWORD"""
+password = os.environ["NEW_PASSWORD"]
 
 # ASP.NET Core Identity PasswordHasher V3
 salt       = os.urandom(16)
@@ -147,26 +152,29 @@ CREATED_BY="script/create_user.sh"
 # ── User in DB einfügen ──────────────────────────────────────
 echo "⏳ Benutzer wird in der Datenbank angelegt..."
 
-docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c \
-    "INSERT INTO \"Users\"
-        (\"Email\", \"PasswordHash\", \"DisplayName\",
-         \"CreateDate\", \"CreatedBy\",
-         \"ChangeDate\", \"ChangedBy\",
-         \"DateFrom\", \"DateTo\")
-     VALUES
-        ('$NEW_EMAIL', '$NEW_HASH', '$DISPLAY_NAME',
-         '$NOW_UTC', '$CREATED_BY',
-         NULL, NULL,
-         '$TODAY', NULL);"
+docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" \
+    -v ON_ERROR_STOP=1 \
+    -v email="$NEW_EMAIL" -v hash="$NEW_HASH" -v name="$DISPLAY_NAME" \
+    -v now="$NOW_UTC" -v by="$CREATED_BY" -v today="$TODAY" <<'SQL'
+INSERT INTO "Users"
+    ("Email", "PasswordHash", "DisplayName",
+     "CreateDate", "CreatedBy",
+     "ChangeDate", "ChangedBy",
+     "DateFrom", "DateTo")
+ VALUES
+    (:'email', :'hash', :'name',
+     :'now', :'by',
+     NULL, NULL,
+     :'today', NULL);
+SQL
 
 echo ""
 echo "✅ Benutzer erfolgreich angelegt!"
 echo ""
 echo "   E-Mail      : $NEW_EMAIL"
 echo "   Anzeigename : $DISPLAY_NAME"
-echo "   Passwort    : $NEW_PASSWORD"
 echo "   Erstellt am : $NOW_UTC UTC"
 echo "   Gültig ab   : $TODAY"
 echo ""
-echo "   Login unter: http://localhost:3000/login"
+echo "   Login unter: https://localhost/login"
 echo ""

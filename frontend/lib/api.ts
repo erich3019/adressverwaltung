@@ -179,7 +179,9 @@ export async function sucheStaedteNachPlz(plzPrefix: string): Promise<City[]> {
   if (!plzPrefix || plzPrefix.length < 2) return [];
 
   // OData-Filter: PLZ beginnt mit dem eingegebenen Wert
-  const filter = encodeURIComponent(`startswith(postalCode,'${plzPrefix}')`);
+  // Hochkomma verdoppeln, damit die Eingabe das OData-Stringliteral nicht verlassen kann
+  const plzLiteral = plzPrefix.replace(/'/g, "''");
+  const filter = encodeURIComponent(`startswith(postalCode,'${plzLiteral}')`);
   const response = await apiFetch(
     `${ODATA_URL}/Cities?$filter=${filter}&$top=10&$orderby=postalCode`,
     { cache: 'no-store' }

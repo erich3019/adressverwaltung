@@ -17,4 +17,7 @@ COPY --from=build /app/publish .
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 
+# Nicht als root laufen (Benutzer "app" ist im aspnet-Image vorhanden)
+USER $APP_UID
+
 ENTRYPOINT ["dotnet", "AdressverwaltungApi.dll"]

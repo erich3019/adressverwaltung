@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,7 @@ namespace AdressverwaltungApi.Controllers;
 /// - Das PasswordHash-Feld wird NIEMALS in Responses zurückgegeben
 /// - Fehlermeldungen sind bewusst generisch (kein Hinweis ob E-Mail oder Passwort falsch)
 /// - Bei erfolgreichem Login wird ein JWT Bearer-Token ausgestellt (8 h Gültigkeit)
+/// - Registrierung ist nur für bereits angemeldete Benutzer möglich
 /// </summary>
 [Route("auth")]
 [ApiController]
@@ -26,6 +28,12 @@ public class AuthController : ControllerBase
     private readonly AdresseDbContext _context;
     private readonly IPasswordHasher<User> _hasher;
     private readonly IConfiguration _config;
+
+    // Fester Hash für die Passwortprüfung bei unbekannter E-Mail. Einmalig berechnet,
+    // damit Login für bekannte und unbekannte Benutzer gleich lange dauert.
+    private static readonly User DummyUser = new();
+    private static readonly string DummyHash =
+        new PasswordHasher<User>().HashPassword(DummyUser, Guid.NewGuid().ToString());
 
     public AuthController(
         AdresseDbContext context,
@@ -67,7 +75,13 @@ public class AuthController : ControllerBase
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    private const string RegisterMessage =
+        "Falls diese E-Mail noch nicht registriert ist, wurde ein Konto erstellt.";
+
     // POST /auth/register
+    // Nur mit gültigem JWT: Neue Benutzer erhalten vollen Zugriff auf alle Daten,
+    // deshalb darf sich niemand anonym selbst registrieren.
+    [Authorize]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
@@ -84,7 +98,7 @@ public class AuthController : ControllerBase
         if (exists)
         {
             // Gleiche Meldung wie bei Erfolg → kein User-Enumeration-Angriff möglich
-            return Ok(new { message = "Falls diese E-Mail noch nicht registriert ist, wurde ein Konto erstellt." });
+            return Ok(new { message = RegisterMessage });
         }
 
         var user = new User
@@ -97,7 +111,7 @@ public class AuthController : ControllerBase
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "Registrierung erfolgreich." });
+        return Ok(new { message = RegisterMessage });
     }
 
     // POST /auth/login
@@ -117,9 +131,8 @@ public class AuthController : ControllerBase
 
         // Passwort prüfen – bei ungültigem Benutzer trotzdem "prüfen"
         // (verhindert Timing-Angriffe durch gleiche Ausführungszeit)
-        var dummyUser = new User();
-        var hashToVerify = user?.PasswordHash ?? _hasher.HashPassword(dummyUser, "dummy");
-        var verifyTarget = user ?? dummyUser;
+        var hashToVerify = user?.PasswordHash ?? DummyHash;
+        var verifyTarget = user ?? DummyUser;
         var result       = _hasher.VerifyHashedPassword(verifyTarget, hashToVerify, req.Password);
 
         if (user is null || result == PasswordVerificationResult.Failed)

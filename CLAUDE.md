@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Adressverwaltung is a tutorial-style address management web app (current version 2.2.0): Next.js 14 frontend, ASP.NET Core 10 OData API, PostgreSQL 16, fronted by nginx. Code comments, identifiers in the domain layer, UI text and documentation are in German (Swiss spelling: `ss` instead of `ß`, e.g. `Strasse`) — keep to that when adding code.
+Adressverwaltung is a tutorial-style address management web app (current version 2.2.0): Next.js 15 frontend, ASP.NET Core 10 OData API, PostgreSQL 16, fronted by nginx. Code comments, identifiers in the domain layer, UI text and documentation are in German (Swiss spelling: `ss` instead of `ß`, e.g. `Strasse`) — keep to that when adding code.
 
 `README.md` is outdated (describes v1.0.0 without auth, nginx, Cities or Settings). Trust the code and `documentation/Aenderungsprotokoll_v2.*.md` over the README.
 
@@ -21,7 +21,8 @@ docker compose logs -f backend
 - Backend directly: http://localhost:5000 (e.g. `/odata/Adressen`)
 - Postgres: localhost:5432, database `adressverwaltung`
 - The frontend container is not published on a host port; it is only reachable through nginx.
-- Seeded login when the Users table is empty: `Seed:AdminEmail` / `Seed:AdminPassword` from config, falling back to the defaults in `DbSeeder.cs`.
+- Backend and Postgres are published on `127.0.0.1` only.
+- Seeded login when the Users table is empty: `Seed:AdminEmail` (default `admin@example.com`) / `Seed:AdminPassword`. Without a configured password `DbSeeder` generates a random one and logs it once; there is no hardcoded default.
 
 ### Backend (`backend/AdressverwaltungApi`)
 
@@ -31,12 +32,12 @@ dotnet run                                        # http://localhost:5000
 ASPNETCORE_ENVIRONMENT=Development dotnet run     # also enables Swagger at /swagger
 ```
 
-There is no `launchSettings.json`, so plain `dotnet run` starts in Production and Swagger is off. The connection string in `appsettings.json` expects Postgres on localhost:5432.
+There is no `launchSettings.json`, so plain `dotnet run` starts in Production and Swagger is off. `appsettings.json` holds no secrets: `Jwt__Key` (at least 32 characters, startup fails otherwise) and a `ConnectionStrings__DefaultConnection` with the password must come from the environment.
 
 ### Frontend (`frontend`)
 
 ```bash
-npm install
+npm ci           # package-lock.json is tracked; the Dockerfile uses npm ci too
 npm run dev      # http://localhost:3000
 npm run build
 npm run lint     # next lint (next/core-web-vitals)
@@ -82,7 +83,7 @@ Consequences:
 
 ### Authentication (two JWT layers)
 
-1. `AuthController` (`POST /auth/login`, `/auth/register`) verifies the password and issues a backend JWT (HS256, `Jwt:*` config, 8 h).
+1. `AuthController` (`POST /auth/login`) verifies the password and issues a backend JWT (HS256, `Jwt:*` config, 8 h). `POST /auth/register` requires a valid JWT — every user has full access, so there is no anonymous self-registration.
 2. NextAuth's Credentials provider (`frontend/lib/auth.ts`) calls `/auth/login` server-side and stores that backend JWT as `accessToken` inside its own encrypted session cookie; the `jwt`/`session` callbacks expose it as `session.accessToken` (typed in `types/next-auth.d.ts`).
 3. `apiFetch` in `lib/api.ts` attaches it as `Authorization: Bearer …`, using `getServerSession(authOptions)` on the server and `getSession()` in the browser. All backend calls should go through `apiFetch`.
 4. `frontend/middleware.ts` requires a session for every page except `/login` and `/api/auth`.
@@ -94,7 +95,7 @@ Session lifetime (NextAuth `maxAge`) and backend token lifetime (`Jwt:ExpiresInH
 - **OData CRUD**: `ODataCrudController<TEntity>` implements `Get`/`Get(key)`/`Post`/`Patch`/`Delete` with `[Authorize]` and `[EnableQuery]`. A concrete controller only supplies `Entities` and `EntityDisplayName` (see `CitiesController`); `AdressenController` overrides `Post` to trigger a notification. Exposing a new entity over OData takes: model, `DbSet` + configuration in `AdresseDbContext`, `modelBuilder.EntitySet<T>("Name")` in `Program.cs`, and a controller whose name matches the entity set.
 - **Plain REST**: `AuthController` and `SettingsController` are ordinary `[ApiController]`s with DTOs in `Dtos/`. `Settings` is treated as a single row.
 - **Casing**: the EDM model uses `EnableLowerCamelCase()` and MVC JSON is camelCase, so payloads and OData query options use camelCase property names (`$filter=startswith(postalCode,'80')`). The `normalize*` functions in `lib/api.ts` still accept PascalCase as a fallback.
-- **Audit fields**: every entity (`Adresse`, `City`, `User`, `Settings`) derives from `AuditableEntity` (`CreateDate`, `CreatedBy`, `ChangeDate`, `ChangedBy`, `DateFrom`, `DateTo`). `AdresseDbContext.SaveChanges[Async]` fills them automatically — user from the JWT name claim, then the `X-User` header, then `"system"` — and defaults `DateFrom` to today. Don't set them in controllers. Timestamps are stored as `timestamp without time zone`, so `DateTime` values must have `Kind=Unspecified` (Npgsql rejects UTC kinds for that column type). Scripts that write to the database with raw SQL bypass this and must populate the audit columns themselves, as `create_user.sh` and `import_cities.py` do.
+- **Audit fields**: every entity (`Adresse`, `City`, `User`, `Settings`) derives from `AuditableEntity` (`CreateDate`, `CreatedBy`, `ChangeDate`, `ChangedBy`, `DateFrom`, `DateTo`). `AdresseDbContext.SaveChanges[Async]` fills them automatically — user from the JWT name claim, otherwise `"system"` (request headers are deliberately not trusted) — and defaults `DateFrom` to today. Don't set them in controllers. Timestamps are stored as `timestamp without time zone`, so `DateTime` values must have `Kind=Unspecified` (Npgsql rejects UTC kinds for that column type). Scripts that write to the database with raw SQL bypass this and must populate the audit columns themselves, as `create_user.sh` and `import_cities.py` do.
 - **Schema creation**: startup calls `db.Database.EnsureCreated()` followed by `DbSeeder.Seed`, not `Migrate()`. The files in `Migrations/` are not applied at runtime, and `EnsureCreated` does nothing once the database exists — a model change does not reach an existing database (e.g. the `postgres-data` volume) on its own.
 - **Notifications**: `AdressenController.Post` → `INotificationService` (`EmailNotificationService`) → `IEmailService` (SMTP, `SmtpSettings:*`). The recipient is `Settings.NotificationEmail`; failures are logged and swallowed so they never fail the API request.
 - **OData limits**: `SetMaxTop(100)`; `Select`, `Filter`, `OrderBy`, `Count`, `Expand` are enabled.
@@ -113,7 +114,8 @@ Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentat
 
 ## Repository notes
 
-- Configuration for the Docker stack is inline in `docker-compose.yml` (`Jwt__*`, `SmtpSettings__*`, `ConnectionStrings__DefaultConnection`, NextAuth vars). The root `.env` holds variables for a different project and is not referenced by the compose file.
-- `nginx/ssl/*.pem`, `frontend/.env.local` and `.env` are git-ignored. A fresh clone has to create them before the stack starts: a self-signed `cert.pem`/`key.pem` pair in `nginx/ssl/` (nginx mounts that directory) and the frontend env file.
+- Non-secret configuration for the Docker stack is inline in `docker-compose.yml`; secrets (`POSTGRES_PASSWORD`, `ConnectionStrings__DefaultConnection`, `Jwt__Key`, `NEXTAUTH_SECRET`, SMTP and Google credentials) come from `env/db.env`, `env/backend.env` and `env/frontend.env` via `env_file`. The root `.env` holds variables for a different project and is not referenced by the compose file.
+- `nginx/ssl/*.pem`, `env/*.env`, `frontend/.env.local` and `.env` are git-ignored. A fresh clone has to create them before the stack starts: a self-signed `cert.pem`/`key.pem` pair in `nginx/ssl/` (nginx mounts that directory) and the three env files from their tracked `env/*.env.example` templates.
+- nginx rate-limits `/auth/` and `/api/auth/callback/credentials` (10 requests per minute per client IP) and sets the security headers; `documentation/Sicherheitsbericht.pdf` lists the security findings and what was done about them.
 - `archive/*.zip` are tracked release bundles of earlier versions, not source.
 - `migration/import_cities.py` is a near-duplicate of `scripts/import_cities.py`.

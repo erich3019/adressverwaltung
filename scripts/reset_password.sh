@@ -38,8 +38,8 @@ else
         exit 1
     fi
 
-    if [ ${#NEW_PASSWORD} -lt 6 ]; then
-        echo "❌ Fehler: Passwort muss mindestens 6 Zeichen lang sein."
+    if [ ${#NEW_PASSWORD} -lt 8 ]; then
+        echo "❌ Fehler: Passwort muss mindestens 8 Zeichen lang sein."
         exit 1
     fi
 fi
@@ -48,10 +48,11 @@ fi
 echo ""
 echo "⏳ Generiere Passwort-Hash..."
 
-NEW_HASH=$(python3 - <<PYEOF
+# Passwort über die Umgebung übergeben, nicht in den Python-Quelltext einsetzen
+NEW_HASH=$(NEW_PASSWORD="$NEW_PASSWORD" python3 - <<'PYEOF'
 import struct, os, hashlib, base64
 
-password = """$NEW_PASSWORD"""
+password = os.environ["NEW_PASSWORD"]
 
 # ASP.NET Core Identity PasswordHasher V3
 salt       = os.urandom(16)
@@ -106,8 +107,12 @@ if [ "$TABLE_EXISTS" != "t" ]; then
 fi
 
 # ── Prüfen ob User existiert ─────────────────────────────────
-USER_EXISTS=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAc \
-    "SELECT COUNT(*) FROM \"Users\" WHERE \"Email\" = '$TARGET_EMAIL';")
+# Werte als psql-Variablen übergeben (:'name' quotet sicher) statt sie ins SQL einzusetzen
+USER_EXISTS=$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tA \
+    -v ON_ERROR_STOP=1 -v email="$TARGET_EMAIL" <<'SQL'
+SELECT COUNT(*) FROM "Users" WHERE "Email" = :'email';
+SQL
+)
 
 if [ "$USER_EXISTS" -eq 0 ]; then
     echo ""
@@ -117,15 +122,16 @@ if [ "$USER_EXISTS" -eq 0 ]; then
 fi
 
 # ── Passwort-Hash in DB schreiben ────────────────────────────
-docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c \
-    "UPDATE \"Users\" SET \"PasswordHash\" = '$NEW_HASH' WHERE \"Email\" = '$TARGET_EMAIL';"
+docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" \
+    -v ON_ERROR_STOP=1 -v email="$TARGET_EMAIL" -v hash="$NEW_HASH" <<'SQL'
+UPDATE "Users" SET "PasswordHash" = :'hash' WHERE "Email" = :'email';
+SQL
 
 echo ""
 echo "✅ Passwort erfolgreich zurückgesetzt!"
 echo ""
 echo "   E-Mail  : $TARGET_EMAIL"
-echo "   Passwort: $NEW_PASSWORD"
 echo ""
 echo "   Bitte jetzt im Browser einloggen:"
-echo "   http://localhost:3000/login"
+echo "   https://localhost/login"
 echo ""

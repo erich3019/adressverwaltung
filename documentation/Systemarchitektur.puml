@@ -55,7 +55,7 @@ rectangle "Docker Compose" as compose {
     component "Reverse Proxy\nRouting nach Pfad-Präfix" as proxy
   }
 
-  node "frontend  (adressverwaltung-frontend)\nNext.js 14 · Node 20 · :3000 (nur intern)" as frontend {
+  node "frontend  (adressverwaltung-frontend)\nNext.js 15 · Node 20 · :3000 (nur intern)" as frontend {
     component "middleware.ts\nRoute-Schutz" as mw
     component "App Router\nServer + Client Components" as pages
     component "NextAuth.js\n/api/auth/*\nSession-Cookie (JWT, 8 h)" as nextauth

@@ -4,15 +4,15 @@ namespace AdressverwaltungApi.Dtos;
 
 /// <summary>Request-Body für POST /auth/register</summary>
 public record RegisterRequest(
-    [Required][EmailAddress] string Email,
-    [Required][MinLength(8)] string Password,
+    [Required][EmailAddress][MaxLength(256)] string Email,
+    [Required][MinLength(8)][MaxLength(128)] string Password,
     [Required][MaxLength(100)] string DisplayName
 );
 
 /// <summary>Request-Body für POST /auth/login</summary>
 public record LoginRequest(
-    [Required][EmailAddress] string Email,
-    [Required] string Password
+    [Required][EmailAddress][MaxLength(256)] string Email,
+    [Required][MaxLength(128)] string Password
 );
 
 /// <summary>

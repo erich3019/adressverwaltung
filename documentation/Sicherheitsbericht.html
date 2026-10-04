@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Sicherheitsbericht Adressverwaltung</title>
+<style>
+  @page { size: A4; margin: 2cm 1.8cm; }
+  body { font-family: 'Liberation Sans', Arial, sans-serif; font-size: 10pt; line-height: 1.35; color: #1a1a1a; }
+  h1 { font-size: 20pt; margin: 0 0 4pt 0; }
+  h2 { font-size: 13pt; margin: 18pt 0 6pt 0; border-bottom: 1px solid #999; padding-bottom: 2pt; }
+  h3 { font-size: 10.5pt; margin: 12pt 0 3pt 0; }
+  p { margin: 0 0 6pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 10pt 0; }
+  th, td { border: 1px solid #999; padding: 3pt 5pt; vertical-align: top; text-align: left; font-size: 9pt; }
+  th { background: #e6e6e6; }
+  code { font-family: 'Liberation Mono', monospace; font-size: 8.5pt; }
+  .meta { color: #444; margin-bottom: 10pt; }
+  ul { margin: 0 0 6pt 0; }
+</style>
+</head>
+<body>
+
+<h1>Sicherheitsbericht Adressverwaltung</h1>
+<p class="meta">Stand: 4. Oktober 2026 · Version 2.2.0 · Frontend (Next.js), Backend (ASP.NET Core OData API), nginx, Docker Compose, Hilfsskripte</p>
+
+<h2>1. Zusammenfassung</h2>
+<p>Die Prüfung ergab 18 Befunde: 2 kritische, 6 hohe, 5 mittlere und 5 niedrige. 17 sind im Code behoben und am laufenden Stack überprüft. Einer ist nur im Code behoben und verlangt noch eine Handlung: Das bisherige Standardpasswort des Admin-Benutzers gilt in der bestehenden Datenbank weiterhin (S-05).</p>
+<p>Die zwei kritischen Befunde erlaubten den Zugriff auf alle Daten ohne Anmeldung: Jeder konnte sich über <code>/auth/register</code> selbst ein Konto anlegen, und die eingesetzte Next.js-Version liess sich am Seitenschutz vorbei aufrufen.</p>
+<p>Sieben Punkte bleiben offen, weil sie sich nicht durch eine Codeänderung allein lösen lassen oder eine Entscheidung brauchen (Abschnitt 4). Am dringendsten sind das Zurücksetzen des Admin-Passworts und der Umgang mit den Geheimnissen, die noch in der Git-History auf GitHub liegen.</p>
+
+<h2>2. Umfang und Vorgehen</h2>
+<ul>
+  <li>Manuelle Durchsicht des Quellcodes: Controller, DbContext, Seeder, DTOs, <code>Program.cs</code>, <code>lib/auth.ts</code>, <code>lib/api.ts</code>, <code>middleware.ts</code>, Login-Formular, <code>nginx.conf</code>, <code>docker-compose.yml</code>, Dockerfiles, Skripte in <code>scripts/</code> und <code>migration/</code>.</li>
+  <li>Abhängigkeiten: <code>dotnet list package --vulnerable --include-transitive</code> und <code>npm audit</code>.</li>
+  <li>Überprüfung der Korrekturen: 51 Backend-Integrationstests (davon 5 neu für diese Korrekturen) und Aufrufe gegen den neu gebauten Docker-Stack unter https://localhost.</li>
+</ul>
+<p>Nicht Teil der Prüfung: automatisierte Penetrationstests mit externen Werkzeugen, die Inhalte der Git-History im Detail und die Infrastruktur ausserhalb des Docker-Stacks.</p>
+
+<h2>3. Befunde und Korrekturen</h2>
+
+<table border="1" cellpadding="4" cellspacing="0" width="100%">
+  <tr><th style="width:7%">Nr.</th><th style="width:9%">Stufe</th><th style="width:30%">Befund</th><th style="width:40%">Korrektur</th><th style="width:14%">Status</th></tr>
+
+  <tr><td nowrap valign="top">S-01</td><td valign="top">Kritisch</td>
+    <td valign="top">Offene Registrierung: <code>POST /auth/register</code> war ohne Anmeldung erreichbar. Ein neu angelegtes Konto erhält ein gültiges Token und damit vollen Lese- und Schreibzugriff auf alle Adressen, Städte und Einstellungen.</td>
+    <td valign="top"><code>[Authorize]</code> auf der Registrierung: Nur angemeldete Benutzer können weitere Benutzer anlegen. Die Tests legen ihren Benutzer direkt in der Datenbank an.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-02</td><td valign="top">Kritisch</td>
+    <td valign="top">Next.js 14.2.5 mit bekannten Lücken, darunter die Umgehung der Middleware (GHSA-f82v-jwr5-mffw), die hier den gesamten Seitenschutz bildet, und Codeausführung über die Bildoptimierung (GHSA-2xp9-vwfh-vxw4). Die 14er-Linie erhält dafür keine Korrekturen mehr.</td>
+    <td valign="top">Upgrade auf Next.js 15.5.27 und React 19. <code>npm audit --omit=dev</code> meldet keine Lücken mehr. PostCSS per <code>overrides</code> auf eine korrigierte Version angehoben.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-03</td><td valign="top">Hoch</td>
+    <td valign="top">Geheimnisse im Repository: JWT-Schlüssel, NextAuth-Secret und Datenbankpasswort standen im Klartext in <code>docker-compose.yml</code>. Mit dem JWT-Schlüssel lassen sich gültige Tokens für beliebige Benutzer fälschen.</td>
+    <td valign="top">Geheimnisse in <code>env/db.env</code>, <code>env/backend.env</code>, <code>env/frontend.env</code> ausgelagert (git-ignoriert, Vorlagen <code>*.env.example</code>). Alle drei Werte neu erzeugt; das Datenbankpasswort wurde in der laufenden Datenbank geändert.</td>
+    <td valign="top">Behoben (History: O-01)</td></tr>
+
+  <tr><td nowrap valign="top">S-04</td><td valign="top">Hoch</td>
+    <td valign="top">Platzhalter-JWT-Schlüssel in <code>appsettings.json</code>, der ohne eigene Konfiguration stillschweigend verwendet wurde; dazu das Datenbankpasswort in derselben Datei.</td>
+    <td valign="top">Schlüssel und Passwort aus <code>appsettings.json</code> entfernt. Das Backend startet nicht, wenn <code>Jwt:Key</code> fehlt, kürzer als 32 Zeichen oder der alte Platzhalter ist.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-05</td><td valign="top">Hoch</td>
+    <td valign="top">Festes Standardpasswort für <code>admin@example.com</code> im Quellcode (<code>DbSeeder.cs</code>) und im README. Compose setzte kein eigenes Passwort, der Stack lief also mit diesem bekannten Zugang.</td>
+    <td valign="top">Kein Standardpasswort mehr: Ohne <code>Seed:AdminPassword</code> erzeugt das Backend ein Zufallspasswort und schreibt es einmalig ins Log. Das gilt nur für eine leere Datenbank – in der bestehenden funktioniert das alte Passwort weiterhin (geprüft).</td>
+    <td valign="top">Code behoben, Handlung nötig (O-02)</td></tr>
+
+  <tr><td nowrap valign="top">S-06</td><td valign="top">Hoch</td>
+    <td valign="top">PostgreSQL (5432) und Backend (5000, ohne TLS) waren auf allen Netzwerkschnittstellen des Hosts veröffentlicht und damit am nginx vorbei erreichbar.</td>
+    <td valign="top">Beide Ports nur noch an <code>127.0.0.1</code> gebunden. Aus dem Netzwerk ist ausschliesslich nginx (80/443) erreichbar.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-07</td><td valign="top">Hoch</td>
+    <td valign="top">Kein Schutz gegen Passwort-Raten: Anmeldeversuche waren unbegrenzt möglich.</td>
+    <td valign="top">nginx begrenzt <code>/auth/</code> und <code>/api/auth/callback/credentials</code> auf 10 Anfragen pro Minute und Client-IP (Antwort 429). Im Test wurden 21 von 25 schnellen Versuchen abgewiesen.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-08</td><td valign="top">Hoch</td>
+    <td valign="top">NuGet-Pakete mit bekannten Lücken (transitiv): <code>Microsoft.Extensions.Caching.Memory</code>, <code>System.Text.Json</code> (hoch), <code>System.IdentityModel.Tokens.Jwt</code>, <code>Microsoft.IdentityModel.JsonWebTokens</code> (mittel).</td>
+    <td valign="top">Pakete aktualisiert, danach Migration auf .NET 10. Die Prüfung meldet für beide Projekte keine anfälligen Pakete.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-09</td><td valign="top">Mittel</td>
+    <td valign="top">Open Redirect: Das Login-Formular leitete nach der Anmeldung ungeprüft auf den Parameter <code>callbackUrl</code> weiter, also auch auf fremde Seiten (Phishing über einen echten Login-Link).</td>
+    <td valign="top">Nur noch Pfade innerhalb der eigenen App werden akzeptiert, alles andere führt auf die Startseite.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-10</td><td valign="top">Mittel</td>
+    <td valign="top">Audit-Felder fälschbar: <code>CreatedBy</code>/<code>ChangedBy</code> wurden ersatzweise aus dem frei setzbaren Header <code>X-User</code> übernommen.</td>
+    <td valign="top">Der Header wird nicht mehr gelesen; massgebend ist allein der Name aus dem Token. Durch einen Test abgedeckt.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-11</td><td valign="top">Mittel</td>
+    <td valign="top">Benutzer-Enumeration: Der Login brauchte für unbekannte E-Mail-Adressen messbar länger (zusätzliche Hash-Berechnung), und die Registrierung antwortete für bestehende und neue Adressen unterschiedlich.</td>
+    <td valign="top">Fester, einmalig berechneter Vergleichs-Hash für unbekannte Benutzer; identische Antwort der Registrierung in beiden Fällen.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-12</td><td valign="top">Mittel</td>
+    <td valign="top">Backend- und Frontend-Container liefen als <code>root</code>.</td>
+    <td valign="top"><code>USER</code> in beiden Dockerfiles gesetzt (Backend: <code>app</code>, Frontend: <code>node</code>).</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-13</td><td valign="top">Mittel</td>
+    <td valign="top">Frontend-Build ohne Lockfile: <code>npm install</code> holte bei jedem Build die jeweils neusten passenden Versionen, ohne Integritätsprüfung.</td>
+    <td valign="top"><code>package-lock.json</code> versioniert, Dockerfile verwendet <code>npm ci</code>.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-14</td><td valign="top">Niedrig</td>
+    <td valign="top">Unvollständige Sicherheitsheader; nginx gab seine Version preis.</td>
+    <td valign="top">Ergänzt: <code>Referrer-Policy</code>, <code>Permissions-Policy</code>, <code>Content-Security-Policy</code> (<code>frame-ancestors</code>, <code>base-uri</code>, <code>form-action</code>, <code>object-src</code>); bestehende Header auch auf Fehlerantworten; <code>server_tokens off</code>.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-15</td><td valign="top">Niedrig</td>
+    <td valign="top">Skripte <code>create_user.sh</code> und <code>reset_password.sh</code>: Eingaben wurden direkt in SQL und in Python-Quelltext eingesetzt, das Passwort am Ende im Klartext ausgegeben, Mindestlänge 6 statt 8.</td>
+    <td valign="top">Werte gehen als psql-Variablen bzw. über die Umgebung; keine Passwortausgabe; Mindestlänge 8. Mit einem Passwort und Namen voller Sonderzeichen getestet.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-16</td><td valign="top">Niedrig</td>
+    <td valign="top">PLZ-Suche: Ein Hochkomma in der Eingabe konnte den OData-Filter verändern (ohne Rechteausweitung).</td>
+    <td valign="top">Hochkommas werden verdoppelt.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-17</td><td valign="top">Niedrig</td>
+    <td valign="top">Keine Längenbegrenzung für E-Mail und Passwort bei Login und Registrierung.</td>
+    <td valign="top"><code>MaxLength</code> 256 bzw. 128 auf den DTOs.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">S-18</td><td valign="top">Niedrig</td>
+    <td valign="top">Ein echt wirkendes Passwort stand als «Standard» im Kommentar von <code>migration/import_cities.py</code>.</td>
+    <td valign="top">Aus der Datei entfernt.</td>
+    <td valign="top">Behoben (History: O-01)</td></tr>
+</table>
+
+<h2>4. Offene Punkte und Restrisiken</h2>
+
+<table border="1" cellpadding="4" cellspacing="0" width="100%">
+  <tr><th style="width:7%">Nr.</th><th style="width:33%">Punkt</th><th style="width:60%">Empfehlung</th></tr>
+
+  <tr><td nowrap valign="top">O-01</td>
+    <td valign="top">Geheimnisse in der Git-History auf GitHub: <code>nginx/ssl/key.pem</code>, <code>frontend/.env.local</code>, Postman-Vault-Key, die alten Werte aus <code>docker-compose.yml</code> und das Passwort aus S-18.</td>
+    <td valign="top">Als bekannt betrachten. JWT-Schlüssel, NextAuth-Secret und Datenbankpasswort sind bereits ersetzt. Noch zu tun: TLS-Zertifikat neu erzeugen, Postman-Vault-Key ersetzen, das Passwort aus S-18 überall ändern, wo es verwendet wird. Das Umschreiben der History ist danach optional und nicht umkehrbar.</td></tr>
+
+  <tr><td nowrap valign="top">O-02</td>
+    <td valign="top">Das frühere Standardpasswort von <code>admin@example.com</code> gilt in der bestehenden Datenbank noch.</td>
+    <td valign="top"><code>./scripts/reset_password.sh</code> ausführen.</td></tr>
+
+  <tr><td nowrap valign="top">O-03</td>
+    <td valign="top">OData-Listen ohne Seitengrösse: <code>GET /odata/Cities</code> liefert alle rund 4000 Zeilen in einer Antwort; <code>MaxTop</code> begrenzt nur ausdrückliche <code>$top</code>-Angaben.</td>
+    <td valign="top"><code>PageSize</code> setzen. Das verlangt Blättern im Frontend, das heute die ganze Liste in einer Antwort erwartet – deshalb nicht in dieser Runde.</td></tr>
+
+  <tr><td nowrap valign="top">O-04</td>
+    <td valign="top">Das Backend-Token ist für JavaScript im Browser lesbar (<code>session.accessToken</code>). Eine XSS-Lücke würde es preisgeben. Im Code wurde keine solche Lücke gefunden.</td>
+    <td valign="top">API-Aufrufe über Next.js-Routen leiten, damit das Token den Server nicht verlässt, und eine strikte <code>script-src</code>-CSP mit Nonces einführen.</td></tr>
+
+  <tr><td nowrap valign="top">O-05</td>
+    <td valign="top">Keine Rollen: Jeder angemeldete Benutzer darf alles, auch Einstellungen ändern und Benutzer anlegen.</td>
+    <td valign="top">Rolle «Admin» im Token einführen und Registrierung sowie Einstellungen darauf beschränken.</td></tr>
+
+  <tr><td nowrap valign="top">O-06</td>
+    <td valign="top">Keine Kontosperre nach Fehlversuchen und kein Widerruf ausgestellter Tokens (8 Stunden gültig).</td>
+    <td valign="top">Sperrzähler pro Benutzer; kürzere Token-Laufzeit oder Sperrliste.</td></tr>
+
+  <tr><td nowrap valign="top">O-07</td>
+    <td valign="top"><code>npm audit</code> meldet noch 7 Einträge (hoch) in Entwicklungswerkzeugen, alle über <code>braces</code> (Tailwind CSS 3, ESLint). Sie laufen nur beim Build mit eigenen Dateien, nicht im ausgelieferten Frontend.</td>
+    <td valign="top">Mit einer Migration auf Tailwind CSS 4 beheben.</td></tr>
+</table>
+
+<h2>5. Überprüfung</h2>
+
+<table border="1" cellpadding="4" cellspacing="0" width="100%">
+  <tr><th style="width:55%">Prüfung</th><th style="width:45%">Ergebnis</th></tr>
+  <tr><td valign="top"><code>dotnet test</code></td><td valign="top">51 von 51 bestanden</td></tr>
+  <tr><td valign="top"><code>dotnet list package --vulnerable --include-transitive</code></td><td valign="top">keine anfälligen Pakete</td></tr>
+  <tr><td valign="top"><code>npm audit --omit=dev</code></td><td valign="top">0 Lücken (mit Entwicklungswerkzeugen: 7, siehe O-07)</td></tr>
+  <tr><td valign="top">Frontend-Build mit Next.js 15 (inkl. Typprüfung und Lint) im Docker-Image</td><td valign="top">erfolgreich</td></tr>
+  <tr><td valign="top"><code>POST /auth/register</code> ohne Token über nginx</td><td valign="top">401</td></tr>
+  <tr><td valign="top">Startseite ohne Session, auch mit dem Header <code>x-middleware-subrequest</code></td><td valign="top">307 (Umleitung zum Login)</td></tr>
+  <tr><td valign="top">Anmeldung über NextAuth, Startseite und Städteliste mit Session</td><td valign="top">200, Daten vorhanden</td></tr>
+  <tr><td valign="top">25 schnelle Anmeldeversuche über nginx</td><td valign="top">4 × 401, 21 × 429</td></tr>
+  <tr><td valign="top">Antwort-Header auf <code>/login</code></td><td valign="top">alle neuen Header vorhanden, <code>Server: nginx</code> ohne Version</td></tr>
+  <tr><td valign="top">Veröffentlichte Ports</td><td valign="top">5000 und 5432 nur an 127.0.0.1; 80/443 offen</td></tr>
+  <tr><td valign="top">Benutzer in den Containern</td><td valign="top">Backend UID 1654 (<code>app</code>), Frontend <code>node</code></td></tr>
+  <tr><td valign="top">Anmeldung mit dem alten Standardpasswort an der bestehenden Datenbank</td><td valign="top">weiterhin möglich (O-02)</td></tr>
+</table>
+
+<p>Nicht im Browser geprüft: das Verhalten des Login-Formulars bei einer manipulierten <code>callbackUrl</code> (S-09) und die Bedienung der Formulare nach dem Upgrade auf React 19. Beides ist nur durch den erfolgreichen Build und die Aufrufe per <code>curl</code> abgedeckt.</p>
+
+<h2>6. Auswirkungen auf den Betrieb</h2>
+<ul>
+  <li>Der Stack braucht vor dem Start die drei Dateien <code>env/*.env</code>; auf diesem Rechner sind sie mit neuen Werten angelegt.</li>
+  <li>Bestehende Sitzungen sind durch den neuen JWT-Schlüssel und das neue NextAuth-Secret ungültig; einmal neu anmelden.</li>
+  <li>Lokales <code>dotnet run</code> braucht <code>Jwt__Key</code> und <code>ConnectionStrings__DefaultConnection</code> aus der Umgebung (siehe README).</li>
+  <li>Neue Benutzer entstehen über <code>./scripts/create_user.sh</code> oder durch einen angemeldeten Benutzer über <code>/auth/register</code>.</li>
+</ul>
+
+</body>
+</html>

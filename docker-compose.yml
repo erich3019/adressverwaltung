@@ -10,9 +10,12 @@ services:
     environment:
       POSTGRES_DB: adressverwaltung
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: deinPasswort123
+    # Geheimnisse liegen in env/*.env (nicht in Git, Vorlagen: env/*.env.example)
+    env_file:
+      - ./env/db.env
+    # Nur lokal erreichbar, nicht aus dem Netzwerk
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -30,21 +33,21 @@ services:
       dockerfile: Dockerfile
     container_name: adressverwaltung-backend
     restart: unless-stopped
+    # Nur lokal erreichbar; von aussen läuft der Zugriff über nginx (HTTPS)
     ports:
-      - "5000:8080"
+      - "127.0.0.1:5000:8080"
+    # Verbindungszeichenfolge, Jwt__Key und SMTP-Zugangsdaten
+    env_file:
+      - ./env/backend.env
     environment:
-      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=adressverwaltung;Username=postgres;Password=deinPasswort123"
       ASPNETCORE_ENVIRONMENT: Production
-      # JWT-Konfiguration
-      Jwt__Key: BiHpOX5C7UsOaz5/84VDgn++TWwENe0gRumCF9+aFeM=
+      # JWT-Konfiguration (Schlüssel: env/backend.env)
       Jwt__Issuer: AdressverwaltungApi
       Jwt__Audience: AdressverwaltungFrontend
       Jwt__ExpiresInHours: "8"
       # SMTP-Einstellungen (optional – nur wenn E-Mail-Benachrichtigungen aktiviert)
       SmtpSettings__Host: smtp.example.com
       SmtpSettings__Port: "587"
-      SmtpSettings__Username: user@example.com
-      SmtpSettings__Password: ERSETZE_MIT_SMTP_PASSWORT
       SmtpSettings__FromAddress: noreply@example.com
     depends_on:
       db:
@@ -62,6 +65,9 @@ services:
     # Kein direkter Port-Export nötig – nginx leitet intern weiter
     expose:
       - "3000"
+    # NEXTAUTH_SECRET und optionale Google-OAuth-Zugangsdaten
+    env_file:
+      - ./env/frontend.env
     environment:
       # Browser-seitige Requests laufen über nginx (HTTPS)
       NEXT_PUBLIC_API_URL: https://localhost
@@ -69,10 +75,6 @@ services:
       INTERNAL_API_URL: http://backend:8080
       # NextAuth-Konfiguration – URL muss mit nginx übereinstimmen
       NEXTAUTH_URL: https://localhost
-      NEXTAUTH_SECRET: WdLrO5NmQ1SD6mPxrwv7aNCkpkWmccLQWCGZGOrH9dQ=
-      # Google OAuth (optional – leer lassen, um Google-Login zu deaktivieren)
-      GOOGLE_CLIENT_ID: ""
-      GOOGLE_CLIENT_SECRET: ""
     depends_on:
       - backend
 

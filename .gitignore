@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+env/*.env
 nginx/ssl/*.pem
 documentation/Postman_Vault_Key_*.txt
 .claude/settings.local.json

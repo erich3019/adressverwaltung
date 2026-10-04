@@ -37,14 +37,12 @@ public class AdresseDbContext : DbContext
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
         // Benutzername ermitteln:
-        // 1. Aus dem JWT-Claim (Name) – wenn NextAuth ein Token übergibt
-        // 2. Aus dem Header "X-User" – manuell gesetzt vom Frontend
-        // 3. Fallback: "system" (z.B. beim Seeding oder Hintergrundprozessen)
+        // 1. Aus dem JWT-Claim (Name) des angemeldeten Benutzers
+        // 2. Fallback: "system" (z.B. beim Seeding oder Hintergrundprozessen)
+        // Frei setzbare Request-Header werden bewusst nicht berücksichtigt,
+        // weil sich sonst die Audit-Felder fälschen liessen.
         var claimUser   = _httpContextAccessor?.HttpContext?.User?.Identity?.Name;
-        var headerUser  = _httpContextAccessor?.HttpContext?.Request.Headers["X-User"].FirstOrDefault();
-        var currentUser = !string.IsNullOrWhiteSpace(claimUser)  ? claimUser
-                        : !string.IsNullOrWhiteSpace(headerUser) ? headerUser
-                        : "system";
+        var currentUser = !string.IsNullOrWhiteSpace(claimUser) ? claimUser : "system";
 
         foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
         {

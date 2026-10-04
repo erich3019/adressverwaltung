@@ -9,6 +9,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 // Wird von der Server-Komponente page.tsx mit googleEnabled versorgt.
 // ──────────────────────────────────────────────────────────────
 
+// Nur Pfade innerhalb der eigenen App als Rücksprungziel zulassen.
+// Verhindert Open Redirects über ?callbackUrl=https://fremde-seite.example
+function sichereCallbackUrl(wert: string | null): string {
+  if (!wert || !wert.startsWith('/') || wert.startsWith('//') || wert.includes('\\')) {
+    return '/';
+  }
+  return wert;
+}
+
 interface LoginFormProps {
   /** Zeige Google-Schaltfläche nur, wenn GOOGLE_CLIENT_ID gesetzt ist. */
   googleEnabled: boolean;
@@ -17,7 +26,7 @@ interface LoginFormProps {
 export function LoginForm({ googleEnabled }: LoginFormProps) {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl  = searchParams.get('callbackUrl') ?? '/';
+  const callbackUrl  = sichereCallbackUrl(searchParams.get('callbackUrl'));
 
   const [email,    setEmail]    = useState('');
   const [passwort, setPasswort] = useState('');
