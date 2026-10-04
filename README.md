@@ -40,13 +40,22 @@ docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg "/data/*.p
 
 ### 1. TLS-Zertifikat erzeugen (einmalig)
 
-Die Zertifikate sind nicht im Repository enthalten. Für die lokale Entwicklung genügt ein selbstsigniertes Zertifikat:
+Die Zertifikate sind nicht im Repository enthalten. Damit der Browser https://localhost als sicher anzeigt, stellt [mkcert](https://github.com/FiloSottile/mkcert) das Zertifikat mit einer lokalen Zertifizierungsstelle aus, der Betriebssystem und Browser vertrauen:
 
 ```bash
+mkcert -install     # einmalig pro Rechner: lokale Zertifizierungsstelle anlegen und als vertrauenswürdig eintragen
 mkdir -p nginx/ssl
+mkcert -cert-file nginx/ssl/cert.pem -key-file nginx/ssl/key.pem localhost 127.0.0.1 ::1
+```
+
+Läuft der Stack bereits, lädt `docker exec adressverwaltung-nginx nginx -s reload` das neue Zertifikat. Den Browser danach neu starten.
+
+Ohne mkcert funktioniert auch ein selbstsigniertes Zertifikat; der Browser zeigt die Seite dann als «nicht sicher» an:
+
+```bash
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout nginx/ssl/key.pem -out nginx/ssl/cert.pem \
-  -subj "/CN=localhost"
+  -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 ```
 
 ### 2. Geheimnisse anlegen
@@ -73,7 +82,7 @@ docker compose logs -f backend
 
 Nach dem Start:
 
-- **App:** https://localhost (Zertifikatswarnung des Browsers bestätigen; Port 80 leitet auf 443 um)
+- **App:** https://localhost (Port 80 leitet auf 443 um)
 - **Backend direkt:** http://localhost:5000 (z.B. `/odata/Adressen`, erfordert Bearer-Token)
 - **PostgreSQL:** `localhost:5432`, Datenbank `adressverwaltung`
 

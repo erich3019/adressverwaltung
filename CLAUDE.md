@@ -17,7 +17,7 @@ docker compose up --build -d     # db, backend, frontend, nginx
 docker compose logs -f backend
 ```
 
-- App: https://localhost (self-signed cert expected in `nginx/ssl/`, not in git; port 80 redirects to 443)
+- App: https://localhost (cert expected in `nginx/ssl/`, not in git — issued with `mkcert` so browsers trust it; port 80 redirects to 443)
 - Backend directly: http://localhost:5000 (e.g. `/odata/Adressen`)
 - Postgres: localhost:5432, database `adressverwaltung`
 - The frontend container is not published on a host port; it is only reachable through nginx.
@@ -119,6 +119,6 @@ Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentat
 ## Repository notes
 
 - Non-secret configuration for the Docker stack is inline in `docker-compose.yml`; security-relevant values come from the root `.env` through compose interpolation: `POSTGRES_PASSWORD` (also inserted into the backend connection string), `JWT_KEY` → `Jwt__Key`, `NEXTAUTH_SECRET`, `SEED_ADMIN_PASSWORD` → `Seed__AdminPassword`, `SMTP_USERNAME`/`SMTP_PASSWORD`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. The first three are required (`${VAR:?…}`), so compose refuses to start without them. A new secret goes into `.env`, `.env.example` and the compose file — never inline.
-- `nginx/ssl/*.pem`, `frontend/.env.local` and `.env` are git-ignored. A fresh clone has to create them before the stack starts: a self-signed `cert.pem`/`key.pem` pair in `nginx/ssl/` (nginx mounts that directory) and `.env` from the tracked `.env.example`.
+- `nginx/ssl/*.pem`, `frontend/.env.local` and `.env` are git-ignored. A fresh clone has to create them before the stack starts: a `cert.pem`/`key.pem` pair in `nginx/ssl/` (nginx mounts that directory; `mkcert -cert-file nginx/ssl/cert.pem -key-file nginx/ssl/key.pem localhost 127.0.0.1 ::1`, a plain self-signed pair also works but shows as not secure) and `.env` from the tracked `.env.example`.
 - nginx rate-limits `/auth/` and `/api/auth/callback/credentials` (10 requests per minute per client IP) and sets the security headers; `documentation/Sicherheitsbericht.pdf` lists the security findings and what was done about them.
 - `archive/*.zip` are tracked release bundles of earlier versions, not source.
