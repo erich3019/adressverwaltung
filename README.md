@@ -157,6 +157,15 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run
 
 Das Datenbankschema wird beim Start mit `EnsureCreated()` angelegt. Modelländerungen gelangen damit nicht automatisch in eine bereits bestehende Datenbank.
 
+### Backend-Tests
+
+xUnit-Integrationstests für die OData-API. Die API läuft dabei im Speicher (`WebApplicationFactory`) gegen eine PostgreSQL-Datenbank, die pro Testlauf als Wegwerf-Container gestartet wird (Testcontainers). Voraussetzung: Docker läuft.
+
+```bash
+cd backend
+dotnet test
+```
+
 ### Frontend starten
 
 ```bash

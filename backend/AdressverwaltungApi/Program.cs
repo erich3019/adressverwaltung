@@ -50,6 +50,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience            = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey         = new SymmetricSecurityKey(
                                            Encoding.UTF8.GetBytes(jwtKey)),
+            // Claim "name" aus dem Token als Identity.Name verwenden
+            // (wird für die Audit-Felder CreatedBy/ChangedBy benötigt)
+            NameClaimType            = "name",
         };
     });
 
@@ -127,3 +130,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Macht die implizite Program-Klasse für WebApplicationFactory<Program>
+// im Testprojekt (AdressverwaltungApi.Tests) sichtbar.
+public partial class Program { }

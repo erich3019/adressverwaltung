@@ -46,7 +46,15 @@ Env vars come from `frontend/.env.local` (`NEXT_PUBLIC_API_URL`, `INTERNAL_API_U
 
 ### Tests
 
-There is no automated test suite in either project. `backend/api-tests.http` holds manual REST Client requests (they predate auth, so they need an `Authorization: Bearer` header from `POST /auth/login` to work now).
+```bash
+cd backend
+dotnet test                                              # needs Docker running
+dotnet test --filter "FullyQualifiedName~AdressenODataTests"
+```
+
+`backend/AdressverwaltungApi.Tests` holds xUnit integration tests for the OData API: `WebApplicationFactory<Program>` against a throwaway PostgreSQL container (Testcontainers), with `IEmailService` replaced by a fake. Tests share one factory (collection `Api`) and `ODataTestBase` empties the tables before each test. The test project targets the installed SDK's framework rather than net8.0, because the TestServer package must match the ASP.NET Core runtime the tests run on. The frontend has no tests.
+
+`backend/api-tests.http` holds manual REST Client requests (they predate auth, so they need an `Authorization: Bearer` header from `POST /auth/login` to work now).
 
 ### Helper scripts (`scripts/`)
 
