@@ -32,7 +32,7 @@ dotnet run                                        # http://localhost:5000
 ASPNETCORE_ENVIRONMENT=Development dotnet run     # also enables Swagger at /swagger
 ```
 
-There is no `launchSettings.json`, so plain `dotnet run` starts in Production and Swagger is off. `appsettings.json` holds no secrets: `Jwt__Key` (at least 32 characters, startup fails otherwise) and a `ConnectionStrings__DefaultConnection` with the password must come from the environment.
+There is no `launchSettings.json`, so plain `dotnet run` starts in Production and Swagger is off. `appsettings.json` holds no secrets: `Jwt__Key` (at least 32 characters, startup fails otherwise) and a `ConnectionStrings__DefaultConnection` with the password must come from the environment, e.g. derived from the root `.env` as shown in the README.
 
 ### Frontend (`frontend`)
 
@@ -63,7 +63,7 @@ All operate on the running `adressverwaltung-db` container via `docker exec`:
 
 - `create_user.sh [email "Display Name" password]` — inserts a user directly into `Users`, generating an ASP.NET Core PasswordHasher V3 compatible hash in Python.
 - `reset_password.sh [password]` — resets the password of `admin@example.com`.
-- `import_cities.py` — imports the Swiss PLZ directory (`migration/AMTOVZ_CSV_LV95.csv`) into `Cities`; configured through `DB_*` / `CSV_PATH` env vars, needs `psycopg2`.
+- `import_cities.py` — imports the Swiss PLZ directory (`migration/AMTOVZ_CSV_LV95.csv`) into `Cities`; configured through `DB_*` / `CSV_PATH` env vars (password: `DB_PASS`, falling back to `POSTGRES_PASSWORD`), needs `psycopg2`.
 
 ## Architecture
 
@@ -118,7 +118,7 @@ Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentat
 
 ## Repository notes
 
-- Non-secret configuration for the Docker stack is inline in `docker-compose.yml`; secrets (`POSTGRES_PASSWORD`, `ConnectionStrings__DefaultConnection`, `Jwt__Key`, `NEXTAUTH_SECRET`, SMTP and Google credentials) come from `env/db.env`, `env/backend.env` and `env/frontend.env` via `env_file`. The root `.env` holds variables for a different project and is not referenced by the compose file.
-- `nginx/ssl/*.pem`, `env/*.env`, `frontend/.env.local` and `.env` are git-ignored. A fresh clone has to create them before the stack starts: a self-signed `cert.pem`/`key.pem` pair in `nginx/ssl/` (nginx mounts that directory) and the three env files from their tracked `env/*.env.example` templates.
+- Non-secret configuration for the Docker stack is inline in `docker-compose.yml`; security-relevant values come from the root `.env` through compose interpolation: `POSTGRES_PASSWORD` (also inserted into the backend connection string), `JWT_KEY` → `Jwt__Key`, `NEXTAUTH_SECRET`, `SEED_ADMIN_PASSWORD` → `Seed__AdminPassword`, `SMTP_USERNAME`/`SMTP_PASSWORD`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. The first three are required (`${VAR:?…}`), so compose refuses to start without them. A new secret goes into `.env`, `.env.example` and the compose file — never inline.
+- `nginx/ssl/*.pem`, `frontend/.env.local` and `.env` are git-ignored. A fresh clone has to create them before the stack starts: a self-signed `cert.pem`/`key.pem` pair in `nginx/ssl/` (nginx mounts that directory) and `.env` from the tracked `.env.example`.
 - nginx rate-limits `/auth/` and `/api/auth/callback/credentials` (10 requests per minute per client IP) and sets the security headers; `documentation/Sicherheitsbericht.pdf` lists the security findings and what was done about them.
 - `archive/*.zip` are tracked release bundles of earlier versions, not source.

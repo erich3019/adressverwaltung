@@ -20,7 +20,8 @@ Version 2.3.0 fasst die Änderungen vom 4. Oktober 2026 zusammen: fünf Änderun
 | 5 | Clean Code | Nachprüfung mit 11 Befunden (B-09 bis B-13, F-07 bis F-12), alle umgesetzt | `dac15cb` |
 | 6 | Dokumentation | PDF der Clean-Code-Analyse neu erzeugt | `6d1975d` |
 | 7 | Dokumentation | Schulungsunterlage zum Sequenzdiagramm | `080cb4a`, `f09a2fc` |
-| 8 | Version | Versionsnummer auf 2.3.0 gesetzt (README, `package.json`, Diagramme, Dokumente) | nach `f09a2fc` |
+| 8 | Version | Versionsnummer auf 2.3.0 gesetzt (README, `package.json`, Diagramme, Dokumente) | `a85be58` |
+| 9 | Konfiguration | Alle sicherheitsrelevanten Variablen in einer Datei `.env` statt in drei Dateien unter `env/` | nach `a85be58` |
 
 Das Datenbankschema ist unverändert. Bestehende Daten bleiben erhalten.
 
@@ -108,8 +109,8 @@ Der vollständige Bericht liegt in `documentation/Sicherheitsbericht.pdf`. Hier 
 
 | Datei | Änderung |
 | --- | --- |
-| `docker-compose.yml` | Geheimnisse entfernt, stattdessen `env_file`; Backend und PostgreSQL nur an `127.0.0.1` |
-| `env/*.env.example` | Neue Vorlagen für `db.env`, `backend.env`, `frontend.env` (die echten Dateien sind git-ignoriert) |
+| `docker-compose.yml` | Geheimnisse entfernt, stattdessen Variablen aus `.env` (`${POSTGRES_PASSWORD}`, `${JWT_KEY}`, `${NEXTAUTH_SECRET}` …); Backend und PostgreSQL nur an `127.0.0.1` |
+| `.env.example` | Neue Vorlage für `.env` mit allen sicherheitsrelevanten Variablen (die echte Datei ist git-ignoriert) |
 | `nginx/nginx.conf` | Ratenbegrenzung für Anmeldungen (10 pro Minute und IP); zusätzliche Sicherheits-Header; Version nicht mehr sichtbar |
 | `scripts/create_user.sh`, `scripts/reset_password.sh` | Werte als psql-Variablen statt im SQL-Text; Passwort nicht mehr ausgegeben; Mindestlänge 8 |
 | `migration/import_cities.py` | Passwort aus dem Kommentar entfernt (Datei in Paket 5 gelöscht) |
@@ -154,7 +155,7 @@ Befunde und Begründungen stehen in der Nachprüfung am Ende von `documentation/
 | `documentation/Aenderungsprotokoll_v2.3.0.pdf` (Quelle `.md`) | neu, dieses Dokument |
 | `documentation/CleanCode_Analyse.md` und `.pdf` | um die Nachprüfung ergänzt, PDF neu erzeugt |
 | `documentation/Systemarchitektur.puml` und `.svg` | ASP.NET Core 10, Next.js 15 |
-| `README.md` | Versionen, Geheimnisse in `env/`, Anmeldung, lokale Entwicklung, Tests, Projektstruktur |
+| `README.md` | Versionen, Geheimnisse in `.env`, Anmeldung, lokale Entwicklung, Tests, Projektstruktur |
 | `CLAUDE.md` | an alle Änderungen angepasst |
 
 ---
@@ -166,18 +167,18 @@ Befunde und Begründungen stehen in der Nachprüfung am Ende von `documentation/
 | Backend API (`backend/AdressverwaltungApi`) | 4 | 13 | 0 |
 | Backend-Tests und Solution | 10 | 0 | 0 |
 | Frontend (`frontend`) | 4 | 17 | 0 |
-| Infrastruktur (`docker-compose.yml`, `nginx`, `env`, `.gitignore`) | 3 | 3 | 0 |
+| Infrastruktur (`docker-compose.yml`, `nginx`, `.env.example`, `.gitignore`) | 1 | 3 | 0 |
 | Skripte und Migration | 0 | 2 | 1 |
 | Dokumentation, `README.md`, `CLAUDE.md` | 6 | 6 | 0 |
 
-Die Zahlen beziehen sich auf den Stand vor diesem Protokoll und vor dem Setzen der Versionsnummer (Commit `f09a2fc`).
+Die Zahlen beziehen sich auf den Stand vor diesem Protokoll und vor dem Setzen der Versionsnummer (Commit `f09a2fc`); die Zeile Infrastruktur zeigt den Stand nach Paket 9.
 
 ---
 
 ## 8. Nach dem Aktualisieren zu tun
 
-1. **Geheimnisse anlegen.** Die drei Dateien `env/db.env`, `env/backend.env` und `env/frontend.env` aus den Vorlagen `*.env.example` erstellen und die Platzhalter ersetzen. Ohne sie startet der Stack nicht.
-2. **Datenbankpasswort bei bestehender Datenbank.** `POSTGRES_PASSWORD` wirkt nur beim ersten Start mit leerem Volume. Bei einem bestehenden Volume das Passwort in der Datenbank mit `ALTER USER postgres PASSWORD '…'` auf den Wert aus `env/db.env` setzen.
+1. **Geheimnisse anlegen.** Die Datei `.env` aus der Vorlage `.env.example` erstellen und die Platzhalter ersetzen. Ohne `POSTGRES_PASSWORD`, `JWT_KEY` und `NEXTAUTH_SECRET` startet der Stack nicht.
+2. **Datenbankpasswort bei bestehender Datenbank.** `POSTGRES_PASSWORD` wirkt nur beim ersten Start mit leerem Volume. Bei einem bestehenden Volume das Passwort in der Datenbank mit `ALTER USER postgres PASSWORD '…'` auf den Wert aus `.env` setzen.
 3. **Images neu bauen.** `docker compose up --build -d`.
 4. **Neu anmelden.** Mit neuem JWT-Schlüssel und neuem `NEXTAUTH_SECRET` sind bestehende Sitzungen ungültig.
 5. **Admin-Passwort.** In einer bestehenden Datenbank gilt das frühere Standardpasswort weiter. Mit `./scripts/reset_password.sh` ersetzen.

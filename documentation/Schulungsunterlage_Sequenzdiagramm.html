@@ -81,7 +81,7 @@
 <h3>Schritt 8: JWT signieren (HS256, 8 h) – Fall «gültig»</h3>
 <p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
 <p><b>Was passiert:</b> Stimmen E-Mail und Passwort, stellt das Backend ein JSON Web Token aus. Es enthält die Benutzer-Id (<code>sub</code>), E-Mail, Anzeigenamen, eine eindeutige Token-Id und das Ablaufdatum in 8 Stunden. Das Token wird mit einem geheimen Schlüssel signiert.</p>
-<p><b>Im Code:</b> <code>Services/JwtTokenService.cs</code>, Methode <code>CreateToken</code>. Schlüssel, Aussteller, Empfänger und Laufzeit kommen aus <code>JwtOptions</code> (Abschnitt <code>Jwt</code> der Konfiguration, im Docker-Stack aus <code>env/backend.env</code>).</p>
+<p><b>Im Code:</b> <code>Services/JwtTokenService.cs</code>, Methode <code>CreateToken</code>. Schlüssel, Aussteller, Empfänger und Laufzeit kommen aus <code>JwtOptions</code> (Abschnitt <code>Jwt</code> der Konfiguration, im Docker-Stack aus <code>.env</code>).</p>
 <p><b>Warum so:</b> Das Token ist signiert, nicht verschlüsselt: Jeder kann den Inhalt lesen, aber niemand kann ihn ohne den Schlüssel verändern. Deshalb muss der Schlüssel geheim bleiben, und es gehören keine vertraulichen Daten ins Token.</p>
 
 <h3>Schritt 9: 200 { id, name, email, token }</h3>

@@ -1,3 +1,7 @@
+# Sicherheitsrelevante Werte (Passwörter, Schlüssel) stehen in der Datei .env
+# neben dieser Datei (nicht in Git, Vorlage: .env.example). Docker Compose liest
+# sie automatisch und setzt sie unten als ${VARIABLE} ein.
+
 services:
 
   # ============================================================
@@ -10,9 +14,7 @@ services:
     environment:
       POSTGRES_DB: adressverwaltung
       POSTGRES_USER: postgres
-    # Geheimnisse liegen in env/*.env (nicht in Git, Vorlagen: env/*.env.example)
-    env_file:
-      - ./env/db.env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
     # Nur lokal erreichbar, nicht aus dem Netzwerk
     ports:
       - "127.0.0.1:5432:5432"
@@ -36,19 +38,22 @@ services:
     # Nur lokal erreichbar; von aussen läuft der Zugriff über nginx (HTTPS)
     ports:
       - "127.0.0.1:5000:8080"
-    # Verbindungszeichenfolge, Jwt__Key und SMTP-Zugangsdaten
-    env_file:
-      - ./env/backend.env
     environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=adressverwaltung;Username=postgres;Password=${POSTGRES_PASSWORD}"
       ASPNETCORE_ENVIRONMENT: Production
-      # JWT-Konfiguration (Schlüssel: env/backend.env)
+      # JWT-Konfiguration
+      Jwt__Key: ${JWT_KEY:?JWT_KEY fehlt in .env}
       Jwt__Issuer: AdressverwaltungApi
       Jwt__Audience: AdressverwaltungFrontend
       Jwt__ExpiresInHours: "8"
       # SMTP-Einstellungen (optional – nur wenn E-Mail-Benachrichtigungen aktiviert)
       SmtpSettings__Host: smtp.example.com
       SmtpSettings__Port: "587"
+      SmtpSettings__Username: ${SMTP_USERNAME:-}
+      SmtpSettings__Password: ${SMTP_PASSWORD:-}
       SmtpSettings__FromAddress: noreply@example.com
+      # Admin-Passwort für den ersten Start mit leerer Datenbank (leer = Zufallspasswort im Log)
+      Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
@@ -65,9 +70,6 @@ services:
     # Kein direkter Port-Export nötig – nginx leitet intern weiter
     expose:
       - "3000"
-    # NEXTAUTH_SECRET und optionale Google-OAuth-Zugangsdaten
-    env_file:
-      - ./env/frontend.env
     environment:
       # Browser-seitige Requests laufen über nginx (HTTPS)
       NEXT_PUBLIC_API_URL: https://localhost
@@ -75,6 +77,10 @@ services:
       INTERNAL_API_URL: http://backend:8080
       # NextAuth-Konfiguration – URL muss mit nginx übereinstimmen
       NEXTAUTH_URL: https://localhost
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET fehlt in .env}
+      # Google OAuth (optional – leer lassen, um Google-Login zu deaktivieren)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     depends_on:
       - backend
 

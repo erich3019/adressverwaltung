@@ -53,7 +53,7 @@
 
   <tr><td nowrap valign="top">S-03</td><td valign="top">Hoch</td>
     <td valign="top">Geheimnisse im Repository: JWT-Schlüssel, NextAuth-Secret und Datenbankpasswort standen im Klartext in <code>docker-compose.yml</code>. Mit dem JWT-Schlüssel lassen sich gültige Tokens für beliebige Benutzer fälschen.</td>
-    <td valign="top">Geheimnisse in <code>env/db.env</code>, <code>env/backend.env</code>, <code>env/frontend.env</code> ausgelagert (git-ignoriert, Vorlagen <code>*.env.example</code>). Alle drei Werte neu erzeugt; das Datenbankpasswort wurde in der laufenden Datenbank geändert.</td>
+    <td valign="top">Geheimnisse in die Datei <code>.env</code> ausgelagert (git-ignoriert, Vorlage <code>.env.example</code>); <code>docker-compose.yml</code> setzt sie als Variablen ein. Alle drei Werte neu erzeugt; das Datenbankpasswort wurde in der laufenden Datenbank geändert.</td>
     <td valign="top">Behoben (History: O-01)</td></tr>
 
   <tr><td nowrap valign="top">S-04</td><td valign="top">Hoch</td>
@@ -188,7 +188,7 @@
 
 <h2>6. Auswirkungen auf den Betrieb</h2>
 <ul>
-  <li>Der Stack braucht vor dem Start die drei Dateien <code>env/*.env</code>; auf diesem Rechner sind sie mit neuen Werten angelegt.</li>
+  <li>Der Stack braucht vor dem Start die Datei <code>.env</code>; auf diesem Rechner ist sie mit neuen Werten angelegt.</li>
   <li>Bestehende Sitzungen sind durch den neuen JWT-Schlüssel und das neue NextAuth-Secret ungültig; einmal neu anmelden.</li>
   <li>Lokales <code>dotnet run</code> braucht <code>Jwt__Key</code> und <code>ConnectionStrings__DefaultConnection</code> aus der Umgebung (siehe README).</li>
   <li>Neue Benutzer entstehen über <code>./scripts/create_user.sh</code> oder durch einen angemeldeten Benutzer über <code>/auth/register</code>.</li>

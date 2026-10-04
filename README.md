@@ -51,13 +51,15 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 
 ### 2. Geheimnisse anlegen
 
-Passwörter und Schlüssel liegen in `env/*.env` und sind nicht im Repository enthalten. Vorlagen kopieren und die Platzhalter ersetzen:
+Passwörter und Schlüssel liegen in der Datei `.env` im Projektstamm und sind nicht im Repository enthalten. Vorlage kopieren und die Platzhalter ersetzen:
 
 ```bash
-for f in db backend frontend; do cp env/$f.env.example env/$f.env; done
-openssl rand -hex 24      # Datenbankpasswort (in db.env und backend.env identisch eintragen)
-openssl rand -base64 48   # je ein Wert für Jwt__Key und NEXTAUTH_SECRET
+cp .env.example .env
+openssl rand -hex 24      # Wert für POSTGRES_PASSWORD
+openssl rand -base64 48   # je ein Wert für JWT_KEY und NEXTAUTH_SECRET
 ```
+
+Docker Compose liest `.env` automatisch und bricht mit einer Meldung ab, wenn `POSTGRES_PASSWORD`, `JWT_KEY` oder `NEXTAUTH_SECRET` fehlen.
 
 ### 3. Services starten
 
@@ -79,7 +81,7 @@ Backend und PostgreSQL sind nur an `127.0.0.1` gebunden; aus dem Netzwerk ist au
 
 ### 4. Anmelden
 
-Beim ersten Start mit leerer `Users`-Tabelle wird ein Admin-Benutzer angelegt (`Seed:AdminEmail`, Standard `admin@example.com`). Das Passwort stammt aus `Seed__AdminPassword` in `env/backend.env`; fehlt der Wert, erzeugt das Backend ein Zufallspasswort und schreibt es einmalig ins Log (`docker compose logs backend`). Das Passwort lässt sich jederzeit neu setzen:
+Beim ersten Start mit leerer `Users`-Tabelle wird ein Admin-Benutzer angelegt (`Seed:AdminEmail`, Standard `admin@example.com`). Das Passwort stammt aus `SEED_ADMIN_PASSWORD` in `.env`; ist der Wert leer, erzeugt das Backend ein Zufallspasswort und schreibt es einmalig ins Log (`docker compose logs backend`). Das Passwort lässt sich jederzeit neu setzen:
 
 ```bash
 ./scripts/reset_password.sh
@@ -89,7 +91,18 @@ Weitere Benutzer lassen sich mit `./scripts/create_user.sh` anlegen.
 
 ## Konfiguration
 
-Die Konfiguration des Docker-Stacks steht in `docker-compose.yml`, Geheimnisse (Datenbankpasswort, `Jwt__Key`, `NEXTAUTH_SECRET`, SMTP- und Google-Zugangsdaten) in `env/*.env`:
+Sicherheitsrelevante Werte stehen in `.env`; `docker-compose.yml` setzt sie als `${VARIABLE}` ein:
+
+| Variable in `.env` | Verwendet für | Pflicht |
+|--------------------|---------------|---------|
+| `POSTGRES_PASSWORD` | Datenbankpasswort (Container `db` und Verbindungszeichenfolge des Backends) | ja |
+| `JWT_KEY` | `Jwt__Key`: Signatur der Bearer-Tokens, mindestens 32 Zeichen | ja |
+| `NEXTAUTH_SECRET` | Verschlüsselung der NextAuth-Session | ja |
+| `SEED_ADMIN_PASSWORD` | `Seed__AdminPassword`: Admin-Passwort beim ersten Start | nein |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | `SmtpSettings__Username` / `SmtpSettings__Password` | nein |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google-Login (leer = deaktiviert) | nein |
+
+Die übrige Konfiguration steht direkt in `docker-compose.yml`:
 
 | Variable | Service | Bedeutung |
 |----------|---------|-----------|
@@ -98,7 +111,6 @@ Die Konfiguration des Docker-Stacks steht in `docker-compose.yml`, Geheimnisse (
 | `SmtpSettings__*` | backend | SMTP-Server für E-Mail-Benachrichtigungen (optional) |
 | `NEXTAUTH_URL`, `NEXTAUTH_SECRET` | frontend | NextAuth-Session |
 | `INTERNAL_API_URL` | frontend | Backend-URL für serverseitige Aufrufe (`http://backend:8080`) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | frontend | Google-Login (optional, leer = deaktiviert) |
 
 `appsettings.json` enthält keine Geheimnisse. Das Backend startet nicht, wenn `Jwt:Key` fehlt, kürzer als 32 Zeichen oder ein Platzhalter ist.
 
@@ -116,7 +128,8 @@ Der Sicherheitsbericht mit allen Befunden und Korrekturen liegt unter `documenta
 
 ```bash
 pip install psycopg2-binary
-DB_PASS=<passwort> CSV_PATH=migration/AMTOVZ_CSV_LV95.csv python3 scripts/import_cities.py
+set -a; . ./.env; set +a   # liefert POSTGRES_PASSWORD
+CSV_PATH=migration/AMTOVZ_CSV_LV95.csv python3 scripts/import_cities.py
 ```
 
 ## API
@@ -166,8 +179,9 @@ Property-Namen sind in Payloads und OData-Abfragen camelCase (`ort`, `postalCode
 ```bash
 cd backend/AdressverwaltungApi
 # Geheimnisse kommen aus der Umgebung, nicht aus appsettings.json
-export Jwt__Key="$(openssl rand -base64 48)"
-export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=adressverwaltung;Username=postgres;Password=<passwort>"
+set -a; . ../../.env; set +a
+export Jwt__Key="$JWT_KEY"
+export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=adressverwaltung;Username=postgres;Password=$POSTGRES_PASSWORD"
 ASPNETCORE_ENVIRONMENT=Development dotnet run
 # Backend:    http://localhost:5000
 # Swagger UI: http://localhost:5000/swagger (nur in Development)
