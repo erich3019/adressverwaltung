@@ -1,0 +1,1 @@
+# Hält das Verzeichnis in Git: Das Dockerfile kopiert public/, Git versioniert aber keine leeren Verzeichnisse.
