@@ -114,7 +114,7 @@ Session lifetime (NextAuth `maxAge`) and backend token lifetime (`Jwt:ExpiresInH
 
 ### Code-review reference IDs
 
-Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentation/CleanCode_Analyse.md` (B = backend, F = frontend), which explains the reasoning behind those refactorings. B-09 to B-13 and F-07 to F-12 are in its follow-up section at the end; `CleanCode_Analyse.pdf` predates that section.
+Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentation/CleanCode_Analyse.md` (B = backend, F = frontend), which explains the reasoning behind those refactorings. B-09 to B-13 and F-07 to F-12 are in its follow-up section at the end.
 
 ## Repository notes
 
