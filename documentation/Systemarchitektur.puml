@@ -1,11 +1,11 @@
 @startuml Systemarchitektur
 ' ============================================================
-' Systemarchitektur – Adressverwaltung v2.2.0
+' Systemarchitektur – Adressverwaltung v2.3.0
 ' SVG erzeugen:
 '   docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg /data/Systemarchitektur.puml
 ' ============================================================
 
-title Adressverwaltung v2.2.0 – Systemarchitektur
+title Adressverwaltung v2.3.0 – Systemarchitektur
 
 skinparam shadowing false
 skinparam defaultFontName sans-serif

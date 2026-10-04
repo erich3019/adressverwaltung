@@ -1,15 +1,15 @@
-# Änderungsprotokoll — Adressverwaltung, 4. Oktober 2026
+# Änderungsprotokoll — Adressverwaltung v2.3.0
 
 **Datum:** 4. Oktober 2026\
 **Ausgangsstand:** v2.2.0 (Commit `1b21258`)\
 **Endstand:** Commit `f09a2fc` auf `main`, 8 Commits, 69 geänderte Dateien\
-**Versionsnummer:** unverändert 2.2.0
+**Versionsnummer:** 2.3.0 (vorher 2.2.0)
 
 ---
 
 ## 1. Übersicht
 
-Am 4. Oktober 2026 kamen fünf Änderungspakete und zwei Dokumente dazu.
+Version 2.3.0 fasst die Änderungen vom 4. Oktober 2026 zusammen: fünf Änderungspakete und zwei neue Dokumente.
 
 | \# | Paket | Inhalt | Commit |
 | --- | --- | --- | --- |
@@ -20,6 +20,7 @@ Am 4. Oktober 2026 kamen fünf Änderungspakete und zwei Dokumente dazu.
 | 5 | Clean Code | Nachprüfung mit 11 Befunden (B-09 bis B-13, F-07 bis F-12), alle umgesetzt | `dac15cb` |
 | 6 | Dokumentation | PDF der Clean-Code-Analyse neu erzeugt | `6d1975d` |
 | 7 | Dokumentation | Schulungsunterlage zum Sequenzdiagramm | `080cb4a`, `f09a2fc` |
+| 8 | Version | Versionsnummer auf 2.3.0 gesetzt (README, `package.json`, Diagramme, Dokumente) | nach `f09a2fc` |
 
 Das Datenbankschema ist unverändert. Bestehende Daten bleiben erhalten.
 
@@ -72,7 +73,7 @@ Der Zwischenschritt in Paket 2 hob die Pakete zunächst innerhalb von .NET 8 an 
 | `react`, `react-dom` | 18 | 19 |
 | `postcss` | 8.4.x (in `next` gebündelt) | ≥ 8.5.23 (per `overrides`) |
 | `@types/next-auth` | 3.15 | entfernt (veraltet) |
-| `package.json` Version | 2.0.0 | 2.2.0 |
+| `package.json` Version | 2.0.0 | 2.3.0 |
 | Lockfile | keines | `package-lock.json`, Dockerfile nutzt `npm ci` |
 
 Next.js 14 erhält für mehrere kritische Lücken keine Korrekturen mehr, deshalb der Sprung auf Version 15. Am Anwendungscode war dafür keine Anpassung nötig.
@@ -150,7 +151,7 @@ Befunde und Begründungen stehen in der Nachprüfung am Ende von `documentation/
 | --- | --- |
 | `documentation/Sicherheitsbericht.pdf` (Quelle `.html`) | neu |
 | `documentation/Schulungsunterlage_Sequenzdiagramm.pdf` (Quelle `.html`, zwei PNG) | neu |
-| `documentation/Aenderungsprotokoll_2026-10-04.pdf` (Quelle `.md`) | neu, dieses Dokument |
+| `documentation/Aenderungsprotokoll_v2.3.0.pdf` (Quelle `.md`) | neu, dieses Dokument |
 | `documentation/CleanCode_Analyse.md` und `.pdf` | um die Nachprüfung ergänzt, PDF neu erzeugt |
 | `documentation/Systemarchitektur.puml` und `.svg` | ASP.NET Core 10, Next.js 15 |
 | `README.md` | Versionen, Geheimnisse in `env/`, Anmeldung, lokale Entwicklung, Tests, Projektstruktur |
@@ -169,7 +170,7 @@ Befunde und Begründungen stehen in der Nachprüfung am Ende von `documentation/
 | Skripte und Migration | 0 | 2 | 1 |
 | Dokumentation, `README.md`, `CLAUDE.md` | 6 | 6 | 0 |
 
-Die Zahlen beziehen sich auf den Stand vor diesem Protokoll (Commit `f09a2fc`).
+Die Zahlen beziehen sich auf den Stand vor diesem Protokoll und vor dem Setzen der Versionsnummer (Commit `f09a2fc`).
 
 ---
 
@@ -210,6 +211,5 @@ Nicht im Browser geprüft: die Bedienung der Oberfläche nach dem Upgrade auf Re
 * OData-Listen haben keine Seitengrösse; das verlangt Blättern im Frontend.
 * Keine Rollen, keine Kontosperre, kein Widerruf von Tokens.
 * `npm audit` meldet 7 Einträge in Entwicklungswerkzeugen (über `braces`); behebbar mit Tailwind CSS 4.
-* Die Versionsnummer steht weiterhin auf 2.2.0.
 
 Einzelheiten zu den Sicherheitspunkten stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 4.

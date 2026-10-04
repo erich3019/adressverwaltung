@@ -1,4 +1,4 @@
-# Adressverwaltung – Tutorial WebApp v2.2.0
+# Adressverwaltung – Tutorial WebApp v2.3.0
 
 Adressverwaltungs-WebApp mit Login, CRUD für Adressen und Städte (PLZ-Verzeichnis), PLZ-Wertehilfe und E-Mail-Benachrichtigung bei neuen Adressen.
 
@@ -227,6 +227,7 @@ adressverwaltung/
 
 | Version | Inhalt |
 |---------|--------|
+| 2.3.0 | .NET 10, Next.js 15, Backend-Tests, Sicherheitskorrekturen, Clean-Code-Nachprüfung |
 | 2.2.0 | JWT-Authentifizierung im Backend, Bearer-Token aus der NextAuth-Session |
 | 2.1.0 | Umsetzung der Clean-Code-Analyse (14 Befunde) |
 | 2.0.0 | Login (NextAuth), Städte, Einstellungen mit E-Mail-Benachrichtigung, Audit-Felder |
