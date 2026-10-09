@@ -3,12 +3,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Adresse } from '@/types/adresse';
-import { getAlleAdressen, loescheAdresse } from '@/lib/api';
+import { getAdressenSeite, loescheAdresse, SEITENGROESSE } from '@/lib/api';
+import Seitenwahl from '@/components/Seitenwahl';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Ladeanzeige from '@/components/Ladeanzeige';
 
 export default function AdressenListePage() {
   const [adressen, setAdressen] = useState<Adresse[]>([]);
+  const [gesamt, setGesamt]     = useState(0);
+  const [seite, setSeite]       = useState(1);
   const [ladevorgang, setLadevorgang] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -21,8 +24,12 @@ export default function AdressenListePage() {
     try {
       setLadevorgang(true);
       setFehler(null);
-      const daten = await getAlleAdressen();
-      setAdressen(daten);
+      const daten = await getAdressenSeite(seite);
+      setAdressen(daten.eintraege);
+      setGesamt(daten.gesamt);
+
+      // Letzte Zeile der letzten Seite gelöscht → eine Seite zurück
+      if (daten.eintraege.length === 0 && seite > 1) setSeite(seite - 1);
     } catch (err) {
       setFehler(
         'Fehler beim Laden der Adressen. Läuft das Backend und ist nginx erreichbar?'
@@ -31,7 +38,7 @@ export default function AdressenListePage() {
     } finally {
       setLadevorgang(false);
     }
-  }, []);
+  }, [seite]);
 
   useEffect(() => {
     ladeDaten();
@@ -51,7 +58,7 @@ export default function AdressenListePage() {
 
     try {
       await loescheAdresse(id);
-      setAdressen((prev) => prev.filter((a) => a.id !== id));
+      await ladeDaten();
     } catch (err) {
       setLoeschFehler('Fehler beim Löschen der Adresse. Bitte versuche es erneut.');
       console.error(err);
@@ -76,7 +83,7 @@ export default function AdressenListePage() {
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Alle Adressen</h2>
           <p className="text-gray-500 text-sm mt-1">
-            {adressen.length} Eintrag{adressen.length !== 1 ? 'räge' : ''} gespeichert
+            {gesamt} {gesamt === 1 ? 'Eintrag' : 'Einträge'} gespeichert
           </p>
         </div>
         <Link
@@ -120,7 +127,7 @@ export default function AdressenListePage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         {adressen.length === 0 && !fehler ? (
           <div className="text-center py-16 text-gray-400">
             <p className="text-4xl mb-3">📭</p>
@@ -176,6 +183,12 @@ export default function AdressenListePage() {
           </table>
         )}
       </div>
+
+      <Seitenwahl
+        seite={seite}
+        seiten={Math.ceil(gesamt / SEITENGROESSE)}
+        onWechsel={setSeite}
+      />
     </main>
   );
 }

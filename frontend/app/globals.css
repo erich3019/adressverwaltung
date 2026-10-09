@@ -1,3 +1,22 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/*
+  Zwei Standardwerte haben sich mit Tailwind CSS 4 geändert. Diese Regeln stellen
+  das Verhalten von Version 3 wieder her, damit die Oberfläche gleich aussieht:
+  - Rahmen ohne eigene Farbklasse sind hellgrau statt in der Textfarbe.
+  - Schaltflächen zeigen den Zeiger-Cursor.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}

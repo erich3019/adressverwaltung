@@ -13,6 +13,11 @@
 #
 # Verwendung (mit Argumenten):
 #   ./create_user.sh email@example.com "Max Muster" MeinPasswort!
+#   ./create_user.sh email@example.com "Max Muster" MeinPasswort! Admin
+#
+# Rolle (viertes Argument, Standard "User"):
+#   User  – Adressen und Städte pflegen
+#   Admin – zusätzlich Benutzer anlegen und Einstellungen ändern
 # ============================================================
 
 set -e
@@ -27,6 +32,7 @@ if [ -n "$1" ] && [ -n "$2" ] && [ -n "$3" ]; then
     NEW_EMAIL="$1"
     DISPLAY_NAME="$2"
     NEW_PASSWORD="$3"
+    NEW_ROLE="${4:-User}"
 else
     echo ""
     echo "=== Neuen Benutzer anlegen ==="
@@ -37,6 +43,8 @@ else
     echo ""
     read -rsp "Passwort bestätigen: " NEW_PASSWORD_CONFIRM
     echo ""
+    read -rp  "Rolle (User/Admin) [User]: " NEW_ROLE
+    NEW_ROLE="${NEW_ROLE:-User}"
 
     if [ "$NEW_PASSWORD" != "$NEW_PASSWORD_CONFIRM" ]; then
         echo "❌ Fehler: Passwörter stimmen nicht überein."
@@ -57,6 +65,11 @@ fi
 
 if [ ${#NEW_PASSWORD} -lt 8 ]; then
     echo "❌ Fehler: Passwort muss mindestens 8 Zeichen lang sein."
+    exit 1
+fi
+
+if [ "$NEW_ROLE" != "User" ] && [ "$NEW_ROLE" != "Admin" ]; then
+    echo "❌ Fehler: Rolle muss 'User' oder 'Admin' sein."
     exit 1
 fi
 
@@ -158,15 +171,15 @@ echo "⏳ Benutzer wird in der Datenbank angelegt..."
 
 docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" \
     -v ON_ERROR_STOP=1 \
-    -v email="$NEW_EMAIL" -v hash="$NEW_HASH" -v name="$DISPLAY_NAME" \
+    -v email="$NEW_EMAIL" -v hash="$NEW_HASH" -v name="$DISPLAY_NAME" -v role="$NEW_ROLE" \
     -v now="$NOW_UTC" -v by="$CREATED_BY" -v today="$TODAY" <<'SQL'
 INSERT INTO "Users"
-    ("Email", "PasswordHash", "DisplayName",
+    ("Email", "PasswordHash", "DisplayName", "Role",
      "CreateDate", "CreatedBy",
      "ChangeDate", "ChangedBy",
      "DateFrom", "DateTo")
  VALUES
-    (:'email', :'hash', :'name',
+    (:'email', :'hash', :'name', :'role',
      :'now', :'by',
      NULL, NULL,
      :'today', NULL);
@@ -177,6 +190,7 @@ echo "✅ Benutzer erfolgreich angelegt!"
 echo ""
 echo "   E-Mail      : $NEW_EMAIL"
 echo "   Anzeigename : $DISPLAY_NAME"
+echo "   Rolle       : $NEW_ROLE"
 echo "   Erstellt am : $NOW_UTC UTC"
 echo "   Gültig ab   : $TODAY"
 echo ""

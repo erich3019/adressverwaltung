@@ -125,7 +125,8 @@ fi
 # ── Passwort-Hash in DB schreiben ────────────────────────────
 docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" \
     -v ON_ERROR_STOP=1 -v email="$TARGET_EMAIL" -v hash="$NEW_HASH" <<'SQL'
-UPDATE "Users" SET "PasswordHash" = :'hash' WHERE "Email" = :'email';
+-- Die höhere Token-Version widerruft alle bisher ausgestellten Tokens des Benutzers
+UPDATE "Users" SET "PasswordHash" = :'hash', "TokenVersion" = "TokenVersion" + 1 WHERE "Email" = :'email';
 SQL
 
 echo ""

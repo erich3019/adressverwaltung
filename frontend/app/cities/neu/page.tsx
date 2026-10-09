@@ -23,7 +23,7 @@ export default function NeueStadtPage() {
         </Link>
       </div>
 
-      <div className="bg-white rounded-2xl shadow p-8">
+      <div className="bg-white rounded-2xl shadow-sm p-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">Neue Stadt anlegen</h1>
         <CityForm onSubmit={handleSubmit} submitLabel="Stadt speichern" />
       </div>

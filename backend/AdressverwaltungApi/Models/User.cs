@@ -27,4 +27,15 @@ public class User : AuditableEntity
     [Required]
     [MaxLength(100)]
     public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Rolle des Benutzers, siehe <see cref="Roles"/>.</summary>
+    [Required]
+    [MaxLength(20)]
+    public string Role { get; set; } = Roles.User;
+
+    /// <summary>
+    /// Wird bei der Abmeldung erhöht. Ein Token gilt nur, solange seine Version
+    /// mit diesem Wert übereinstimmt – so lassen sich ausgestellte Tokens widerrufen.
+    /// </summary>
+    public int TokenVersion { get; set; }
 }

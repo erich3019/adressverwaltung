@@ -38,7 +38,7 @@ export default function StadtBearbeitenPage() {
         </Link>
       </div>
 
-      <div className="bg-white rounded-2xl shadow p-8">
+      <div className="bg-white rounded-2xl shadow-sm p-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">Stadt bearbeiten</h1>
 
         {laden && (

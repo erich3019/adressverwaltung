@@ -10,11 +10,15 @@ namespace AdressverwaltungApi.Services;
 
 /// <summary>
 /// JWT-Implementierung von ITokenService (HS256).
+/// Die Rolle steht bewusst nicht im Token: Sie wird bei jeder Anfrage aus der
+/// Datenbank gelesen (siehe TokenUserValidator), eine Änderung gilt also sofort.
 /// Ausgelagert aus AuthController gemäss SRP (B-10): Der Controller
 /// verarbeitet HTTP-Anfragen, das Ausstellen von Tokens ist eine eigene Aufgabe.
 /// </summary>
 public class JwtTokenService : ITokenService
 {
+    public const string TokenVersionClaim = "tv";
+
     private readonly JwtOptions _options;
 
     public JwtTokenService(IOptions<JwtOptions> options)
@@ -34,6 +38,8 @@ public class JwtTokenService : ITokenService
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim(JwtRegisteredClaimNames.Name,  user.DisplayName),
             new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
+            // Version für den Widerruf: Nach einer Abmeldung passt sie nicht mehr
+            new Claim(TokenVersionClaim, user.TokenVersion.ToString(), ClaimValueTypes.Integer32),
         };
 
         var token = new JwtSecurityToken(

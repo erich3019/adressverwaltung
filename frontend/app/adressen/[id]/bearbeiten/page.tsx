@@ -53,7 +53,7 @@ export default function AdresseBearbeitenPage() {
         </p>
       )}
 
-      <div className="bg-white rounded-xl shadow p-6">
+      <div className="bg-white rounded-xl shadow-sm p-6">
         <Fehlermeldung meldung={fehler} />
         {adresse && (
           <AdresseForm

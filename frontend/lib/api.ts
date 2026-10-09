@@ -1,50 +1,51 @@
-import { getSession } from 'next-auth/react';
+import { signOut } from 'next-auth/react';
 import { getServerSession } from 'next-auth';
-import { authOptions } from './auth';
+import { serverAuthOptions } from './auth';
+import { API_HEADER } from './apiHeader';
 import { Adresse, AdresseCreate, AdresseUpdate } from '@/types/adresse';
 import { City, CityCreate, CityUpdate } from '@/types/city';
 
-// Server Components (typeof window === 'undefined'): INTERNAL_API_URL verwenden
-//   → Docker-intern: http://backend:8080 (nginx nicht nötig)
-// Client Components (Browser): leerer String → relative URLs (/odata/...)
-//   → Browser schickt Request an denselben Host (nginx leitet weiter)
-//   → funktioniert sowohl mit http://localhost:3000 als auch https://localhost
-const BASE_URL  = typeof window === 'undefined'
-  ? (process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000')
-  : '';
-const ODATA_URL = `${BASE_URL}/odata`;
+// Server Components (typeof window === 'undefined'): direkt zum Backend
+//   → Docker-intern: http://backend:8080, der Bearer-Token kommt aus der Session
+// Client Components (Browser): über den Proxy /api/backend der eigenen App
+//   → der Proxy hängt den Token an; der Browser bekommt ihn nie zu sehen
+const IM_BROWSER = typeof window !== 'undefined';
+const BASE_URL   = IM_BROWSER
+  ? '/api/backend'
+  : (process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000');
+const ODATA_URL  = `${BASE_URL}/odata`;
 
 // ============================================================
 // Authentifizierter Fetch
 // ============================================================
-// Liest den JWT Bearer-Token aus der NextAuth-Session und fügt ihn
-// automatisch als Authorization-Header bei jedem API-Aufruf hinzu.
-//
 // Wichtig: Next.js unterscheidet Server Components und Client Components.
-//   - Server Components (z.B. cities/page.tsx): getSession() von next-auth/react
-//     funktioniert NICHT (kein Browser). Stattdessen: getServerSession(authOptions).
-//   - Client Components (z.B. app/page.tsx mit 'use client'): getSession() korrekt.
-//
-// typeof window === 'undefined' → Server-Umgebung
+//   - Server Components (z.B. cities/page.tsx): Der Backend-JWT steht in der
+//     Session von getServerSession(serverAuthOptions) und wird als
+//     Authorization-Header mitgesendet.
+//   - Client Components (z.B. app/page.tsx mit 'use client'): Der Aufruf geht mit
+//     dem Session-Cookie an /api/backend; ein Token ist im Browser nicht vorhanden.
 async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  let token: string | undefined;
-
-  if (typeof window === 'undefined') {
-    // Server Component: getServerSession aus next-auth (serverseitig)
-    const session = await getServerSession(authOptions);
-    token = session?.accessToken;
-  } else {
-    // Client Component: getSession aus next-auth/react (clientseitig)
-    const session = await getSession();
-    token = session?.accessToken;
-  }
-
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string> | undefined ?? {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  return fetch(url, { ...init, headers });
+  if (IM_BROWSER) {
+    // Vom Proxy verlangter Header (Schutz vor Cross-Site-Request-Forgery)
+    headers[API_HEADER] = '1';
+  } else {
+    const session = await getServerSession(serverAuthOptions);
+    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+  }
+
+  const response = await fetch(url, { ...init, headers });
+
+  // 401 im Browser: Die Session ist abgelaufen oder das Token wurde widerrufen
+  // (z.B. Abmeldung auf einem anderen Gerät) → zurück zum Login
+  if (IM_BROWSER && response.status === 401) {
+    await signOut({ callbackUrl: '/login' });
+  }
+
+  return response;
 }
 
 // ============================================================
@@ -78,6 +79,41 @@ function jsonRequest(method: 'POST' | 'PATCH' | 'PUT', daten: unknown): RequestI
 async function leseListe<T>(response: Response, normalize: (raw: RawEntity) => T): Promise<T[]> {
   const data = await response.json() as { value: RawEntity[] };
   return data.value.map(normalize);
+}
+
+// Eine Seite einer Liste samt Gesamtzahl aller Treffer
+export interface Seite<T> {
+  eintraege: T[];
+  gesamt: number;
+}
+
+// Zeilen pro Seite in den Listen. Das Backend liefert höchstens 100 Zeilen pro Antwort.
+export const SEITENGROESSE = 25;
+
+// Hochkomma verdoppeln, damit eine Eingabe das OData-Stringliteral nicht verlassen kann
+function odataText(wert: string): string {
+  return wert.replace(/'/g, "''");
+}
+
+// Liest eine Seite: $top/$skip blättern, $count=true liefert die Gesamtzahl mit
+async function leseSeite<T>(
+  url: string,
+  seite: number,
+  fehlertext: string,
+  normalize: (raw: RawEntity) => T
+): Promise<Seite<T>> {
+  const trenner = url.includes('?') ? '&' : '?';
+  const skip    = (Math.max(1, seite) - 1) * SEITENGROESSE;
+  const response = await apiRequest(
+    `${url}${trenner}$top=${SEITENGROESSE}&$skip=${skip}&$count=true`,
+    fehlertext
+  );
+  const data = await response.json() as { value: RawEntity[]; '@odata.count'?: number };
+
+  return {
+    eintraege: data.value.map(normalize),
+    gesamt:    data['@odata.count'] ?? data.value.length,
+  };
 }
 
 // ============================================================
@@ -125,10 +161,14 @@ function normalizeCity(raw: RawEntity): City {
 // ADRESSEN
 // ============================================================
 
-// GET /odata/Adressen – Alle Adressen abrufen
-export async function getAlleAdressen(): Promise<Adresse[]> {
-  const response = await apiRequest(`${ODATA_URL}/Adressen`, 'Fehler beim Abrufen der Adressen');
-  return leseListe(response, normalizeAdresse);
+// GET /odata/Adressen?$orderby=…&$top=…&$skip=…&$count=true – Eine Seite der Adressen
+export async function getAdressenSeite(seite: number): Promise<Seite<Adresse>> {
+  return leseSeite(
+    `${ODATA_URL}/Adressen?$orderby=name,vorname,id`,
+    seite,
+    'Fehler beim Abrufen der Adressen',
+    normalizeAdresse
+  );
 }
 
 // GET /odata/Adressen(id) – Einzelne Adresse abrufen
@@ -169,10 +209,22 @@ export async function loescheAdresse(id: number): Promise<void> {
 export const PLZ_SUCHE_MIN_LAENGE = 2;
 const PLZ_SUCHE_MAX_TREFFER = 10;
 
-// GET /odata/Cities – Alle Städte abrufen
-export async function getAlleCities(): Promise<City[]> {
-  const response = await apiRequest(`${ODATA_URL}/Cities`, 'Fehler beim Abrufen der Städte');
-  return leseListe(response, normalizeCity);
+// GET /odata/Cities?$filter=…&$orderby=…&$top=…&$skip=…&$count=true – Eine Seite der Städte.
+// suche filtert nach dem Anfang der PLZ oder einem Teil des Ortsnamens.
+export async function getCitiesSeite(seite: number, suche = ''): Promise<Seite<City>> {
+  const text   = odataText(suche.trim());
+  const filter = text
+    ? `&$filter=${encodeURIComponent(
+        `startswith(postalCode,'${text}') or contains(tolower(cityName),'${text.toLowerCase()}')`
+      )}`
+    : '';
+
+  return leseSeite(
+    `${ODATA_URL}/Cities?$orderby=postalCode,cityName,id${filter}`,
+    seite,
+    'Fehler beim Abrufen der Städte',
+    normalizeCity
+  );
 }
 
 // GET /odata/Cities?$filter=startswith(postalCode,'prefix')&$top=10
@@ -181,9 +233,7 @@ export async function getAlleCities(): Promise<City[]> {
 export async function sucheStaedteNachPlz(plzPrefix: string): Promise<City[]> {
   if (!plzPrefix || plzPrefix.length < PLZ_SUCHE_MIN_LAENGE) return [];
 
-  // Hochkomma verdoppeln, damit die Eingabe das OData-Stringliteral nicht verlassen kann
-  const plzLiteral = plzPrefix.replace(/'/g, "''");
-  const filter = encodeURIComponent(`startswith(postalCode,'${plzLiteral}')`);
+  const filter = encodeURIComponent(`startswith(postalCode,'${odataText(plzPrefix)}')`);
   const response = await apiFetch(
     `${ODATA_URL}/Cities?$filter=${filter}&$top=${PLZ_SUCHE_MAX_TREFFER}&$orderby=postalCode`,
     { cache: 'no-store' }

@@ -145,6 +145,11 @@ public class AdresseDbContext : DbContext
 
             // E-Mail muss eindeutig sein
             entity.HasIndex(u => u.Email).IsUnique();
+
+            // Standardwerte in der Datenbank, damit auch Skripte mit eigenem SQL
+            // (create_user.sh) gültige Zeilen anlegen
+            entity.Property(u => u.Role).HasDefaultValue(Roles.User);
+            entity.Property(u => u.TokenVersion).HasDefaultValue(0);
         });
 
         modelBuilder.Entity<Settings>().ToTable("Settings");

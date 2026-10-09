@@ -15,11 +15,16 @@ services:
       POSTGRES_DB: adressverwaltung
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+      # Passwort der Rolle "adressverwaltung_app", mit der sich das Backend verbindet
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD fehlt in .env}
     # Nur lokal erreichbar, nicht aus dem Netzwerk
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Legt beim ersten Start die Rolle des Backends an (bestehende Datenbank:
+      # ./scripts/create_db_role.sh)
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -44,7 +49,8 @@ services:
     ports:
       - "127.0.0.1:5000:8080"
     environment:
-      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=adressverwaltung;Username=postgres;Password=${POSTGRES_PASSWORD}"
+      # Eigene Rolle ohne Superuser-Rechte; "postgres" bleibt der Verwaltung vorbehalten
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=adressverwaltung;Username=adressverwaltung_app;Password=${APP_DB_PASSWORD}"
       ASPNETCORE_ENVIRONMENT: Production
       # JWT-Konfiguration
       Jwt__Key: ${JWT_KEY:?JWT_KEY fehlt in .env}

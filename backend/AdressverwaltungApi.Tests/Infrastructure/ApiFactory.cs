@@ -72,6 +72,21 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         return client;
     }
 
+    /// <summary>
+    /// Legt einen weiteren Benutzer mit der angegebenen Rolle an und gibt einen
+    /// Client mit dessen eigenem Token zurück.
+    /// </summary>
+    public async Task<HttpClient> CreateClientForNewUserAsync(string role)
+    {
+        var email = $"{role.ToLowerInvariant()}-{Guid.NewGuid():N}@example.com";
+        await CreateUserAsync(email, role);
+
+        var client = CreateClient();
+        var token  = await RequestTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
     /// <summary>Leert alle fachlichen Tabellen, damit jeder Test bei null beginnt.</summary>
     public async Task ResetDataAsync()
     {
@@ -93,20 +108,27 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private async Task<string> LoginAsync(HttpClient client)
     {
         // /auth/register verlangt selbst ein JWT, deshalb wird der Testbenutzer
-        // direkt in der Datenbank angelegt.
-        await WithDbContextAsync(async db =>
-        {
-            if (await db.Users.AnyAsync(u => u.Email == TestUserEmail)) return;
+        // direkt in der Datenbank angelegt – als Admin, damit er alles aufrufen darf.
+        await CreateUserAsync(TestUserEmail, Roles.Admin);
+        return await RequestTokenAsync(client, TestUserEmail);
+    }
 
-            var user = new User { Email = TestUserEmail, DisplayName = TestUserName };
+    private Task CreateUserAsync(string email, string role)
+        => WithDbContextAsync(async db =>
+        {
+            if (await db.Users.AnyAsync(u => u.Email == email)) return;
+
+            var user = new User { Email = email, DisplayName = TestUserName, Role = role };
             user.PasswordHash = new PasswordHasher<User>().HashPassword(user, TestUserPassword);
             db.Users.Add(user);
             await db.SaveChangesAsync();
         });
 
+    private static async Task<string> RequestTokenAsync(HttpClient client, string email)
+    {
         var login = await client.PostAsJsonAsync("/auth/login", new
         {
-            email    = TestUserEmail,
+            email,
             password = TestUserPassword,
         });
         login.EnsureSuccessStatusCode();

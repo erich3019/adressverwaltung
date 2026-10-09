@@ -6,7 +6,9 @@ namespace AdressverwaltungApi.Dtos;
 public record RegisterRequest(
     [Required][EmailAddress][MaxLength(256)] string Email,
     [Required][MinLength(8)][MaxLength(128)] string Password,
-    [Required][MaxLength(100)] string DisplayName
+    [Required][MaxLength(100)] string DisplayName,
+    /// <summary>"Admin" oder "User"; ohne Angabe "User".</summary>
+    [MaxLength(20)] string? Role = null
 );
 
 /// <summary>Request-Body für POST /auth/login</summary>
@@ -24,5 +26,6 @@ public record LoginResponse(
     string Id,
     string Name,
     string Email,
+    string Role,
     string Token
 );

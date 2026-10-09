@@ -7,6 +7,7 @@ using Microsoft.OData.ModelBuilder;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
 using AdressverwaltungApi;
+using AdressverwaltungApi.Controllers;
 using AdressverwaltungApi.Data;
 using AdressverwaltungApi.Models;
 using AdressverwaltungApi.Options;
@@ -78,6 +79,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             // (wird für die Audit-Felder CreatedBy/ChangedBy benötigt)
             NameClaimType            = "name",
         };
+
+        // Bei jeder Anfrage prüfen, ob es den Benutzer noch gibt und das Token
+        // nicht widerrufen ist; dabei die aktuelle Rolle aus der Datenbank übernehmen.
+        options.Events = new JwtBearerEvents { OnTokenValidated = TokenUserValidator.ValidateAsync };
     });
 
 // Jeder Endpunkt verlangt ein gültiges JWT, auch ohne eigenes [Authorize] – das gilt
@@ -103,7 +108,7 @@ builder.Services.AddControllers(options => options.Filters.Add<ODataErrorDetailF
         .Select()
         .Filter()
         .OrderBy()
-        .SetMaxTop(100)
+        .SetMaxTop(ODataCrudController<Adresse>.MaxPageSize)
         .Count()
         .Expand()
         .AddRouteComponents("odata", modelBuilder.GetEdmModel())
@@ -140,6 +145,9 @@ using (var scope = app.Services.CreateScope())
     // Zuverlässiger als Migrate() in Docker-Umgebungen, da keine
     // Migrations-History-Konflikte entstehen können.
     db.Database.EnsureCreated();
+
+    // Spalten nachziehen, die einer bestehenden Datenbank noch fehlen
+    SchemaUpgrader.Apply(db);
 
     // B-01: Seed-Logik ausgelagert in DbSeeder (SRP)
     DbSeeder.Seed(db, hasher, config, app.Logger);

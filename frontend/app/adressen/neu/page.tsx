@@ -27,7 +27,7 @@ export default function NeueAdressePage() {
 
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Neue Adresse erfassen</h2>
 
-      <div className="bg-white rounded-xl shadow p-6">
+      <div className="bg-white rounded-xl shadow-sm p-6">
         <AdresseForm onSubmit={handleSubmit} submitLabel="Adresse speichern" />
       </div>
     </main>

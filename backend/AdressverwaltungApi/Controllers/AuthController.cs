@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
@@ -17,7 +18,8 @@ namespace AdressverwaltungApi.Controllers;
 /// - Fehlermeldungen sind bewusst generisch (kein Hinweis ob E-Mail oder Passwort falsch)
 /// - Bei erfolgreichem Login wird ein JWT Bearer-Token ausgestellt (ITokenService)
 /// - Wiederholte Fehlversuche sperren die E-Mail-Adresse vorübergehend (ILoginThrottle)
-/// - Registrierung ist nur für bereits angemeldete Benutzer möglich
+/// - Registrierung ist nur für Administratoren möglich
+/// - Die Abmeldung widerruft die ausgestellten Tokens des Benutzers
 /// </summary>
 [Route("auth")]
 [ApiController]
@@ -50,15 +52,21 @@ public class AuthController : ControllerBase
     }
 
     // POST /auth/register
-    // Nur mit gültigem JWT: Neue Benutzer erhalten vollen Zugriff auf alle Daten,
-    // deshalb darf sich niemand anonym selbst registrieren.
-    [Authorize]
+    // Nur für Administratoren: Neue Benutzer erhalten Zugriff auf alle Adressen,
+    // deshalb darf sich niemand selbst registrieren.
+    [Authorize(Roles = Roles.Admin)]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
     {
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
+        }
+
+        var role = string.IsNullOrWhiteSpace(req.Role) ? Roles.User : req.Role.Trim();
+        if (!Roles.IsValid(role))
+        {
+            return BadRequest(new { message = $"Unbekannte Rolle. Erlaubt sind {Roles.Admin} und {Roles.User}." });
         }
 
         // Gleiche Meldung für neue und bestehende E-Mail → kein User-Enumeration-Angriff möglich
@@ -68,6 +76,7 @@ public class AuthController : ControllerBase
             {
                 Email       = req.Email.Trim().ToLowerInvariant(),
                 DisplayName = req.DisplayName.Trim(),
+                Role        = role,
             };
             user.PasswordHash = _hasher.HashPassword(user, req.Password);
 
@@ -120,8 +129,27 @@ public class AuthController : ControllerBase
             Id:    user.Id.ToString(),
             Name:  user.DisplayName,
             Email: user.Email,
+            Role:  user.Role,
             Token: _tokenService.CreateToken(user)
         ));
+    }
+
+    // POST /auth/logout
+    // Widerruft alle Tokens des angemeldeten Benutzers (auch die anderer Geräte):
+    // Die Token-Version wird erhöht, ältere Tokens weist TokenUserValidator danach ab.
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+        {
+            return Unauthorized();
+        }
+
+        await _context.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.TokenVersion, u => u.TokenVersion + 1));
+
+        return NoContent();
     }
 
     /// <summary>

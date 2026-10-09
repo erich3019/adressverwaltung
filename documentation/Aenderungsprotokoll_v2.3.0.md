@@ -4,7 +4,8 @@
 **Ausgangsstand:** v2.2.0 (Commit `1b21258`)\
 **Endstand:** Commit `f09a2fc` auf `main`, 8 Commits, 69 geänderte Dateien\
 **Versionsnummer:** 2.3.0 (vorher 2.2.0)\
-**Nachtrag:** 9. Oktober 2026, zweite Sicherheitsprüfung (Abschnitt 11), Commit `68d2789`
+**Nachtrag:** 9. Oktober 2026, zweite Sicherheitsprüfung (Abschnitt 11), Commit `68d2789`\
+**Nachtrag 2:** 9. Oktober 2026, offene Punkte der Sicherheitsprüfung behoben (Abschnitt 12)
 
 ---
 
@@ -215,12 +216,9 @@ Die Adressverwaltung ist eine Demo-Anwendung ohne schützenswerte Daten. Zwei Pu
 
 Bei einem Einsatz mit echten Daten sind beide Punkte vor der Inbetriebnahme zu erledigen.
 
-Offen bleiben:
+Die übrigen offenen Punkte dieses Abschnitts (Seitengrösse, Rollen, Kontosperre, Widerruf von Tokens, Datenbank-Superuser) sind mit den Nachträgen vom 9. Oktober 2026 behoben (Abschnitte 11 und 12). Offen bleibt:
 
-* OData-Listen haben keine Seitengrösse; das verlangt Blättern im Frontend.
-* Keine Rollen, kein Widerruf von Tokens. Die Kontosperre ist seit dem Nachtrag vom 9. Oktober 2026 vorhanden (Abschnitt 11).
-* `npm audit` meldet 9 Einträge in Entwicklungswerkzeugen (am 4. Oktober waren es 7); behebbar mit Tailwind CSS 4.
-* Das Backend verbindet sich als Datenbank-Superuser `postgres` (neu aufgenommen am 9. Oktober 2026).
+* `npm audit` meldet 5 Einträge in Entwicklungswerkzeugen (über `braces` im Lint-Plugin von Next.js); dafür gibt es keine korrigierte Version.
 
 Einzelheiten zu den Sicherheitspunkten stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 4.
 
@@ -291,3 +289,85 @@ Auf dem Entwicklungsrechner ist Punkt 1 bereits erledigt.
 | Endpunkte ohne Token, Fehlerantwort ohne Stacktrace, Kontosperre, TLS-Verfahren, Header, Container-Einstellungen | wie beabsichtigt |
 
 Nicht im Browser geprüft: ob die neue CSP im Browser etwas blockiert, und der Hinweis des Login-Formulars bei einer abgelehnten Anmeldung. Die Google-Anmeldung liess sich nicht prüfen, weil sie nicht konfiguriert ist.
+
+---
+
+## 12. Nachtrag 2 vom 9. Oktober 2026: offene Punkte behoben
+
+Die offenen Punkte O-03 bis O-08 aus dem Sicherheitsbericht sind bearbeitet: fünf behoben, O-07 verkleinert. Die Versionsnummer bleibt 2.3.0. **Das Datenbankschema ändert sich:** Die Tabelle `Users` erhält die Spalten `Role` und `TokenVersion`; das Backend ergänzt sie beim Start selbst. Einzelheiten stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 3.3.
+
+| Punkt | Änderung |
+| --- | --- |
+| O-03 Seitengrösse | Höchstens 100 Zeilen pro Antwort; Listen im Frontend blättern mit 25 Zeilen, Städteliste mit Suche |
+| O-04 Token im Browser | API-Aufrufe des Browsers über den Proxy `/api/backend`; kein Token mehr in der Session; CSP mit Nonce |
+| O-05 Rollen | `Admin` und `User`; Benutzer anlegen und Einstellungen ändern nur als `Admin` |
+| O-06 Widerruf | Token-Version pro Benutzer; Abmeldung und Passwort-Reset machen ausgestellte Tokens ungültig |
+| O-07 Entwicklungswerkzeuge | Tailwind CSS 4; `npm audit` meldet 5 statt 9 Einträge |
+| O-08 Datenbank-Superuser | Backend verbindet sich mit der Rolle `adressverwaltung_app` |
+
+### Backend
+
+| Datei | Änderung |
+| --- | --- |
+| `Models/User.cs`, neu `Models/Roles.cs` | Felder `Role` und `TokenVersion`; Rollen `Admin` und `User` |
+| neu `SchemaUpgrader.cs` | Ergänzt die neuen Spalten in einer bestehenden Datenbank; vorhandene Benutzer werden `Admin` |
+| neu `TokenUserValidator.cs` | Prüft bei jeder Anfrage Benutzer und Token-Version und übernimmt die Rolle aus der Datenbank |
+| `Services/JwtTokenService.cs` | Token enthält die Token-Version (`tv`) |
+| `Controllers/AuthController.cs`, `Dtos/AuthDtos.cs` | Registrierung nur als `Admin`, optional mit Rolle; neu `POST /auth/logout`; Login liefert die Rolle |
+| `Controllers/SettingsController.cs` | `PUT /settings` nur als `Admin` |
+| `Controllers/ODataCrudController.cs` | Seitengrösse 100 für Listen |
+| `Data/AdresseDbContext.cs`, `DbSeeder.cs`, `Program.cs`, `appsettings.json` | Standardwerte der neuen Spalten; Seed-Benutzer ist `Admin`; Einbindung von Validator und Schema-Nachzug; Datenbankbenutzer |
+
+### Frontend
+
+| Datei | Änderung |
+| --- | --- |
+| neu `app/api/backend/[...pfad]/route.ts`, `lib/apiHeader.ts` | Proxy zum Backend, hängt das Token serverseitig an; Schutz vor Cross-Site-Request-Forgery |
+| `lib/api.ts` | Browser ruft den Proxy auf; Blättern (`getAdressenSeite`, `getCitiesSeite`); bei 401 zurück zum Login |
+| `lib/auth.ts`, `types/next-auth.d.ts` | Session ohne Token, dafür mit Rolle; `serverAuthOptions` für Server Components; Abmeldung ruft `/auth/logout` auf |
+| `middleware.ts`, `app/layout.tsx` | Seitenschutz ohne Umweg über `/api/auth/signin`; CSP mit Nonce pro Antwort |
+| `app/page.tsx`, `app/cities/page.tsx`, neu `components/Seitenwahl.tsx` | Blättern in beiden Listen; Suche in der Städteliste; Aktionsspalte bricht nicht mehr um |
+| `app/einstellungen/page.tsx` | Formular für die Rolle `User` gesperrt |
+| `app/globals.css`, `postcss.config.mjs`, `package.json`; gelöscht `tailwind.config.ts` | Tailwind CSS 4; Klassennamen in 9 Dateien angepasst (`shadow` → `shadow-sm` usw.) |
+
+### Infrastruktur und Skripte
+
+| Datei | Änderung |
+| --- | --- |
+| neu `db/init/10-app-rolle.sh`, `scripts/create_db_role.sh` | Legt die Datenbankrolle des Backends an (neue bzw. bestehende Datenbank) |
+| `docker-compose.yml`, `.env.example` | Neues Geheimnis `APP_DB_PASSWORD`; Backend verbindet sich als `adressverwaltung_app` |
+| `nginx/nginx.conf` | Feste CSP nur noch für Antworten ohne eigene CSP (API, statische Dateien, Fehlerseiten) |
+| `scripts/create_user.sh` | Viertes Argument für die Rolle (Standard `User`) |
+| `scripts/reset_password.sh` | Widerruft die Tokens des Benutzers |
+
+### Tests und Dokumentation
+
+| Datei | Änderung |
+| --- | --- |
+| neu `AdressverwaltungApi.Tests/RolesAndRevocationTests.cs` | 9 Tests: Rechte der Rollen, Rollenwechsel, Abmeldung, gelöschter Benutzer, Seitengrösse |
+| `AdressverwaltungApi.Tests/Infrastructure/ApiFactory.cs` | Testbenutzer ist `Admin`; weitere Benutzer mit wählbarer Rolle |
+| `documentation/Sicherheitsbericht.html` und `.pdf`, `README.md`, `CLAUDE.md` | nachgeführt |
+
+### Nach dem Aktualisieren zu tun
+
+1. **Neues Geheimnis.** `APP_DB_PASSWORD` in `.env` eintragen (`openssl rand -hex 24`).
+2. **Datenbankrolle bei bestehender Datenbank.** `docker compose up -d db`, dann `./scripts/create_db_role.sh`. Bei einer neuen Datenbank entfällt das.
+3. **Images neu bauen.** `docker compose up --build -d`, danach `docker compose restart nginx`.
+4. **Rollen prüfen.** Vorhandene Benutzer sind `Admin`. Wer nur Adressen pflegen soll, wird in der Datenbank auf `User` gesetzt; neue Benutzer erhalten `User`.
+5. **Lokale Entwicklung.** Im Frontend `npm ci` ausführen (Tailwind CSS 4). `dotnet run` verbindet sich als `adressverwaltung_app` mit `APP_DB_PASSWORD` (siehe README).
+
+Auf dem Entwicklungsrechner sind die Punkte 1 bis 3 bereits erledigt.
+
+### Prüfung
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `dotnet test` | 69 von 69 bestanden (9 neu) |
+| `dotnet list package --vulnerable --include-transitive` | keine anfälligen Pakete |
+| `npm audit --omit=dev` | 0 Lücken (mit Entwicklungswerkzeugen: 5) |
+| Frontend-Build mit Typprüfung und Lint im Docker-Image | erfolgreich |
+| Browser (Chromium, ferngesteuert): Anmeldung, alle Seiten, Anlegen, Ändern, Löschen, Suchen, Blättern, Abmelden | erfolgreich, keine Fehler und keine CSP-Verstösse in der Konsole |
+| Token im Browser, eingeschleuster Inline-Handler, Proxy ohne Header, altes Cookie nach Abmeldung, Rolle `User` | kein Token; blockiert; 403; 401; Einstellungen gesperrt |
+| Oberfläche vor und nach Tailwind CSS 4 (Bildschirmfotos) | gleiches Aussehen |
+
+Nicht geprüft: andere Browser als Chromium, die Bedienung von Hand und die Google-Anmeldung (nicht konfiguriert).

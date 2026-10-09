@@ -24,10 +24,10 @@
 <p class="meta">Stand: 9. Oktober 2026 · Version 2.3.0 · Frontend (Next.js), Backend (ASP.NET Core OData API), nginx, Docker Compose, Hilfsskripte</p>
 
 <h2>1. Zusammenfassung</h2>
-<p>Der Bericht umfasst zwei Prüfungen. Die erste vom 4. Oktober 2026 ergab 18 Befunde (S-01 bis S-18): 2 kritische, 6 hohe, 5 mittlere und 5 niedrige. Die zweite vom 9. Oktober 2026 ergab 11 weitere (S-19 bis S-29): 7 mittlere und 4 niedrige, keine kritischen oder hohen.</p>
+<p>Der Bericht umfasst zwei Prüfungen. Die erste vom 4. Oktober 2026 ergab 18 Befunde (S-01 bis S-18): 2 kritische, 6 hohe, 5 mittlere und 5 niedrige. Die zweite vom 9. Oktober 2026 ergab 11 weitere (S-19 bis S-29): 7 mittlere und 4 niedrige, keine kritischen oder hohen. Anschliessend wurden am selben Tag die bis dahin offenen Restrisiken O-03 bis O-08 bearbeitet (Abschnitt 3.3).</p>
 <p>Von den 29 Befunden sind 28 im Code behoben und am laufenden Stack überprüft. Einer ist nur im Code behoben: Das bisherige Standardpasswort des Admin-Benutzers gilt in der bestehenden Datenbank weiterhin (S-05); das ist bewusst akzeptiert.</p>
 <p>Die zwei kritischen Befunde erlaubten den Zugriff auf alle Daten ohne Anmeldung: Jeder konnte sich über <code>/auth/register</code> selbst ein Konto anlegen, und die eingesetzte Next.js-Version liess sich am Seitenschutz vorbei aufrufen.</p>
-<p>Die Adressverwaltung ist eine Demo-Anwendung ohne schützenswerte Daten. Deshalb sind zwei Punkte bewusst akzeptiert (Entscheid vom 4. Oktober 2026): die Geheimnisse in der Git-History auf GitHub und das alte Admin-Passwort in der bestehenden Datenbank. Sechs weitere Punkte bleiben als Restrisiken offen, weil sie sich nicht durch eine kleine Codeänderung lösen lassen (Abschnitt 4). Die zweite Prüfung hat einen davon erledigt (Kontosperre, vorher Teil von O-06), einen verkleinert (O-04) und einen neu aufgenommen (O-08).</p>
+<p>Die Adressverwaltung ist eine Demo-Anwendung ohne schützenswerte Daten. Deshalb sind zwei Punkte bewusst akzeptiert (Entscheid vom 4. Oktober 2026): die Geheimnisse in der Git-History auf GitHub und das alte Admin-Passwort in der bestehenden Datenbank. Von den sechs Restrisiken O-03 bis O-08 sind fünf behoben. O-07 ist verkleinert: Von 9 Meldungen zu Entwicklungswerkzeugen bleiben 5, für die es keine korrigierte Version gibt. Was darüber hinaus offen bleibt, steht in Abschnitt 4.</p>
 
 <h2>2. Umfang und Vorgehen</h2>
 <ul>
@@ -35,6 +35,7 @@
   <li>Abhängigkeiten: <code>dotnet list package --vulnerable --include-transitive</code> und <code>npm audit</code>.</li>
   <li>Überprüfung der Korrekturen: 51 Backend-Integrationstests (davon 5 neu für diese Korrekturen) und Aufrufe gegen den neu gebauten Docker-Stack unter https://localhost.</li>
   <li>Zweite Prüfung (9. Oktober 2026): erneute Durchsicht derselben Dateien und beider Abhängigkeitsprüfungen. Zusätzlich Aufrufe ohne Anmeldung gegen den laufenden Stack (Antwort-Header, erreichbare Endpunkte, angebotene TLS-Verfahren) und Anfragen mit unerwarteten Feldern an die OData-API über das Testprojekt. Überprüfung der Korrekturen mit 60 Tests (davon 9 neu) und am neu gebauten Stack.</li>
+  <li>Bearbeitung der offenen Punkte (9. Oktober 2026): Überprüfung mit 69 Tests (davon 9 neu), am neu gebauten Stack und erstmals in einem Browser (Chromium, ferngesteuert mit Playwright) – Anmeldung, alle Seiten, Anlegen, Ändern, Löschen, Suchen, Blättern und Abmelden, je mit Auswertung der Browser-Konsole.</li>
 </ul>
 <p>Nicht Teil der Prüfung: automatisierte Penetrationstests mit externen Werkzeugen, die Inhalte der Git-History im Detail und die Infrastruktur ausserhalb des Docker-Stacks.</p>
 
@@ -197,8 +198,44 @@
     <td valign="top">Behoben</td></tr>
 </table>
 
+<h3>3.3 Bearbeitung der offenen Punkte (9. Oktober 2026)</h3>
+
+<table border="1" cellpadding="4" cellspacing="0" width="100%">
+  <tr><th style="width:7%">Nr.</th><th style="width:31%">Ausgangslage</th><th style="width:48%">Korrektur</th><th style="width:14%">Status</th></tr>
+
+  <tr><td nowrap valign="top">O-03</td>
+    <td valign="top">OData-Listen ohne Seitengrösse: Eine Abfrage lieferte alle rund 4000 Städte in einer Antwort (4,3 MB für die Städteseite).</td>
+    <td valign="top">Das Backend liefert höchstens 100 Zeilen pro Antwort und einen Folgelink (<code>@odata.nextLink</code>). Die Listen im Frontend blättern mit 25 Zeilen pro Seite; die Städteliste hat dazu eine Suche nach PLZ oder Ortsname.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">O-04</td>
+    <td valign="top">Das Backend-Token war für JavaScript im Browser lesbar (<code>session.accessToken</code>); Inline-Skripte waren erlaubt.</td>
+    <td valign="top">Das Token bleibt auf dem Server: Der Browser ruft die API über <code>/api/backend</code> der eigenen Anwendung auf, die das Token aus dem verschlüsselten Cookie anhängt. <code>/api/auth/session</code> liefert kein Token mehr. Weil diese Aufrufe über ein Cookie angemeldet sind, verlangt der Proxy einen eigenen Header und einen passenden <code>Origin</code> (Schutz vor Cross-Site-Request-Forgery). Die CSP der Seiten erlaubt Skripte nur noch mit einer Nonce, die für eine einzige Antwort gilt.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">O-05</td>
+    <td valign="top">Keine Rollen: Jeder angemeldete Benutzer durfte alles.</td>
+    <td valign="top">Rollen <code>Admin</code> und <code>User</code>. Nur <code>Admin</code> darf Benutzer anlegen (<code>POST /auth/register</code>) und die Einstellungen ändern (<code>PUT /settings</code>); <code>User</code> pflegt Adressen und Städte. Die Rolle wird bei jeder Anfrage aus der Datenbank gelesen, ein Wechsel gilt also sofort. Bestehende Benutzer sind <code>Admin</code> geblieben, neue erhalten <code>User</code>.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">O-06</td>
+    <td valign="top">Kein Widerruf ausgestellter Tokens (8 Stunden gültig).</td>
+    <td valign="top">Jeder Benutzer hat eine Token-Version, die im Token steht und bei jeder Anfrage verglichen wird. Die Abmeldung (<code>POST /auth/logout</code>, von NextAuth automatisch aufgerufen) und <code>reset_password.sh</code> erhöhen sie; ältere Tokens sind damit ungültig. Tokens gelöschter Benutzer werden ebenfalls abgewiesen.</td>
+    <td valign="top">Behoben</td></tr>
+
+  <tr><td nowrap valign="top">O-07</td>
+    <td valign="top"><code>npm audit</code> meldete 9 Einträge in Entwicklungswerkzeugen (Tailwind CSS 3, ESLint).</td>
+    <td valign="top">Migration auf Tailwind CSS 4; damit entfallen 4 Einträge. Es bleiben 5 (hoch), alle über <code>braces</code> im Lint-Plugin von Next.js. Für <code>braces</code> gibt es keine korrigierte Version.</td>
+    <td valign="top">Teilweise behoben</td></tr>
+
+  <tr><td nowrap valign="top">O-08</td>
+    <td valign="top">Das Backend verband sich als Datenbank-Superuser <code>postgres</code>.</td>
+    <td valign="top">Eigene Rolle <code>adressverwaltung_app</code> ohne Superuser-Rechte, die nur die Datenbank der Anwendung besitzt. Neue Datenbanken erhalten sie beim ersten Start, bestehende über <code>./scripts/create_db_role.sh</code>. Neues Geheimnis <code>APP_DB_PASSWORD</code> in <code>.env</code>.</td>
+    <td valign="top">Behoben</td></tr>
+</table>
+
 <h2>4. Akzeptierte Risiken und offene Punkte</h2>
-<p>O-01 und O-02 sind für die Demo-Anwendung akzeptiert. Bei einem Einsatz mit echten Daten sind sie vor der Inbetriebnahme zu erledigen. O-03 bis O-08 sind offene Restrisiken.</p>
+<p>O-01 und O-02 sind für die Demo-Anwendung akzeptiert. Bei einem Einsatz mit echten Daten sind sie vor der Inbetriebnahme zu erledigen. O-03 bis O-06 und O-08 sind behoben (Abschnitt 3.3). Die übrigen Zeilen sind Restrisiken.</p>
 
 <table border="1" cellpadding="4" cellspacing="0" width="100%">
   <tr><th style="width:7%">Nr.</th><th style="width:33%">Punkt</th><th style="width:60%">Stand und Empfehlung</th></tr>
@@ -211,29 +248,21 @@
     <td valign="top">Das frühere Standardpasswort von <code>admin@example.com</code> gilt in der bestehenden Datenbank noch.</td>
     <td valign="top"><b>Akzeptiert (Demo-Anwendung).</b> Bei einem Einsatz mit echten Daten <code>./scripts/reset_password.sh</code> ausführen.</td></tr>
 
-  <tr><td nowrap valign="top">O-03</td>
-    <td valign="top">OData-Listen ohne Seitengrösse: <code>GET /odata/Cities</code> liefert alle rund 4000 Zeilen in einer Antwort; <code>MaxTop</code> begrenzt nur ausdrückliche <code>$top</code>-Angaben.</td>
-    <td valign="top"><code>PageSize</code> setzen. Das verlangt Blättern im Frontend, das heute die ganze Liste in einer Antwort erwartet – deshalb nicht in dieser Runde.</td></tr>
-
-  <tr><td nowrap valign="top">O-04</td>
-    <td valign="top">Das Backend-Token ist für JavaScript im Browser lesbar (<code>session.accessToken</code>). Eine XSS-Lücke würde es preisgeben. Im Code wurde keine solche Lücke gefunden.</td>
-    <td valign="top">Seit S-28 dürfen Skripte nur vom eigenen Ursprung geladen werden und Verbindungen nur dorthin gehen; Inline-Skripte sind aber weiterhin erlaubt. Offen: API-Aufrufe über Next.js-Routen leiten, damit das Token den Server nicht verlässt, und eine strikte <code>script-src</code>-CSP mit Nonces einführen.</td></tr>
-
-  <tr><td nowrap valign="top">O-05</td>
-    <td valign="top">Keine Rollen: Jeder angemeldete Benutzer darf alles, auch Einstellungen ändern und Benutzer anlegen.</td>
-    <td valign="top">Rolle «Admin» im Token einführen und Registrierung sowie Einstellungen darauf beschränken.</td></tr>
-
-  <tr><td nowrap valign="top">O-06</td>
-    <td valign="top">Kein Widerruf ausgestellter Tokens (8 Stunden gültig). Die Kontosperre ist seit S-22 vorhanden; ihr Zähler liegt im Arbeitsspeicher und geht bei einem Neustart des Backends verloren.</td>
-    <td valign="top">Kürzere Token-Laufzeit oder Sperrliste. Die Sperre lässt sich missbrauchen, um einen Benutzer für 15 Minuten auszusperren; das ist der übliche Preis einer Kontosperre.</td></tr>
-
   <tr><td nowrap valign="top">O-07</td>
-    <td valign="top"><code>npm audit</code> meldet 9 Einträge in Entwicklungswerkzeugen (7 hoch, 2 mittel; am 4. Oktober waren es 7), über Tailwind CSS 3 und ESLint. Sie laufen nur beim Build mit eigenen Dateien, nicht im ausgelieferten Frontend.</td>
-    <td valign="top">Mit einer Migration auf Tailwind CSS 4 beheben.</td></tr>
+    <td valign="top"><code>npm audit</code> meldet 5 Einträge (hoch) in Entwicklungswerkzeugen, alle über <code>braces</code> im Lint-Plugin von Next.js (<code>eslint-config-next</code>). Sie laufen nur beim Lint mit eigenen Dateien, nicht im ausgelieferten Frontend.</td>
+    <td valign="top">Für <code>braces</code> gibt es keine korrigierte Version. Beobachten und aktualisieren, sobald das Plugin ohne <code>braces</code> auskommt.</td></tr>
 
-  <tr><td nowrap valign="top">O-08</td>
-    <td valign="top">Das Backend verbindet sich als Datenbank-Superuser <code>postgres</code>. Eine Lücke im Backend hätte damit Zugriff auf die ganze Datenbankinstanz.</td>
-    <td valign="top">Eigene Datenbankrolle mit Rechten nur auf die Datenbank <code>adressverwaltung</code>. Das verlangt eine Umstellung der bestehenden Datenbank – deshalb nicht in dieser Runde.</td></tr>
+  <tr><td nowrap valign="top">O-09</td>
+    <td valign="top">Die CSP erlaubt weiterhin Inline-Styles (<code>style-src 'unsafe-inline'</code>).</td>
+    <td valign="top">Geringes Risiko: Styles führen keinen Code aus. Eine Nonce auch für Styles wäre möglich, sobald keine Komponente mehr Inline-Styles braucht.</td></tr>
+
+  <tr><td nowrap valign="top">O-10</td>
+    <td valign="top">Die Abmeldung widerruft alle Tokens des Benutzers, auch die auf anderen Geräten. Der Sperrzähler der Kontosperre (S-22) liegt im Arbeitsspeicher und lässt sich missbrauchen, um einen Benutzer für 15 Minuten auszusperren.</td>
+    <td valign="top">Bewusst einfach gehalten. Für eine Abmeldung pro Gerät bräuchte es eine Liste einzelner Tokens.</td></tr>
+
+  <tr><td nowrap valign="top">O-11</td>
+    <td valign="top">Rollen lassen sich nur beim Anlegen eines Benutzers vergeben (<code>/auth/register</code>, <code>create_user.sh</code>). Ändern oder Löschen von Benutzern geht nur direkt in der Datenbank.</td>
+    <td valign="top">Benutzerverwaltung für Administratoren ergänzen, falls die Anwendung mehr als eine Demo wird.</td></tr>
 </table>
 
 <h2>5. Überprüfung</h2>
@@ -280,6 +309,30 @@
 
 <p>Nicht im Browser geprüft: ob die neue Content-Security-Policy (S-28) im Browser etwas blockiert, und der Hinweis des Login-Formulars bei einer abgelehnten Anmeldung (S-25). Die Login-Seite lädt nur Dateien vom eigenen Ursprung, und alle Seiten antworten per <code>curl</code> mit 200; Verstösse gegen die CSP zeigt aber nur die Konsole des Browsers. Die Google-Anmeldung selbst liess sich nicht prüfen, weil sie nicht konfiguriert ist.</p>
 
+<h3>5.3 Bearbeitung der offenen Punkte (9. Oktober 2026)</h3>
+
+<table border="1" cellpadding="4" cellspacing="0" width="100%">
+  <tr><th style="width:55%">Prüfung</th><th style="width:45%">Ergebnis</th></tr>
+  <tr><td valign="top"><code>dotnet test</code></td><td valign="top">69 von 69 bestanden (9 neu: Rollen, Widerruf, Seitengrösse)</td></tr>
+  <tr><td valign="top"><code>dotnet list package --vulnerable --include-transitive</code></td><td valign="top">keine anfälligen Pakete</td></tr>
+  <tr><td valign="top"><code>npm audit --omit=dev</code></td><td valign="top">0 Lücken (mit Entwicklungswerkzeugen: 5, siehe O-07)</td></tr>
+  <tr><td valign="top">Browser: Anmeldung, Startseite, Städte, Einstellungen, beide Formulare</td><td valign="top">alle Seiten laden; keine Fehler und keine CSP-Verstösse in der Konsole</td></tr>
+  <tr><td valign="top">Browser: Aufruf einer geschützten Seite ohne Session</td><td valign="top">Umleitung zum Login, nach der Anmeldung zurück auf die gewünschte Seite</td></tr>
+  <tr><td valign="top">Browser: Adresse anlegen, ändern und löschen</td><td valign="top">erfolgreich, die Liste zeigt jeweils den neuen Stand</td></tr>
+  <tr><td valign="top">Browser: Städte suchen (PLZ, Ortsname mit Umlaut) und blättern</td><td valign="top">606 Treffer für «8» auf 25 Seiten; 25 Treffer für «zürich»; eine Eingabe mit Hochkommas ergibt 0 Treffer</td></tr>
+  <tr><td valign="top">Browser: <code>/api/auth/session</code></td><td valign="top">enthält Name, E-Mail, Id und Rolle, kein Token</td></tr>
+  <tr><td valign="top">Browser: eingeschleuster Inline-Handler (<code>&lt;img onerror=…&gt;</code>)</td><td valign="top">von der CSP blockiert</td></tr>
+  <tr><td valign="top">Proxy <code>/api/backend</code>: ohne den eigenen Header; Pfad <code>/auth</code>; Pfad mit <code>..</code></td><td valign="top">403; 404; 404</td></tr>
+  <tr><td valign="top"><code>GET /odata/Cities</code> ohne <code>$top</code></td><td valign="top">100 Zeilen und <code>@odata.nextLink</code></td></tr>
+  <tr><td valign="top">Browser: Abmelden, danach das alte Session-Cookie wieder einsetzen</td><td valign="top">das Backend weist das Token ab (401)</td></tr>
+  <tr><td valign="top">Browser: Benutzer mit Rolle <code>User</code> auf der Einstellungsseite</td><td valign="top">Formular gesperrt mit Hinweis; <code>PUT /settings</code> ergibt 403</td></tr>
+  <tr><td valign="top">Verbindung des Backends zur Datenbank</td><td valign="top">als <code>adressverwaltung_app</code> (kein Superuser, darf keine Datenbanken und Rollen anlegen)</td></tr>
+  <tr><td valign="top">Bestehende Datenbank nach dem Start</td><td valign="top">Spalten <code>Role</code> und <code>TokenVersion</code> ergänzt, vorhandene Benutzer sind <code>Admin</code></td></tr>
+  <tr><td valign="top">Oberfläche vor und nach der Migration auf Tailwind CSS 4 (Bildschirmfotos)</td><td valign="top">gleiches Aussehen; die Aktionsspalte der Städteliste bricht nicht mehr um</td></tr>
+</table>
+
+<p>Mit diesen Browser-Prüfungen sind auch die Punkte abgedeckt, die in 5.1 und 5.2 als «nicht im Browser geprüft» vermerkt sind, mit zwei Ausnahmen: die Google-Anmeldung (nicht konfiguriert) und der Hinweis des Login-Formulars bei einer abgelehnten Anmeldung. Geprüft wurde in einem einzigen Browser (Chromium); andere Browser und die Bedienung von Hand nicht.</p>
+
 <h2>6. Auswirkungen auf den Betrieb</h2>
 <ul>
   <li>Der Stack braucht vor dem Start die Datei <code>.env</code>; auf diesem Rechner ist sie mit neuen Werten angelegt.</li>
@@ -295,6 +348,15 @@
   <li>Eine Datei von einem fremden Ursprung (Schrift, Skript, Bild, API) braucht einen passenden Eintrag in der CSP in <code>nginx/nginx.conf</code>, sonst blockiert der Browser sie.</li>
   <li>Die Google-Anmeldung wird abgelehnt, bis das Backend für eine Google-Identität ein Token ausstellen kann.</li>
   <li>Sehr alte Clients ohne ECDHE und AES-GCM können sich nicht mehr verbinden; aktuelle Browser sind nicht betroffen.</li>
+</ul>
+<p>Seit der Bearbeitung der offenen Punkte gilt zusätzlich:</p>
+<ul>
+  <li><code>.env</code> braucht <code>APP_DB_PASSWORD</code>. Bei einer bestehenden Datenbank einmalig <code>docker compose up -d db</code> und <code>./scripts/create_db_role.sh</code> ausführen, danach den Stack neu bauen. Auf diesem Rechner ist das erledigt.</li>
+  <li>Das Backend ergänzt beim Start die Spalten <code>Role</code> und <code>TokenVersion</code> in der Tabelle <code>Users</code>. Vorhandene Benutzer werden <code>Admin</code>.</li>
+  <li>Neue Benutzer erhalten die Rolle <code>User</code>, sofern nicht <code>Admin</code> angegeben wird (<code>create_user.sh</code>: viertes Argument; <code>/auth/register</code>: Feld <code>role</code>).</li>
+  <li>Abmelden beendet die Sitzungen des Benutzers auf allen Geräten.</li>
+  <li>Listenabfragen liefern höchstens 100 Zeilen. Wer die API direkt nutzt, folgt <code>@odata.nextLink</code> oder blättert mit <code>$top</code> und <code>$skip</code>.</li>
+  <li>Die Anwendung im Browser ruft die API nur noch über <code>/api/backend</code> auf. <code>/odata</code>, <code>/settings</code> und <code>/auth</code> bleiben für Werkzeuge wie Postman mit eigenem Token erreichbar.</li>
 </ul>
 
 </body>

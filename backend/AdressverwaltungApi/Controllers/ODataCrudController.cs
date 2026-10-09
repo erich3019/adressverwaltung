@@ -22,6 +22,9 @@ namespace AdressverwaltungApi.Controllers;
 public abstract class ODataCrudController<TEntity> : ODataController
     where TEntity : class
 {
+    /// <summary>Grösste Seite, die eine Listenabfrage liefert (entspricht SetMaxTop in Program.cs).</summary>
+    public const int MaxPageSize = 100;
+
     protected readonly AdresseDbContext _context;
 
     /// <summary>Das DbSet, auf dem dieser Controller operiert.</summary>
@@ -36,7 +39,8 @@ public abstract class ODataCrudController<TEntity> : ODataController
     }
 
     // GET /odata/{EntitySet}
-    [EnableQuery]
+    // Höchstens MaxPageSize Zeilen pro Antwort; für den Rest liefert OData "@odata.nextLink".
+    [EnableQuery(PageSize = MaxPageSize)]
     public virtual IActionResult Get()
         => Ok(Entities.AsNoTracking());
 

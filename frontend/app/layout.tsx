@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import './globals.css';
 import Providers from './providers';
 import NavBar from '@/components/NavBar';
@@ -8,11 +9,15 @@ export const metadata: Metadata = {
   description: 'Tutorial-Applikation: Next.js + OData + PostgreSQL',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Jede Seite pro Anfrage rendern: Nur so kann Next.js die Nonce der
+  // Content-Security-Policy (middleware.ts) in seine Skripte einsetzen.
+  await headers();
+
   return (
     <html lang="de">
       <body className="bg-gray-100 min-h-screen">

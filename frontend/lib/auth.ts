@@ -1,4 +1,4 @@
-import type { NextAuthOptions } from 'next-auth';
+import type { NextAuthOptions, Session } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 
@@ -38,11 +38,12 @@ export const authOptions: NextAuthOptions = {
 
           if (!response.ok) return null;
 
-          // Backend gibt { id, name, email, token } zurück (LoginResponse DTO)
+          // Backend gibt { id, name, email, role, token } zurück (LoginResponse DTO)
           const user = await response.json() as {
             id:    string;
             name:  string;
             email: string;
+            role:  string;   // "Admin" oder "User"
             token: string;   // JWT Bearer-Token
           };
 
@@ -50,6 +51,7 @@ export const authOptions: NextAuthOptions = {
             id:          String(user.id),
             email:       user.email,
             name:        user.name,
+            role:        user.role,
             accessToken: user.token,   // wird in jwt-Callback weitergegeben
           };
         } catch {
@@ -90,21 +92,55 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id          = user.id;
+        token.role        = user.role;
         token.accessToken = user.accessToken;   // Backend-JWT im verschlüsselten Cookie
       }
       return token;
     },
     // NextAuth-Token in Session-Objekt umwandeln, das das Frontend lesen kann.
     // F-04: Typsicherer Zugriff dank Module Augmentation in types/next-auth.d.ts
+    // Diese Session geht über /api/auth/session an den Browser – der Backend-JWT
+    // gehört deshalb bewusst NICHT hinein (siehe serverAuthOptions).
     async session({ session, token }) {
       if (token?.id && session.user) {
-        session.user.id = token.id;
+        session.user.id   = token.id;
+        session.user.role = token.role;
       }
-      // Backend-JWT für API-Aufrufe in der Session verfügbar machen
-      session.accessToken = token.accessToken;
       return session;
     },
   },
 
+  events: {
+    // Abmeldung auch dem Backend melden: Es widerruft dann die ausgestellten Tokens.
+    // Schlägt der Aufruf fehl, läuft das Token spätestens nach 8 Stunden ab.
+    async signOut({ token }) {
+      if (!token?.accessToken) return;
+
+      try {
+        await fetch(`${INTERNAL_API}/auth/logout`, {
+          method:  'POST',
+          headers: { Authorization: `Bearer ${token.accessToken}` },
+        });
+      } catch (err) {
+        console.error('Abmeldung am Backend fehlgeschlagen', err);
+      }
+    },
+  },
+
   secret: process.env.NEXTAUTH_SECRET,
+};
+
+// Variante für getServerSession() in Server Components: Hier bleibt die Session auf
+// dem Server, deshalb darf sie den Backend-JWT für API-Aufrufe enthalten.
+// Nicht im NextAuth-Handler (app/api/auth) verwenden.
+export const serverAuthOptions: NextAuthOptions = {
+  ...authOptions,
+  callbacks: {
+    ...authOptions.callbacks,
+    async session(params) {
+      const session = await authOptions.callbacks!.session!(params) as Session;
+      session.accessToken = params.token.accessToken;
+      return session;
+    },
+  },
 };

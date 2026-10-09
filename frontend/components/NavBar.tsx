@@ -20,7 +20,7 @@ export default function NavBar() {
   const adressenAktiv = pathname === '/' || pathname.startsWith('/adressen');
 
   return (
-    <header className="bg-blue-800 text-white shadow">
+    <header className="bg-blue-800 text-white shadow-sm">
       <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
         {/* Logo / Titel */}
         <div>

@@ -64,11 +64,13 @@ Passwörter und Schlüssel liegen in der Datei `.env` im Projektstamm und sind n
 
 ```bash
 cp .env.example .env
-openssl rand -hex 24      # Wert für POSTGRES_PASSWORD
+openssl rand -hex 24      # je ein Wert für POSTGRES_PASSWORD und APP_DB_PASSWORD
 openssl rand -base64 48   # je ein Wert für JWT_KEY und NEXTAUTH_SECRET
 ```
 
-Docker Compose liest `.env` automatisch und bricht mit einer Meldung ab, wenn `POSTGRES_PASSWORD`, `JWT_KEY` oder `NEXTAUTH_SECRET` fehlen.
+Docker Compose liest `.env` automatisch und bricht mit einer Meldung ab, wenn `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `JWT_KEY` oder `NEXTAUTH_SECRET` fehlen.
+
+Das Backend verbindet sich mit der Rolle `adressverwaltung_app`, nicht als Superuser `postgres`. Bei einer neuen Datenbank entsteht die Rolle beim ersten Start. Bei einer bestehenden Datenbank einmalig `./scripts/create_db_role.sh` ausführen (auch nach einer Änderung von `APP_DB_PASSWORD`).
 
 ### 3. Services starten
 
@@ -96,7 +98,7 @@ Beim ersten Start mit leerer `Users`-Tabelle wird ein Admin-Benutzer angelegt (`
 ./scripts/reset_password.sh
 ```
 
-Weitere Benutzer lassen sich mit `./scripts/create_user.sh` anlegen.
+Weitere Benutzer lassen sich mit `./scripts/create_user.sh` anlegen. Das vierte Argument ist die Rolle: `User` (Standard) pflegt Adressen und Städte, `Admin` darf zusätzlich Benutzer anlegen und die Einstellungen ändern.
 
 ## Konfiguration
 
@@ -104,7 +106,8 @@ Sicherheitsrelevante Werte stehen in `.env`; `docker-compose.yml` setzt sie als 
 
 | Variable in `.env` | Verwendet für | Pflicht |
 |--------------------|---------------|---------|
-| `POSTGRES_PASSWORD` | Datenbankpasswort (Container `db` und Verbindungszeichenfolge des Backends) | ja |
+| `POSTGRES_PASSWORD` | Passwort des Datenbank-Superusers `postgres` (Container `db`, Verwaltung und Skripte) | ja |
+| `APP_DB_PASSWORD` | Passwort der Rolle `adressverwaltung_app` (Verbindungszeichenfolge des Backends) | ja |
 | `JWT_KEY` | `Jwt__Key`: Signatur der Bearer-Tokens, mindestens 32 Zeichen | ja |
 | `NEXTAUTH_SECRET` | Verschlüsselung der NextAuth-Session | ja |
 | `SEED_ADMIN_PASSWORD` | `Seed__AdminPassword`: Admin-Passwort beim ersten Start | nein |
@@ -161,8 +164,9 @@ curl -s http://localhost:5000/odata/Adressen -H "Authorization: Bearer <JWT>"
 | Methode | URL | Beschreibung |
 |---------|-----|--------------|
 | POST | `/auth/login` | Anmelden, liefert JWT |
-| POST | `/auth/register` | Benutzer registrieren (nur mit Bearer-Token) |
-| GET | `/odata/Adressen` | Alle Adressen |
+| POST | `/auth/register` | Benutzer registrieren (nur Rolle Admin; optional `role`) |
+| POST | `/auth/logout` | Abmelden: widerruft die Tokens des Benutzers |
+| GET | `/odata/Adressen` | Adressen (höchstens 100 pro Antwort, weiter mit `@odata.nextLink` oder `$top`/`$skip`) |
 | GET | `/odata/Adressen(1)` | Adresse mit Id 1 |
 | GET | `/odata/Adressen?$filter=ort eq 'Bern'` | Gefiltert |
 | GET | `/odata/Adressen?$orderby=name` | Sortiert |
@@ -190,7 +194,7 @@ cd backend/AdressverwaltungApi
 # Geheimnisse kommen aus der Umgebung, nicht aus appsettings.json
 set -a; . ../../.env; set +a
 export Jwt__Key="$JWT_KEY"
-export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=adressverwaltung;Username=postgres;Password=$POSTGRES_PASSWORD"
+export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=adressverwaltung;Username=adressverwaltung_app;Password=$APP_DB_PASSWORD"
 ASPNETCORE_ENVIRONMENT=Development dotnet run
 # Backend:    http://localhost:5000
 # Swagger UI: http://localhost:5000/swagger (nur in Development)
@@ -240,7 +244,8 @@ adressverwaltung/
 │   ├── types/
 │   └── middleware.ts     Route-Schutz
 ├── nginx/                nginx.conf, ssl/ (nicht im Repository)
-├── scripts/              create_user.sh, reset_password.sh, import_cities.py
+├── db/init/              Legt die Datenbankrolle des Backends an
+├── scripts/              create_user.sh, reset_password.sh, create_db_role.sh, import_cities.py
 ├── migration/            PLZ-Verzeichnis (CSV)
 ├── documentation/        Änderungsprotokolle, Tutorials, Architekturdiagramm
 └── docker-compose.yml

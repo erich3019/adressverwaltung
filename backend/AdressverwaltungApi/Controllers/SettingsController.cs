@@ -10,7 +10,7 @@ namespace AdressverwaltungApi.Controllers;
 /// <summary>
 /// Controller für Anwendungseinstellungen.
 /// GET /settings   – aktuelle Einstellungen lesen
-/// PUT /settings   – Benachrichtigungs-E-Mail ändern
+/// PUT /settings   – Benachrichtigungs-E-Mail ändern (nur Rolle Admin)
 /// </summary>
 [Authorize]
 [Route("settings")]
@@ -33,7 +33,8 @@ public class SettingsController : ControllerBase
         return Ok(new SettingsResponse(settings?.NotificationEmail ?? string.Empty));
     }
 
-    // PUT /settings
+    // PUT /settings – nur für Administratoren
+    [Authorize(Roles = Roles.Admin)]
     [HttpPut]
     public async Task<IActionResult> UpdateSettings([FromBody] SettingsUpdateRequest req)
     {

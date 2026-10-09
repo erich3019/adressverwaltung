@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { getSettings, speichereSettings } from '@/lib/api';
 import Fehlermeldung from '@/components/Fehlermeldung';
 import { inputClass, labelClass, primaryButtonClass } from '@/components/formStyles';
@@ -11,6 +12,11 @@ export default function EinstellungenPage() {
   const [speichern,  setSpeichern]  = useState(false);
   const [fehler,     setFehler]     = useState<string | null>(null);
   const [erfolg,     setErfolg]     = useState(false);
+
+  // Ändern dürfen nur Administratoren. Das Backend prüft die Rolle selbst;
+  // hier wird das Formular lediglich passend dazu gesperrt.
+  const { data: session } = useSession();
+  const istAdmin = session?.user?.role === 'Admin';
 
   // Einstellungen beim ersten Rendern laden
   useEffect(() => {
@@ -41,7 +47,7 @@ export default function EinstellungenPage() {
       <h1 className="text-3xl font-bold text-gray-800 mb-2">Einstellungen</h1>
       <p className="text-gray-500 mb-8">Konfiguration der Benachrichtigungen</p>
 
-      <div className="bg-white rounded-2xl shadow p-8">
+      <div className="bg-white rounded-2xl shadow-sm p-8">
         <h2 className="text-lg font-semibold text-gray-700 mb-4">E-Mail-Benachrichtigungen</h2>
         <p className="text-sm text-gray-500 mb-6">
           Bei jeder neu erfassten Adresse wird eine Benachrichtigung an diese E-Mail-Adresse gesendet.
@@ -64,11 +70,18 @@ export default function EinstellungenPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="z.B. admin@example.com"
                 className={inputClass}
+                disabled={!istAdmin}
               />
               <p className="text-xs text-gray-400 mt-1">
                 Leer lassen = keine E-Mail-Benachrichtigungen
               </p>
             </div>
+
+            {!istAdmin && (
+              <p className="text-sm text-gray-500">
+                Nur Benutzer mit der Rolle «Admin» können die Einstellungen ändern.
+              </p>
+            )}
 
             <Fehlermeldung meldung={fehler} />
 
@@ -79,7 +92,7 @@ export default function EinstellungenPage() {
             )}
 
             <div className="pt-2">
-              <button type="submit" disabled={speichern} className={primaryButtonClass}>
+              <button type="submit" disabled={speichern || !istAdmin} className={primaryButtonClass}>
                 {speichern ? 'Wird gespeichert…' : 'Speichern'}
               </button>
             </div>

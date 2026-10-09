@@ -42,6 +42,7 @@ public static class DbSeeder
         {
             Email       = email,
             DisplayName = "Admin",
+            Role        = Roles.Admin,
         };
         admin.PasswordHash = hasher.HashPassword(admin, password);
 
