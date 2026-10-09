@@ -1,4 +1,4 @@
-# Adressverwaltung – Tutorial WebApp v2.3.0
+# Adressverwaltung – Tutorial WebApp v2.4.0
 
 Adressverwaltungs-WebApp mit Login, CRUD für Adressen und Städte (PLZ-Verzeichnis), PLZ-Wertehilfe und E-Mail-Benachrichtigung bei neuen Adressen.
 
@@ -26,9 +26,9 @@ nginx verteilt die Anfragen nach Pfad-Präfix:
 
 ![Sequenzdiagramm](documentation/Sequenzdiagramm.svg)
 
-Jeder der 38 Schritte ist in der Schulungsunterlage `documentation/Schulungsunterlage_Sequenzdiagramm.pdf` erläutert.
+Jeder der 44 Schritte ist in der Schulungsunterlage `documentation/Schulungsunterlage_Sequenzdiagramm.pdf` erläutert.
 
-Beim Login stellt das Backend ein JWT aus, das NextAuth im verschlüsselten Session-Cookie ablegt. Bei jedem API-Aufruf liest `apiFetch` das Token aus der Session und sendet es als `Authorization: Bearer` mit.
+Beim Login stellt das Backend ein JWT aus, das NextAuth im verschlüsselten Session-Cookie ablegt. Der Browser ruft die API über den Proxy `/api/backend` der eigenen Anwendung auf; dieser liest das Token aus dem Cookie und sendet es als `Authorization: Bearer` an das Backend. Im Browser ist das Token nie sichtbar.
 
 Die Quellen der Diagramme liegen in `documentation/Systemarchitektur.puml` und `documentation/Sequenzdiagramm.puml`. SVG neu erzeugen:
 
@@ -255,9 +255,10 @@ adressverwaltung/
 
 | Version | Inhalt |
 |---------|--------|
+| 2.4.0 | Zweite Sicherheitsprüfung: Rollen, Token-Widerruf, Proxy für API-Aufrufe, CSP mit Nonce, Blättern, eigene Datenbankrolle |
 | 2.3.0 | .NET 10, Next.js 15, Backend-Tests, Sicherheitskorrekturen, Clean-Code-Nachprüfung |
 | 2.2.0 | JWT-Authentifizierung im Backend, Bearer-Token aus der NextAuth-Session |
 | 2.1.0 | Umsetzung der Clean-Code-Analyse (14 Befunde) |
 | 2.0.0 | Login (NextAuth), Städte, Einstellungen mit E-Mail-Benachrichtigung, Audit-Felder |
 
-Details stehen in den Änderungsprotokollen unter `documentation/`.
+Details stehen in den Änderungsprotokollen unter `documentation/`. Das Lehrmittel zur aktuellen Version ist `documentation/Tutorial_WebApp_v2.4.pdf`.

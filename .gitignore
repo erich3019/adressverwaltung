@@ -29,3 +29,7 @@ __pycache__/
 # OS / Editor
 .DS_Store
 Thumbs.db
+
+# Persönliche Notizen (nicht für das Repository)
+documentation/github.odt
+documentation/github_ssh.odt

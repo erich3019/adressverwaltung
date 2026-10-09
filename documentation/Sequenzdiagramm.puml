@@ -1,12 +1,12 @@
 @startuml Sequenzdiagramm
 ' ============================================================
-' Sequenzdiagramm – Adressverwaltung v2.3.0
+' Sequenzdiagramm – Adressverwaltung v2.4.0
 ' Ablauf: Login und Erfassen einer neuen Adresse
 ' SVG erzeugen:
 '   docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg /data/Sequenzdiagramm.puml
 ' ============================================================
 
-title Adressverwaltung v2.3.0 – Login und neue Adresse erfassen
+title Adressverwaltung v2.4.0 – Login und neue Adresse erfassen
 
 skinparam shadowing false
 skinparam defaultFontName sans-serif
@@ -36,7 +36,7 @@ skinparam note {
 actor "Benutzer" as user
 participant "Browser\n(Client Components)" as browser
 participant "nginx\n:443" as nginx
-participant "Next.js\nNextAuth · /api/auth/*" as next
+participant "Next.js\nNextAuth · /api/auth/*\nProxy · /api/backend/*" as next
 participant "Backend\nASP.NET Core · :8080" as api
 database "PostgreSQL" as db
 participant "SMTP-Server" as smtp
@@ -51,18 +51,25 @@ nginx -> next : Weiterleitung (alle übrigen Pfade)
 activate next
 next -> api : POST /auth/login\n(direkt über INTERNAL_API_URL, ohne nginx)
 activate api
+api -> api : Kontosperre prüfen\n(ILoginThrottle)
+note right of api
+  Nach 5 Fehlversuchen ist die E-Mail-Adresse
+  15 Minuten gesperrt: sofort 429,
+  weiter wie ab Schritt 17
+end note
 api -> db : SELECT Users WHERE Email
-db --> api : User + PasswordHash
+db --> api : User + PasswordHash,\nRole, TokenVersion
 api -> api : Passwort-Hash prüfen (PBKDF2)
 
 alt Anmeldedaten gültig
-  api -> api : JWT signieren (HS256, 8 h)
-  api --> next : 200 { id, name, email, token }
-  next -> next : jwt-Callback:\naccessToken = token
+  api -> api : Fehlerzähler zurücksetzen,\nJWT signieren (HS256, 8 h,\nmit Token-Version)
+  api --> next : 200 { id, name, email, role, token }
+  next -> next : jwt-Callback:\naccessToken = token, role
   next --> nginx : Set-Cookie: Session\n(verschlüsselt, enthält Backend-JWT)
   nginx --> browser : 200
   browser -> browser : router.push(callbackUrl)
 else ungültig
+  api -> api : Fehlversuch zählen
   api --> next : 401 «Ungültige Anmeldedaten.»
   deactivate api
   next --> nginx : Fehler (authorize() = null)
@@ -75,21 +82,23 @@ end
 user -> browser : Formular auf /adressen/neu\nausfüllen und speichern
 note right of browser
   PLZ-Wertehilfe (vorher, ab 2 Zeichen):
-  GET /odata/Cities?$filter=startswith(postalCode,…)
+  GET /api/backend/odata/Cities
+  ?$filter=startswith(postalCode,…)
 end note
 
-browser -> nginx : GET /api/auth/session\n(apiFetch → getSession())
-nginx -> next : Weiterleitung
-next --> nginx : Session { user, accessToken }
-nginx --> browser : accessToken
-
-browser -> nginx : POST /odata/Adressen\nAuthorization: Bearer <JWT>
-nginx -> api : Weiterleitung (/odata/*)
+browser -> nginx : POST /api/backend/odata/Adressen\nSession-Cookie + Header x-adressverwaltung
+nginx -> next : Weiterleitung (alle übrigen Pfade)
+activate next
+next -> next : Proxy: Pfad, Header und Origin prüfen,\nBackend-JWT aus dem Cookie lesen
+next -> api : POST /odata/Adressen\nAuthorization: Bearer <JWT>\n(direkt über INTERNAL_API_URL, ohne nginx)
 activate api
 api -> api : JWT validieren\n(Signatur, Issuer, Audience, Ablauf)
+api -> db : SELECT Users WHERE Id
+db --> api : Role, TokenVersion
+api -> api : Token-Version vergleichen,\nRolle übernehmen\n(TokenUserValidator)
 
 alt Token gültig
-  api -> api : AdressenController.Post\nModelState prüfen
+  api -> api : AdressenController.Post\nModelState prüfen, Id verwerfen
   api -> api : SaveChangesAsync → ApplyAuditFields\n(CreateDate, CreatedBy, DateFrom)
   api -> db : INSERT INTO Adressen
   db --> api : Id
@@ -102,15 +111,19 @@ alt Token gültig
     end
   end
 
-  api --> nginx : 201 Created (Adresse)
+  api --> next : 201 Created (Adresse)
+  next --> nginx : 201 (unverändert weitergereicht)
   nginx --> browser : 201
   browser -> browser : router.push('/')
   browser --> user : Adressliste mit neuem Eintrag
-else Token fehlt oder abgelaufen
-  api --> nginx : 401 Unauthorized
+else Token abgelaufen oder widerrufen
+  api --> next : 401 Unauthorized
   deactivate api
+  next --> nginx : 401
+  deactivate next
   nginx --> browser : 401
-  browser --> user : «Fehler beim Speichern.»
+  browser -> browser : signOut()\n(apiFetch bei Status 401)
+  browser --> user : Login-Seite
 end
 
 @enduml

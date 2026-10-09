@@ -1,0 +1,2381 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adressverwaltung – Tutorial WebApp v2.4</title>
+  <!-- Seitenumbruch, Kopfzeile und Seitenzahlen: paged.js -->
+  <script src="https://unpkg.com/pagedjs@0.4.3/dist/paged.polyfill.js"></script>
+  <style>
+    /* ============================================================
+       PAGE SETUP
+    ============================================================ */
+    @page {
+      size: A4;
+      margin: 2.5cm 2cm;
+      @top-center { content: string(doctitle); font-size: 8pt; color: #777; font-family: Georgia, serif; }
+      @bottom-center { content: counter(page); font-size: 8pt; color: #555; font-family: Georgia, serif; }
+    }
+    @page :first { margin: 0; @top-center { content: none; } @bottom-center { content: none; } }
+    body { margin: 0; padding: 0; font-family: Georgia, "Noto Serif", serif; font-size: 11pt;
+           color: #333; line-height: 1.6; text-align: justify; text-align-last: left;
+           string-set: doctitle ""; }
+
+    /* ============================================================
+       COVER PAGE
+    ============================================================ */
+    .cover {
+      page: cover; width: 210mm; height: 297mm; margin: 0;
+      position: relative; overflow: hidden; page-break-after: always;
+      background: linear-gradient(160deg, #0b1e40 0%, #1a2e6c 35%, #1e3a8a 65%, #0b1e40 100%);
+      color: #ffffff; text-align: center; box-sizing: border-box;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .cover-logo-bar {
+      position: absolute; top: 0; left: 0; width: 100%; height: 8mm;
+      background: #e5a020; display: flex; align-items: center; padding-left: 20px;
+    }
+    .cover-logo-text { font-size: 8pt; color: #0b1e40; font-family: Georgia, serif; font-weight: 700; letter-spacing: 2px; }
+    .cover-top-badge {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px; padding: 4px 16px; font-size: 8pt; color: #93c5fd; letter-spacing: 1px;
+      margin-bottom: 30px; margin-top: 20px;
+    }
+    .cover h1 {
+      font-size: 32pt; font-weight: 700; color: #ffffff; text-align: center; text-align-last: center;
+      letter-spacing: 1px; line-height: 1.25; margin: 0 0 10px 0; padding: 0 20px; max-width: 100%;
+      white-space: normal; overflow-wrap: break-word; word-wrap: break-word;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      string-set: doctitle "";
+    }
+    .cover p { text-align: center; text-align-last: center; }
+    .cover h2 {
+      font-size: 13pt; color: #bfdbfe; font-weight: 400; letter-spacing: 0.5px;
+      margin: 0 0 40px 0; padding: 0 20px; font-style: italic;
+      white-space: normal; overflow-wrap: break-word;
+    }
+    .cover-divider {
+      width: 60px; height: 3px; background: #e5a020; border-radius: 2px; margin: 0 auto 35px;
+    }
+    .cover-meta {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      background: rgba(255,255,255,0.07); border-radius: 10px;
+      padding: 18px 40px; margin: 0 20px 30px;
+    }
+    .cover-meta-row { font-size: 10pt; color: #e2e8f0; display: flex; gap: 24px; }
+    .cover-meta-label { color: #93c5fd; font-weight: 600; margin-right: 4px; }
+    .cover-stack {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 20px; padding: 0 30px;
+    }
+    .cover-pill {
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 15px; padding: 4px 14px; font-size: 8.5pt; color: #e0f2fe;
+      font-family: 'Courier New', monospace;
+    }
+    .cover-footer {
+      position: absolute; bottom: 12mm; left: 0; width: 100%; text-align: center;
+      font-size: 8pt; color: rgba(255,255,255,0.4); letter-spacing: 0.5px;
+    }
+    .cover-accent-line {
+      position: absolute; left: 0; top: 50%; width: 4px; height: 120px;
+      background: linear-gradient(to bottom, transparent, #e5a020, transparent);
+      transform: translateY(-50%);
+    }
+
+    /* ============================================================
+       TYPOGRAPHY
+    ============================================================ */
+    h1 { font-size: 19pt; color: #0b1e40; margin-top: 0; margin-bottom: 0.3cm;
+         page-break-before: always; page-break-after: avoid; string-set: doctitle content(); }
+    h1:first-of-type { page-break-before: avoid; }
+    h2 { font-size: 13.5pt; color: #1a3a6c; margin-top: 0.7cm; margin-bottom: 0.2cm; page-break-after: avoid; border-bottom: 1px solid #dde5f4; padding-bottom: 3px; }
+    h3 { font-size: 11.5pt; color: #2563eb; margin-top: 0.5cm; margin-bottom: 0.15cm; page-break-after: avoid; font-style: italic; }
+    h4 { font-size: 11pt; color: #1a3a6c; font-weight: 700; margin-top: 0.4cm; margin-bottom: 0.1cm; page-break-after: avoid; }
+    p { margin: 0 0 0.3cm 0; }
+    ul, ol { margin: 0.1cm 0 0.3cm 0; padding-left: 1.4cm; }
+    li { margin-bottom: 0.1cm; }
+
+    /* ============================================================
+       CHAPTER NUMBER DECORATION
+    ============================================================ */
+    .chapter-num {
+      font-size: 9pt; color: #e5a020; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; margin-bottom: 0.15cm; margin-top: 0.3cm;
+    }
+
+    /* ============================================================
+       CODE BLOCKS – VS Code Dark
+    ============================================================ */
+    .code-block { margin: 0.3cm 0 0.5cm 0; page-break-inside: auto; }
+    .code-label {
+      background: #2d2d2d; color: #858585; font-size: 7.5pt;
+      font-family: 'Courier New', monospace; padding: 3px 10px;
+      border-radius: 4px 4px 0 0; display: inline-block;
+      border-left: 3px solid #e5a020; margin-bottom: -2px;
+    }
+    pre {
+      background: #1e1e1e; color: #d4d4d4; border-radius: 0 4px 4px 4px;
+      padding: 0.35cm 0.5cm; font-family: 'Courier New', Courier, monospace;
+      font-size: 8pt; line-height: 1.5; margin: 0;
+      border-left: 3px solid #e5a020;
+    }
+    code {
+      font-family: 'Courier New', monospace; font-size: 9pt;
+      background: #eef2f8; color: #1a3a6c; padding: 1px 5px; border-radius: 2px;
+    }
+    pre code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+
+    /* Syntax colours */
+    .kw  { color: #569cd6; }
+    .st  { color: #ce9178; }
+    .cm  { color: #6a9955; font-style: italic; }
+    .ty  { color: #4ec9b0; }
+    .nm  { color: #dcdcaa; }
+    .nb  { color: #9cdcfe; }
+    .op  { color: #d4d4d4; }
+
+    /* ============================================================
+       INFO / WARNING / TIP BOXES
+    ============================================================ */
+    .box { border-left: 4px solid; padding: 0.3cm 0.4cm; margin: 0.4cm 0;
+           border-radius: 0 4px 4px 0; page-break-inside: avoid; }
+    .box-title { font-weight: 700; font-size: 10pt; margin-bottom: 0.15cm; }
+    .box-info  { background: #eff6ff; border-color: #3b82f6; }
+    .box-info .box-title  { color: #1d4ed8; }
+    .box-warn  { background: #fffbeb; border-color: #f59e0b; }
+    .box-warn .box-title  { color: #b45309; }
+    .box-tip   { background: #f0fdf4; border-color: #22c55e; }
+    .box-tip .box-title   { color: #15803d; }
+    .box-danger{ background: #fff1f2; border-color: #ef4444; }
+    .box-danger .box-title{ color: #b91c1c; }
+    .box ul { margin: 0.1cm 0 0 0; padding-left: 1.2cm; }
+    .box li { font-size: 10.5pt; margin-bottom: 0.08cm; }
+    .box p  { font-size: 10.5pt; margin: 0.05cm 0; }
+
+    /* ============================================================
+       LEARNING GOALS
+    ============================================================ */
+    .learning-goals {
+      background: #f0f5ff; border: 1.5px solid #3b82f6; border-radius: 6px;
+      padding: 0.35cm 0.5cm; margin: 0.3cm 0 0.6cm 0; page-break-inside: avoid;
+    }
+    .learning-goals h4 { color: #1d4ed8; margin: 0 0 0.15cm 0; font-size: 10.5pt; }
+    .learning-goals ul { margin: 0; padding-left: 1.2cm; }
+    .learning-goals li { font-size: 10.5pt; margin-bottom: 0.08cm; color: #1e3a8a; }
+
+    /* ============================================================
+       CHAPTER SUMMARY
+    ============================================================ */
+    .chapter-summary {
+      background: #f8fafc; border: 1.5px solid #1a3a6c; border-radius: 6px;
+      padding: 0.35cm 0.5cm; margin: 0.5cm 0 0.3cm 0; page-break-inside: avoid;
+    }
+    .chapter-summary h4 { color: #0b1e40; margin: 0 0 0.15cm 0; font-size: 10.5pt; }
+    .chapter-summary ul { margin: 0; padding-left: 1.2cm; }
+    .chapter-summary li { font-size: 10.5pt; margin-bottom: 0.08cm; }
+
+    /* ============================================================
+       TABLES
+    ============================================================ */
+    table {
+      width: 100%; border-collapse: collapse; margin: 0.3cm 0 0.5cm 0;
+      font-size: 10pt;
+    }
+    th { background: #0b1e40; color: #fff; padding: 5px 8px; text-align: left; font-size: 9.5pt; }
+    td { padding: 4px 8px; border-bottom: 1px solid #e0e7ef; vertical-align: top; }
+    tr:nth-child(even) td { background: #f5f8ff; }
+    caption { font-weight: 700; margin-bottom: 4px; color: #1a3a6c; font-size: 9.5pt; text-align: left; }
+
+    /* ============================================================
+       OVERFLOW PREVENTION
+    ============================================================ */
+    pre, table, figure, img, svg, .mermaid, blockquote, .equation, code {
+      max-width: 100%; box-sizing: border-box; overflow-wrap: break-word;
+    }
+    pre { overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+    a { word-break: break-all; color: #2563eb; }
+
+    /* ============================================================
+       TOC
+    ============================================================ */
+    .toc-page { }
+    .toc-title { font-size: 20pt; color: #0b1e40; margin: 0 0 0.5cm 0; border-bottom: 2.5px solid #e5a020; padding-bottom: 0.2cm; }
+    .toc-list { list-style: none; padding: 0; margin: 0; column-count: 2; column-gap: 0.8cm; }
+    .toc-list li { display: flex; align-items: baseline; padding: 4px 0; break-inside: avoid; }
+    .toc-list li a { display: flex; align-items: baseline; width: 100%; text-decoration: none; color: #333; }
+    .toc-list .toc-h2 .toc-text { font-weight: 700; font-size: 10.5pt; color: #0b1e40; }
+    .toc-list .toc-h3 { padding-left: 16px; }
+    .toc-list .toc-h3 .toc-text { font-weight: 400; font-size: 9.5pt; color: #444; }
+    .toc-list .toc-anhang .toc-text { font-weight: 700; font-size: 10.5pt; color: #0b1e40; }
+    .toc-text { white-space: nowrap; flex-shrink: 0; }
+    .toc-dots { flex: 1; margin: 0 5px; border-bottom: 1.5px dotted #bbb; min-width: 20px; position: relative; top: -3px; }
+    .toc-page-num { flex-shrink: 0; text-align: right; min-width: 18px; font-size: 9.5pt; color: #555; }
+
+    /* ============================================================
+       STEP DIAGRAM (for JWT flow)
+    ============================================================ */
+    .step-flow { margin: 0.3cm 0 0.5cm 0; }
+    .step-row { display: flex; align-items: flex-start; margin-bottom: 0.2cm; }
+    .step-num { background: #e5a020; color: #fff; font-weight: 700; font-size: 9pt;
+                min-width: 22px; height: 22px; border-radius: 50%;
+                display: flex; align-items: center; justify-content: center;
+                margin-right: 10px; flex-shrink: 0; margin-top: 1px; }
+    .step-text { font-size: 10.5pt; line-height: 1.4; }
+    .step-arrow { color: #e5a020; margin: 0 8px; font-weight: 700; }
+
+    /* JWT Token visualisation */
+    .jwt-vis { font-family: 'Courier New', monospace; font-size: 9pt; margin: 0.3cm 0;
+               background: #1e1e1e; border-radius: 6px; padding: 12px 14px;
+               word-break: break-all; line-height: 1.6; }
+    .jwt-h   { color: #9cdcfe; }
+    .jwt-p   { color: #4ec9b0; }
+    .jwt-s   { color: #ce9178; }
+    .jwt-dot { color: #d4d4d4; font-weight: 700; }
+
+    /* Architecture diagram */
+    .arch-diagram { display: flex; align-items: center; justify-content: center;
+                    gap: 0; margin: 0.3cm 0 0.5cm; flex-wrap: wrap; }
+    .arch-box { background: #1a2e6c; color: #fff; border-radius: 8px; padding: 10px 16px;
+                text-align: center; font-size: 9.5pt; min-width: 80px; }
+    .arch-box strong { display: block; font-size: 10.5pt; margin-bottom: 2px; }
+    .arch-box .port { font-size: 7.5pt; color: #93c5fd; font-family: 'Courier New', monospace; }
+    .arch-arrow { color: #e5a020; font-size: 14pt; font-weight: 700; padding: 0 8px; white-space: nowrap; }
+    .arch-connector { width: 2px; height: 30px; background: #e5a020; margin: 0 auto; }
+
+    /* Misc */
+    .version-badge { display: inline-block; background: #e5a020; color: #fff;
+                     border-radius: 4px; padding: 1px 8px; font-size: 8.5pt; font-weight: 700; margin-left: 6px; }
+    .highlight { background: #fef3c7; padding: 1px 4px; border-radius: 2px; }
+    figcaption::before, caption::before { content: attr(data-label) "  "; font-weight: bold; }
+    .katex-display { overflow-x: auto; }
+    .cmd { background: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace;
+           font-size: 9pt; padding: 6px 12px; border-radius: 4px; display: block;
+           margin: 0.2cm 0; border-left: 3px solid #e5a020; }
+  
+    /* v2.3: Seitenzahlen im Inhaltsverzeichnis über paged.js */
+    .toc-page-num::after { content: target-counter(attr(data-ref), page); }
+    @page cover { margin: 0; @top-center { content: none; } @bottom-center { content: none; } }
+    img { max-width: 100%; }
+    td code, th code { font-size: 8.5pt; }
+    pre { break-inside: auto; }
+  </style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-logo-bar"><span class="cover-logo-text">LEHRMITTEL APPLIKATIONSENTWICKLUNG</span></div>
+  <div class="cover-accent-line"></div>
+  <div class="cover-top-badge">INFORMATIKER EFZ &nbsp;|&nbsp; 2. LEHRJAHR</div>
+  <h1>Adressverwaltung<br>Tutorial WebApp</h1>
+  <h2>Full-Stack-Applikation mit Next.js, C# OData und PostgreSQL</h2>
+  <div class="cover-divider"></div>
+  <div class="cover-meta">
+    <div class="cover-meta-row">
+      <span><span class="cover-meta-label">Version:</span>2.4</span>
+      <span><span class="cover-meta-label">Stand:</span>Oktober 2026</span>
+    </div>
+    <div class="cover-meta-row">
+      <span><span class="cover-meta-label">Neu in v2.4:</span>Rollen, Token-Widerruf, Proxy für API-Aufrufe, CSP mit Nonce, Blättern</span>
+    </div>
+  </div>
+  <div class="cover-stack">
+    <span class="cover-pill">Next.js 15</span>
+    <span class="cover-pill">React 19</span>
+    <span class="cover-pill">C# ASP.NET Core 10</span>
+    <span class="cover-pill">OData</span>
+    <span class="cover-pill">PostgreSQL 16</span>
+    <span class="cover-pill">nginx</span>
+    <span class="cover-pill">Docker Compose</span>
+    <span class="cover-pill">NextAuth.js</span>
+    <span class="cover-pill">JWT</span>
+  </div>
+  <div class="cover-footer">Ausgabe zur Version 2.4.0 — Codebeispiele aus dem Projektstand</div>
+</div>
+
+<section>
+  <div class="toc-page">
+    <h2 class="toc-title">Inhaltsverzeichnis</h2>
+    <ul class="toc-list">
+<li class="toc-h2"><a href="#kap1"><span class="toc-text">1. Projektübersicht</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap1"></span></a></li>
+<li class="toc-h3"><a href="#kap1-1"><span class="toc-text">1.1 Was wird gebaut?</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap1-1"></span></a></li>
+<li class="toc-h3"><a href="#kap1-2"><span class="toc-text">1.2 Lernziele</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap1-2"></span></a></li>
+<li class="toc-h3"><a href="#kap1-3"><span class="toc-text">1.3 Tech-Stack im Überblick</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap1-3"></span></a></li>
+<li class="toc-h3"><a href="#kap1-4"><span class="toc-text">1.4 Architektur-Überblick</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap1-4"></span></a></li>
+<li class="toc-h2"><a href="#kap2"><span class="toc-text">2. Entwicklungsumgebung</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap2"></span></a></li>
+<li class="toc-h3"><a href="#kap2-1"><span class="toc-text">2.1 Voraussetzungen</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap2-1"></span></a></li>
+<li class="toc-h3"><a href="#kap2-2"><span class="toc-text">2.2 Projekt holen</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap2-2"></span></a></li>
+<li class="toc-h3"><a href="#kap2-3"><span class="toc-text">2.3 Geheimnisse und Zertifikat</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap2-3"></span></a></li>
+<li class="toc-h3"><a href="#kap2-4"><span class="toc-text">2.4 Stack starten</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap2-4"></span></a></li>
+<li class="toc-h2"><a href="#kap3"><span class="toc-text">3. Datenbankmodell</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap3"></span></a></li>
+<li class="toc-h3"><a href="#kap3-1"><span class="toc-text">3.1 Entitäts-Klassen</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap3-1"></span></a></li>
+<li class="toc-h3"><a href="#kap3-2"><span class="toc-text">3.2 AuditableEntity</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap3-2"></span></a></li>
+<li class="toc-h3"><a href="#kap3-3"><span class="toc-text">3.3 AdresseDbContext</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap3-3"></span></a></li>
+<li class="toc-h3"><a href="#kap3-4"><span class="toc-text">3.4 DbSeeder</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap3-4"></span></a></li>
+<li class="toc-h3"><a href="#kap3-5"><span class="toc-text">3.5 EnsureCreated vs. Migrations</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap3-5"></span></a></li>
+<li class="toc-h2"><a href="#kap4"><span class="toc-text">4. Backend – ASP.NET Core 10</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap4"></span></a></li>
+<li class="toc-h3"><a href="#kap4-1"><span class="toc-text">4.1 Projektstruktur</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap4-1"></span></a></li>
+<li class="toc-h3"><a href="#kap4-2"><span class="toc-text">4.2 OData</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap4-2"></span></a></li>
+<li class="toc-h3"><a href="#kap4-3"><span class="toc-text">4.3 Generischer ODataCrudController</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap4-3"></span></a></li>
+<li class="toc-h3"><a href="#kap4-4"><span class="toc-text">4.4 AuthController</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap4-4"></span></a></li>
+<li class="toc-h3"><a href="#kap4-5"><span class="toc-text">4.5 Typisierte Konfiguration</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap4-5"></span></a></li>
+<li class="toc-h3"><a href="#kap4-6"><span class="toc-text">4.6 E-Mail-Benachrichtigung</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap4-6"></span></a></li>
+<li class="toc-h2"><a href="#kap5"><span class="toc-text">5. JWT – JSON Web Token</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap5"></span></a></li>
+<li class="toc-h3"><a href="#kap5-1"><span class="toc-text">5.1 Was ist ein JWT?</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap5-1"></span></a></li>
+<li class="toc-h3"><a href="#kap5-2"><span class="toc-text">5.2 Zwei Tokens</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap5-2"></span></a></li>
+<li class="toc-h3"><a href="#kap5-3"><span class="toc-text">5.3 JWT im Backend konfigurieren</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap5-3"></span></a></li>
+<li class="toc-h3"><a href="#kap5-4"><span class="toc-text">5.4 JWT ausstellen</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap5-4"></span></a></li>
+<li class="toc-h3"><a href="#kap5-5"><span class="toc-text">5.5 Endpunkte schützen</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap5-5"></span></a></li>
+<li class="toc-h3"><a href="#kap5-6"><span class="toc-text">5.6 JWT im Frontend</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap5-6"></span></a></li>
+<li class="toc-h3"><a href="#kap5-7"><span class="toc-text">5.7 Ablauf: Login bis API-Aufruf</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap5-7"></span></a></li>
+<li class="toc-h2"><a href="#kap6"><span class="toc-text">6. Frontend – Next.js 15</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap6"></span></a></li>
+<li class="toc-h3"><a href="#kap6-1"><span class="toc-text">6.1 Projektstruktur</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap6-1"></span></a></li>
+<li class="toc-h3"><a href="#kap6-2"><span class="toc-text">6.2 Middleware</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap6-2"></span></a></li>
+<li class="toc-h3"><a href="#kap6-3"><span class="toc-text">6.3 Server und Client Components</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap6-3"></span></a></li>
+<li class="toc-h3"><a href="#kap6-4"><span class="toc-text">6.4 Die API-Schicht</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap6-4"></span></a></li>
+<li class="toc-h3"><a href="#kap6-5"><span class="toc-text">6.5 Formulare</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap6-5"></span></a></li>
+<li class="toc-h3"><a href="#kap6-6"><span class="toc-text">6.6 Gemeinsame Bausteine</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap6-6"></span></a></li>
+<li class="toc-h2"><a href="#kap7"><span class="toc-text">7. nginx und HTTPS</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap7"></span></a></li>
+<li class="toc-h3"><a href="#kap7-1"><span class="toc-text">7.1 Weiterleitung nach Pfad</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap7-1"></span></a></li>
+<li class="toc-h3"><a href="#kap7-2"><span class="toc-text">7.2 Sicherheits-Header</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap7-2"></span></a></li>
+<li class="toc-h3"><a href="#kap7-3"><span class="toc-text">7.3 Ratenbegrenzung</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap7-3"></span></a></li>
+<li class="toc-h2"><a href="#kap8"><span class="toc-text">8. Tests</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap8"></span></a></li>
+<li class="toc-h3"><a href="#kap8-1"><span class="toc-text">8.1 Aufbau</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap8-1"></span></a></li>
+<li class="toc-h3"><a href="#kap8-2"><span class="toc-text">8.2 Ein Test im Detail</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap8-2"></span></a></li>
+<li class="toc-h2"><a href="#kap9"><span class="toc-text">9. Sicherheit im Projekt</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap9"></span></a></li>
+<li class="toc-h3"><a href="#kap9-1"><span class="toc-text">9.1 Umgesetzte Massnahmen</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap9-1"></span></a></li>
+<li class="toc-h3"><a href="#kap9-2"><span class="toc-text">9.2 Offene Punkte</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap9-2"></span></a></li>
+<li class="toc-h2"><a href="#kap10"><span class="toc-text">10. Clean Code im Projekt</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap10"></span></a></li>
+<li class="toc-h3"><a href="#kap10-1"><span class="toc-text">10.1 Prinzipien</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap10-1"></span></a></li>
+<li class="toc-h3"><a href="#kap10-2"><span class="toc-text">10.2 Massnahmen-Übersicht</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap10-2"></span></a></li>
+<li class="toc-h2"><a href="#kap11"><span class="toc-text">11. Docker Compose</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap11"></span></a></li>
+<li class="toc-h3"><a href="#kap11-1"><span class="toc-text">11.1 docker-compose.yml</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap11-1"></span></a></li>
+<li class="toc-h3"><a href="#kap11-2"><span class="toc-text">11.2 Wichtige Befehle</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap11-2"></span></a></li>
+<li class="toc-h2"><a href="#kap12"><span class="toc-text">12. Häufige Fehler</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#kap12"></span></a></li>
+<li class="toc-anhang"><a href="#anhA"><span class="toc-text">Anhang A: PLZ-Import</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#anhA"></span></a></li>
+<li class="toc-anhang"><a href="#anhB"><span class="toc-text">Anhang B: Hilfsskripte</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#anhB"></span></a></li>
+<li class="toc-anhang"><a href="#anhC"><span class="toc-text">Anhang C: Übungsaufgaben</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#anhC"></span></a></li>
+<li class="toc-anhang"><a href="#anhD"><span class="toc-text">Anhang D: Unterlagen und Links</span><span class="toc-dots"></span><span class="toc-page-num" data-ref="#anhD"></span></a></li>
+    </ul>
+  </div>
+</section>
+
+<section id="kap1">
+  <div class="chapter-num">Kapitel 1</div>
+  <h1 id="kap1h">1. Projektübersicht</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du weisst, was die Adressverwaltung kann und wofür sie als Lernprojekt dient.</li><li>Du kennst die eingesetzten Technologien und ihre Aufgaben.</li><li>Du kannst erklären, welchen Weg eine Anfrage vom Browser bis in die Datenbank nimmt.</li></ul></div>
+<h2 id="kap1-1">1.1 Was wird gebaut?</h2>
+<p>Die <strong>Adressverwaltung</strong> ist eine vollständige Webapplikation mit CRUD-Funktionen (Create, Read, Update, Delete). Angemeldete Benutzer erfassen, bearbeiten und löschen Personenadressen. Dazu kommen ein Städteverzeichnis mit allen Schweizer Postleitzahlen, eine PLZ-Wertehilfe im Adressformular, eine Einstellungsseite und eine E-Mail-Benachrichtigung bei neuen Adressen.</p>
+<p>Es gibt zwei Rollen: <code>User</code> pflegt Adressen und Städte, <code>Admin</code> darf zusätzlich Benutzer anlegen und die Einstellungen ändern.</p>
+<p>Eine Adresse besteht aus sechs Fachfeldern:</p>
+<table><thead><tr><th>Feld</th><th>Typ</th><th>Beschreibung</th><th>Beispiel</th></tr></thead><tbody><tr><td><code>vorname</code></td><td>string, max. 100</td><td>Vorname der Person</td><td>Anna</td></tr><tr><td><code>name</code></td><td>string, max. 100</td><td>Nachname der Person</td><td>Meier</td></tr><tr><td><code>strasse</code></td><td>string, max. 200</td><td>Strassenname</td><td>Bahnhofstrasse</td></tr><tr><td><code>strassennummer</code></td><td>string, max. 20</td><td>Hausnummer, auch mit Zusatz</td><td>12a</td></tr><tr><td><code>plz</code></td><td>string, max. 10</td><td>Postleitzahl</td><td>8001</td></tr><tr><td><code>ort</code></td><td>string, max. 100</td><td>Ortsname</td><td>Zürich</td></tr></tbody></table>
+<p>Jeder Datensatz trägt zusätzlich <strong>Audit-Felder</strong>: wann und von wem er erstellt und zuletzt geändert wurde, sowie einen Gültigkeitszeitraum (<code>dateFrom</code>, <code>dateTo</code>). Diese Felder setzt das Backend selbst; das Frontend sendet sie nie.</p>
+<h2 id="kap1-2">1.2 Lernziele</h2>
+<p>Das Tutorial richtet sich an Lernende im 2. Lehrjahr Informatiker EFZ. Am Ende kannst du:</p>
+<ul><li><strong>Full-Stack-Architektur:</strong> vier Container (Datenbank, Backend, Frontend, Reverse Proxy) starten und erklären, wie sie zusammenarbeiten.</li><li><strong>OData-API:</strong> eine ASP.NET-Core-API mit OData lesen, erweitern und per HTTP abfragen.</li><li><strong>JWT-Authentifizierung:</strong> Tokens ausstellen, prüfen und vom Frontend aus mitsenden.</li><li><strong>NextAuth.js:</strong> die Sitzung im Frontend verwalten und das Backend-Token darin transportieren.</li><li><strong>Entity Framework Core:</strong> Modelle, DbContext und automatisch befüllte Audit-Felder verstehen.</li><li><strong>Sicherheit:</strong> Geheimnisse aus dem Code heraushalten, HTTPS lokal einrichten und typische Lücken erkennen.</li><li><strong>Tests:</strong> Integrationstests gegen eine echte Datenbank ausführen und lesen.</li><li><strong>Clean Code:</strong> SRP und DRY an konkreten Refactorings im Projekt nachvollziehen.</li></ul>
+<h2 id="kap1-3">1.3 Tech-Stack im Überblick</h2>
+<table><thead><tr><th>Technologie</th><th>Version</th><th>Rolle</th><th>Warum?</th></tr></thead><tbody><tr><td><strong>Next.js</strong></td><td>15 (App Router)</td><td>Frontend-Framework</td><td>Server- und Client-Komponenten, eingebautes Routing</td></tr><tr><td><strong>React</strong></td><td>19</td><td>UI-Bibliothek</td><td>Komponenten und Hooks für den Zustand</td></tr><tr><td><strong>TypeScript</strong></td><td>5</td><td>Typsicherheit</td><td>Fehler beim Kompilieren statt zur Laufzeit</td></tr><tr><td><strong>NextAuth.js</strong></td><td>4</td><td>Sitzung im Frontend</td><td>Credentials-Provider, verschlüsseltes Session-Cookie</td></tr><tr><td><strong>Tailwind CSS</strong></td><td>4</td><td>Styling</td><td>Utility-Klassen direkt im Markup</td></tr><tr><td><strong>ASP.NET Core</strong></td><td>10</td><td>Backend-Framework</td><td>Performant, plattformübergreifend, OData-Unterstützung</td></tr><tr><td><strong>OData</strong></td><td>9 (<code>Microsoft.AspNetCore.OData</code>)</td><td>Abfragesprache der API</td><td>Filter, Sortierung und Auswahl ohne eigene Endpunkte</td></tr><tr><td><strong>EF Core + Npgsql</strong></td><td>10</td><td>ORM</td><td>LINQ statt SQL, Modell als C#-Klassen</td></tr><tr><td><strong>JWT</strong></td><td>RFC 7519</td><td>API-Authentifizierung</td><td>Zustandslos, kein Session-Speicher im Backend</td></tr><tr><td><strong>PostgreSQL</strong></td><td>16</td><td>Datenbank</td><td>Open Source, zuverlässig</td></tr><tr><td><strong>nginx</strong></td><td>aktuell</td><td>Reverse Proxy</td><td>HTTPS, ein Eingang für Frontend und Backend</td></tr><tr><td><strong>Docker Compose</strong></td><td>v2</td><td>Container-Verbund</td><td>Alle Dienste mit einem Befehl starten</td></tr><tr><td><strong>xUnit + Testcontainers</strong></td><td>2.9 / 4</td><td>Backend-Tests</td><td>Tests gegen eine echte PostgreSQL-Datenbank</td></tr></tbody></table>
+<h2 id="kap1-4">1.4 Architektur-Überblick</h2>
+<p>Die Applikation besteht aus vier Containern. Der Browser spricht ausschliesslich mit <strong>nginx</strong> unter <code>https://localhost</code>. nginx beendet die TLS-Verbindung und verteilt die Anfragen nach ihrem Pfad:</p>
+<div class="arch-diagram">
+  <div class="arch-box"><strong>Browser</strong><span class="port">https://localhost</span></div>
+  <div class="arch-arrow">&harr;</div>
+  <div class="arch-box"><strong>nginx</strong><span class="port">:443 Reverse Proxy</span></div>
+  <div class="arch-arrow">&harr;</div>
+  <div class="arch-box"><strong>Next.js</strong><span class="port">:3000 Frontend</span></div>
+  <div class="arch-arrow">+</div>
+  <div class="arch-box"><strong>ASP.NET Core</strong><span class="port">:8080 Backend</span></div>
+  <div class="arch-arrow">&harr;</div>
+  <div class="arch-box"><strong>PostgreSQL</strong><span class="port">:5432 Datenbank</span></div>
+</div>
+<table><thead><tr><th>Pfad</th><th>Ziel</th><th>Inhalt</th></tr></thead><tbody><tr><td><code>/odata/*</code></td><td>Backend</td><td>OData-API für Adressen und Städte</td></tr><tr><td><code>/auth/*</code></td><td>Backend</td><td>Login, Registrierung und Abmeldung</td></tr><tr><td><code>/settings</code></td><td>Backend</td><td>Einstellungen lesen und speichern</td></tr><tr><td>alles andere</td><td>Next.js</td><td>Seiten, <code>/api/auth/*</code> (NextAuth) und <code>/api/backend/*</code> (Proxy zum Backend)</td></tr></tbody></table>
+<p>Der Browser ruft die API nie direkt auf. Seine Aufrufe gehen an <code>/api/backend/…</code>, also an Next.js. Dieser Proxy hängt das Token an und reicht die Anfrage an das Backend weiter (Kapitel 5.6). Die Pfade <code>/odata</code>, <code>/auth</code> und <code>/settings</code> sind für Werkzeuge wie curl oder Postman da, die ihr eigenes Token mitschicken.</p>
+<p>Das vollständige Diagramm liegt in <code>documentation/Systemarchitektur.svg</code>:</p>
+<p><img src="Systemarchitektur.svg" style="width:100%"></p>
+<div class="box box-info"><div class="box-title">Warum ein Reverse Proxy?</div><p>Weil Frontend und Backend unter derselben Adresse erreichbar sind, braucht der Browser keine CORS-Freigaben, und es gibt nur ein Zertifikat. Backend und Datenbank sind von aussen gar nicht direkt erreichbar.</p></div>
+<div class="box box-warn"><div class="box-title">Seiten dürfen nicht mit Backend-Pfaden kollidieren</div><p>Die Einstellungsseite heisst <code>/einstellungen</code>, weil <code>/settings</code> an das Backend geht. Die Login-Seite heisst <code>/login</code>, weil <code>/auth</code> dem Backend und <code>/api/auth</code> NextAuth gehört.</p></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 1</h4><ul><li>Vier Container: PostgreSQL, ASP.NET-Core-Backend, Next.js-Frontend und nginx.</li><li>Der Browser kennt nur <code>https://localhost</code>; nginx verteilt nach Pfad.</li><li>Das Backend bietet die Daten über OData an und schützt sie mit JWT.</li><li>Der Browser erreicht die API nur über den Proxy <code>/api/backend</code> von Next.js.</li></ul></div>
+</section>
+<section id="kap2">
+  <div class="chapter-num">Kapitel 2</div>
+  <h1 id="kap2h">2. Entwicklungsumgebung einrichten</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du hast die benötigten Werkzeuge installiert und weisst, wozu jedes dient.</li><li>Du kannst das Projekt klonen und in vier Schritten starten.</li><li>Du verstehst, warum Geheimnisse in einer <code>.env</code>-Datei stehen und nicht im Repository.</li></ul></div>
+<h2 id="kap2-1">2.1 Voraussetzungen</h2>
+<table><thead><tr><th>Werkzeug</th><th>Version</th><th>Wozu?</th><th>Pflicht?</th></tr></thead><tbody><tr><td><strong>Docker</strong> mit Compose</td><td>aktuell</td><td>Startet alle vier Container</td><td>ja</td></tr><tr><td><strong>Git</strong></td><td>2.x</td><td>Projekt klonen, Versionskontrolle</td><td>ja</td></tr><tr><td><strong>mkcert</strong></td><td>1.4</td><td>Lokales TLS-Zertifikat, dem der Browser vertraut</td><td>ja</td></tr><tr><td><strong>.NET SDK</strong></td><td>10</td><td>Backend lokal starten, Tests ausführen</td><td>für Backend-Arbeit</td></tr><tr><td><strong>Node.js</strong></td><td>22 LTS</td><td>Frontend lokal starten, Lint</td><td>für Frontend-Arbeit</td></tr><tr><td><strong>Python 3</strong> mit <code>psycopg2-binary</code></td><td>3.10+</td><td>PLZ-Verzeichnis importieren</td><td>für den Import</td></tr><tr><td><strong>VS Code</strong></td><td>aktuell</td><td>Editor</td><td>empfohlen</td></tr></tbody></table>
+<h3>Empfohlene VS Code Extensions</h3>
+<ul><li><code>ms-dotnettools.csdevkit</code> — C# Dev Kit (Sprachunterstützung, Tests)</li><li><code>esbenp.prettier-vscode</code> — Formatierung (2 Leerzeichen, einfache Anführungszeichen, Strichpunkte)</li><li><code>dbaeumer.vscode-eslint</code> — ESLint für TypeScript</li><li><code>ms-azuretools.vscode-docker</code> — Docker-Integration</li><li><code>humao.rest-client</code> — HTTP-Anfragen aus VS Code senden</li></ul>
+<h2 id="kap2-2">2.2 Projekt holen</h2>
+<div class="code-block"><div class="code-label">Terminal</div><pre><code>git clone git@github.com:erich3019/adressverwaltung.git
+cd adressverwaltung</code></pre></div>
+<div class="code-block"><div class="code-label">Projektstruktur</div><pre><code>adressverwaltung/
+├── backend/
+│   ├── Adressverwaltung.sln
+│   ├── AdressverwaltungApi/          ← API (Controller, Modelle, Dienste)
+│   └── AdressverwaltungApi.Tests/    ← Integrationstests
+├── frontend/                         ← Next.js (app/, components/, lib/, types/)
+├── nginx/
+│   ├── nginx.conf                    ← Reverse Proxy
+│   └── ssl/                          ← Zertifikat (nicht in Git)
+├── db/init/                          ← Legt beim ersten Start die Datenbankrolle des Backends an
+├── scripts/                          ← create_user.sh, reset_password.sh, create_db_role.sh, import_cities.py
+├── migration/                        ← PLZ-Verzeichnis als CSV
+├── documentation/                    ← Diagramme, Berichte, dieses Tutorial
+├── .env.example                      ← Vorlage für die Geheimnisse
+└── docker-compose.yml                ← Startet alle vier Dienste</code></pre></div>
+<h2 id="kap2-3">2.3 Geheimnisse und Zertifikat</h2>
+<p>Passwörter und Schlüssel gehören nicht in den Quellcode und nicht in Git. Sie stehen in der Datei <code>.env</code> im Projektstamm. Diese Datei ist git-ignoriert; im Repository liegt nur die Vorlage <code>.env.example</code>.</p>
+<div class="code-block"><div class="code-label">.env.example</div><pre><code># Adressverwaltung – sicherheitsrelevante Variablen für docker-compose.yml
+# Kopieren nach .env und die Platzhalter ersetzen. Die Datei .env gehört nicht in Git.
+
+# PostgreSQL (gilt nur beim ersten Start mit leerem Volume; danach per ALTER USER ändern)
+# z.B. openssl rand -hex 24
+POSTGRES_PASSWORD=ERSETZEN
+
+# Passwort der Datenbankrolle "adressverwaltung_app", mit der sich das Backend verbindet.
+# Nur Buchstaben und Ziffern verwenden (der Wert steht in einem Connection-String).
+# Neue Datenbank: wird beim ersten Start gesetzt. Bestehende Datenbank oder neues
+# Passwort: ./scripts/create_db_role.sh
+# z.B. openssl rand -hex 24
+APP_DB_PASSWORD=ERSETZEN
+
+# Signaturschlüssel der Backend-JWTs (mindestens 32 Zeichen)
+# z.B. openssl rand -base64 48
+JWT_KEY=ERSETZEN
+
+# Verschlüsselung der NextAuth-Session
+# z.B. openssl rand -base64 48
+NEXTAUTH_SECRET=ERSETZEN
+
+# Passwort des Admin-Benutzers beim ersten Start mit leerer Datenbank.
+# Leer = das Backend erzeugt ein Zufallspasswort und schreibt es ins Log.
+SEED_ADMIN_PASSWORD=
+
+# SMTP-Zugangsdaten für E-Mail-Benachrichtigungen (optional)
+SMTP_USERNAME=
+SMTP_PASSWORD=
+
+# Google OAuth (optional – leer lassen, um Google-Login zu deaktivieren)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=</code></pre></div>
+<div class="code-block"><div class="code-label">Terminal – .env anlegen</div><pre><code>cp .env.example .env
+openssl rand -hex 24      # je ein Wert für POSTGRES_PASSWORD und APP_DB_PASSWORD
+openssl rand -base64 48   # je ein Wert für JWT_KEY und NEXTAUTH_SECRET</code></pre></div>
+<table><thead><tr><th>Variable</th><th>Verwendet für</th><th>Pflicht</th></tr></thead><tbody><tr><td><code>POSTGRES_PASSWORD</code></td><td>Passwort des Superusers <code>postgres</code> (Verwaltung, Hilfsskripte, PLZ-Import)</td><td>ja</td></tr><tr><td><code>APP_DB_PASSWORD</code></td><td>Passwort der Rolle <code>adressverwaltung_app</code>, mit der sich das Backend verbindet; nur Buchstaben und Ziffern</td><td>ja</td></tr><tr><td><code>JWT_KEY</code></td><td>Signaturschlüssel der Backend-Tokens, mindestens 32 Zeichen</td><td>ja</td></tr><tr><td><code>NEXTAUTH_SECRET</code></td><td>Verschlüsselung des Session-Cookies</td><td>ja</td></tr><tr><td><code>SEED_ADMIN_PASSWORD</code></td><td>Passwort des ersten Admin-Benutzers</td><td>nein</td></tr><tr><td><code>SMTP_USERNAME</code>, <code>SMTP_PASSWORD</code></td><td>Zugangsdaten für den Mailversand</td><td>nein</td></tr><tr><td><code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code></td><td>Google-Login</td><td>nein</td></tr></tbody></table>
+<div class="box box-warn"><div class="box-title">Platzhalter ersetzen</div><p>Docker Compose bricht mit einer Meldung ab, wenn einer der vier Pflichtwerte fehlt. Das Backend startet ausserdem nicht, wenn <code>JWT_KEY</code> kürzer als 32 Zeichen ist. Der Wert <code>ERSETZEN</code> aus der Vorlage reicht also nicht.</p></div>
+<div class="box box-info"><div class="box-title">Zwei Datenbankbenutzer</div><p>Das Backend arbeitet nicht als Superuser <code>postgres</code>, sondern mit der Rolle <code>adressverwaltung_app</code>. Sie besitzt nur die Datenbank der Anwendung. Angelegt wird sie beim ersten Start mit leerem Volume (<code>db/init/10-app-rolle.sh</code>). Für eine bestehende Datenbank oder nach einem neuen <code>APP_DB_PASSWORD</code> genügt einmal <code>./scripts/create_db_role.sh</code>.</p></div>
+<h3>TLS-Zertifikat mit mkcert</h3>
+<p>nginx braucht ein Zertifikat. Ein selbstsigniertes Zertifikat zeigt der Browser als «nicht sicher» an. <strong>mkcert</strong> legt eine lokale Zertifizierungsstelle an, trägt sie bei Betriebssystem und Browser als vertrauenswürdig ein und stellt damit ein Zertifikat für <code>localhost</code> aus:</p>
+<div class="code-block"><div class="code-label">Terminal – Zertifikat erzeugen</div><pre><code>mkcert -install     # einmalig pro Rechner
+mkdir -p nginx/ssl
+mkcert -cert-file nginx/ssl/cert.pem -key-file nginx/ssl/key.pem localhost 127.0.0.1 ::1</code></pre></div>
+<h2 id="kap2-4">2.4 Stack starten</h2>
+<div class="code-block"><div class="code-label">Terminal</div><pre><code># Alle vier Container bauen und im Hintergrund starten
+docker compose up --build -d
+
+# Status prüfen
+docker compose ps
+
+# Logs des Backends verfolgen
+docker compose logs -f backend</code></pre></div>
+<table><thead><tr><th>Dienst</th><th>Adresse</th><th>Hinweis</th></tr></thead><tbody><tr><td>Applikation</td><td><code>https://localhost</code></td><td>Port 80 leitet auf 443 um</td></tr><tr><td>Backend direkt</td><td><code>http://localhost:5000</code></td><td>nur vom eigenen Rechner; alle Endpunkte ausser Login brauchen ein Token</td></tr><tr><td>PostgreSQL</td><td><code>localhost:5432</code></td><td>nur vom eigenen Rechner; Datenbank <code>adressverwaltung</code></td></tr><tr><td>Swagger</td><td><code>http://localhost:5000/swagger</code></td><td>nur bei lokalem Start in der Umgebung <code>Development</code></td></tr></tbody></table>
+<h3>Erstes Login</h3>
+<p>Ist die Tabelle <code>Users</code> leer, legt das Backend beim Start den Benutzer <code>admin@example.com</code> mit der Rolle <code>Admin</code> an. Das Passwort stammt aus <code>SEED_ADMIN_PASSWORD</code>. Ist der Wert leer, erzeugt das Backend ein Zufallspasswort und schreibt es einmalig ins Log:</p>
+<div class="code-block"><div class="code-label">Terminal – Passwort aus dem Log lesen</div><pre><code>docker compose logs backend | grep "Admin-Benutzer"</code></pre></div>
+<div class="box box-tip"><div class="box-title">Für eine Klasse</div><p>Trage vor dem ersten Start einen festen Wert bei <code>SEED_ADMIN_PASSWORD</code> ein. Dann haben alle dasselbe, bekannte Passwort.</p></div>
+<h3>Städte importieren und Benutzer anlegen</h3>
+<p>Eine frische Datenbank enthält keine Städte; die PLZ-Wertehilfe im Adressformular bleibt leer, bis das Verzeichnis importiert ist (Details in Anhang A). Weitere Benutzer legt ein Skript direkt in der Datenbank an:</p>
+<div class="code-block"><div class="code-label">Terminal</div><pre><code># PLZ-Verzeichnis importieren (4073 Einträge)
+pip install psycopg2-binary
+set -a; . ./.env; set +a
+CSV_PATH=migration/AMTOVZ_CSV_LV95.csv python3 scripts/import_cities.py
+
+# Benutzer anlegen (viertes Argument: Rolle, ohne Angabe User)
+./scripts/create_user.sh anna@example.com "Anna Meier" "Ein-Sicheres-Passwort-1!"
+./scripts/create_user.sh beat@example.com "Beat Keller" "Ein-Sicheres-Passwort-2!" Admin
+
+# Admin-Passwort neu setzen
+./scripts/reset_password.sh</code></pre></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 2</h4><ul><li>Pflicht sind Docker, Git und mkcert; .NET, Node.js und Python nur für die jeweilige Arbeit.</li><li>Geheimnisse stehen in <code>.env</code> (nicht in Git), die Vorlage in <code>.env.example</code>; vier Werte sind Pflicht.</li><li><code>mkcert</code> sorgt dafür, dass der Browser <code>https://localhost</code> als sicher anzeigt.</li><li><code>docker compose up --build -d</code> startet alles; das erste Admin-Passwort steht im Backend-Log.</li></ul></div>
+</section>
+<section id="kap3">
+  <div class="chapter-num">Kapitel 3</div>
+  <h1 id="kap3h">3. Datenbankmodell</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kennst die vier Entitäten und ihre gemeinsame Basisklasse.</li><li>Du verstehst, wie die Audit-Felder automatisch befüllt werden.</li><li>Du weisst, warum das Projekt <code>EnsureCreated</code> verwendet und wie neue Spalten in eine bestehende Datenbank gelangen.</li></ul></div>
+<h2 id="kap3-1">3.1 Entitäts-Klassen</h2>
+<table><thead><tr><th>Klasse</th><th>Tabelle</th><th>Zweck</th></tr></thead><tbody><tr><td><code>Adresse</code></td><td><code>Adressen</code></td><td>Personenadresse</td></tr><tr><td><code>City</code></td><td><code>Cities</code></td><td>PLZ und Ortsname für die Wertehilfe</td></tr><tr><td><code>User</code></td><td><code>Users</code></td><td>Benutzerkonto mit Passwort-Hash, Rolle und Token-Version</td></tr><tr><td><code>Settings</code></td><td><code>Settings</code></td><td>Einstellungen (eine einzige Zeile)</td></tr></tbody></table>
+<p>Pflichtfelder und Höchstlängen stehen als DataAnnotations direkt an den Eigenschaften. Sie gelten doppelt: als Spaltendefinition in der Datenbank und als Validierung eingehender Daten.</p>
+<div class="code-block"><div class="code-label">Models/Adresse.cs</div><pre><code>public class Adresse : AuditableEntity
+{
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string Vorname { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(200)]
+    public string Strasse { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(20)]
+    public string Strassennummer { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(10)]
+    public string Plz { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string Ort { get; set; } = string.Empty;
+}</code></pre></div>
+<div class="code-block"><div class="code-label">Models/City.cs</div><pre><code>public class City : AuditableEntity
+{
+    public int Id { get; set; }
+
+    /// &lt;summary&gt;Postleitzahl (z.B. "8001")&lt;/summary&gt;
+    [Required]
+    [MaxLength(10)]
+    public string PostalCode { get; set; } = string.Empty;
+
+    /// &lt;summary&gt;Ortsname (z.B. "Zürich")&lt;/summary&gt;
+    [Required]
+    [MaxLength(100)]
+    public string CityName { get; set; } = string.Empty;
+}</code></pre></div>
+<div class="code-block"><div class="code-label">Models/User.cs</div><pre><code>public class User : AuditableEntity
+{
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(256)]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    /// &lt;summary&gt;
+    /// Passwort-Hash (generiert via ASP.NET Core PasswordHasher).
+    /// Wird niemals im Klartext gespeichert oder zurückgegeben.
+    /// &lt;/summary&gt;
+    [Required]
+    public string PasswordHash { get; set; } = string.Empty;
+
+    /// &lt;summary&gt;Anzeigename des Benutzers (z.B. "Anna Meier")&lt;/summary&gt;
+    [Required]
+    [MaxLength(100)]
+    public string DisplayName { get; set; } = string.Empty;
+
+    /// &lt;summary&gt;Rolle des Benutzers, siehe &lt;see cref="Roles"/&gt;.&lt;/summary&gt;
+    [Required]
+    [MaxLength(20)]
+    public string Role { get; set; } = Roles.User;
+
+    /// &lt;summary&gt;
+    /// Wird bei der Abmeldung erhöht. Ein Token gilt nur, solange seine Version
+    /// mit diesem Wert übereinstimmt – so lassen sich ausgestellte Tokens widerrufen.
+    /// &lt;/summary&gt;
+    public int TokenVersion { get; set; }
+}</code></pre></div>
+<p><code>Role</code> legt fest, was der Benutzer darf. <code>TokenVersion</code> ist ein Zähler, mit dem sich ausgestellte Tokens widerrufen lassen (Kapitel 5.5). Die erlaubten Rollen stehen als Konstanten an einer Stelle:</p>
+<div class="code-block"><div class="code-label">Models/Roles.cs</div><pre><code>public static class Roles
+{
+    public const string Admin = "Admin";
+    public const string User  = "User";
+
+    public static bool IsValid(string? role) =&gt; role is Admin or User;
+}</code></pre></div>
+<div class="box box-warn"><div class="box-title">PasswordHash ist nicht das Passwort</div><p>Gespeichert wird nur ein Hash (PBKDF2 mit Salt, erzeugt vom <code>PasswordHasher</code> von ASP.NET Core). Der Klartext wird nie gespeichert, und kein API-Endpunkt gibt den Hash zurück.</p></div>
+<h2 id="kap3-2">3.2 AuditableEntity</h2>
+<p>Alle vier Entitäten erben von <code>AuditableEntity</code>. So stehen die Audit-Felder nur an einer Stelle (DRY):</p>
+<div class="code-block"><div class="code-label">Models/AuditableEntity.cs</div><pre><code>public abstract class AuditableEntity
+{
+    // ─────────────────────────────────────────────────────────────────────────
+    // Audit: Erstellungsinformationen
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// &lt;summary&gt;Zeitstempel der Erstellung (UTC), automatisch gesetzt.&lt;/summary&gt;
+    public DateTime CreateDate { get; set; }
+
+    /// &lt;summary&gt;Benutzername, der den Datensatz erstellt hat. Automatisch aus dem HTTP-Kontext ermittelt.&lt;/summary&gt;
+    public string CreatedBy { get; set; } = string.Empty;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Audit: Änderungsinformationen
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// &lt;summary&gt;Zeitstempel der letzten Änderung (UTC), wird bei jedem UPDATE gesetzt.&lt;/summary&gt;
+    public DateTime? ChangeDate { get; set; }
+
+    /// &lt;summary&gt;Benutzername, der zuletzt geändert hat. Wird bei jedem UPDATE gesetzt.&lt;/summary&gt;
+    public string? ChangedBy { get; set; }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Gültigkeitszeitraum
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// &lt;summary&gt;
+    /// Gültig ab (inklusive). Standardmässig wird das heutige Datum gesetzt,
+    /// falls beim Erstellen kein Wert übergeben wird.
+    /// &lt;/summary&gt;
+    public DateOnly DateFrom { get; set; }
+
+    /// &lt;summary&gt;
+    /// Gültig bis (inklusive). null bedeutet "unbegrenzt gültig".
+    /// &lt;/summary&gt;
+    public DateOnly? DateTo { get; set; }
+}</code></pre></div>
+<p>Befüllt werden sie im <code>AdresseDbContext</code>, unmittelbar vor jedem Speichern:</p>
+<div class="code-block"><div class="code-label">Data/AdresseDbContext.cs – ApplyAuditFields</div><pre><code>private void ApplyAuditFields()
+{
+    // DateTime.UtcNow hat Kind=UTC, aber die Spalte ist 'timestamp without time zone'.
+    // Npgsql 6+ lehnt Kind=UTC für diesen Typ ab → Kind=Unspecified setzen.
+    var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
+    // Benutzername ermitteln:
+    // 1. Aus dem JWT-Claim (Name) des angemeldeten Benutzers
+    // 2. Fallback: "system" (z.B. beim Seeding oder Hintergrundprozessen)
+    // Frei setzbare Request-Header werden bewusst nicht berücksichtigt,
+    // weil sich sonst die Audit-Felder fälschen liessen.
+    var claimUser   = _httpContextAccessor?.HttpContext?.User?.Identity?.Name;
+    var currentUser = !string.IsNullOrWhiteSpace(claimUser) ? claimUser : "system";
+
+    foreach (var entry in ChangeTracker.Entries&lt;AuditableEntity&gt;())
+    {
+        switch (entry.State)
+        {
+            case EntityState.Added:
+                entry.Entity.CreateDate = now;
+                entry.Entity.CreatedBy  = currentUser;
+
+                // Vom Client mitgeschickte Änderungsangaben verwerfen
+                entry.Entity.ChangeDate = null;
+                entry.Entity.ChangedBy  = null;
+
+                // DateFrom auf heute setzen, falls nicht explizit übergeben
+                if (entry.Entity.DateFrom == default)
+                    entry.Entity.DateFrom = DateOnly.FromDateTime(now);
+                break;
+
+            case EntityState.Modified:
+                entry.Entity.ChangeDate = now;
+                entry.Entity.ChangedBy  = currentUser;
+
+                // CreateDate und CreatedBy niemals überschreiben!
+                entry.Property(e =&gt; e.CreateDate).IsModified = false;
+                entry.Property(e =&gt; e.CreatedBy).IsModified  = false;
+                break;
+        }
+    }
+}</code></pre></div>
+<div class="code-block"><div class="code-label">Data/AdresseDbContext.cs – SaveChanges</div><pre><code>// Synchrone Variante (z.B. beim Seeding in Program.cs)
+public override int SaveChanges()
+{
+    ApplyAuditFields();
+    return base.SaveChanges();
+}
+
+// Asynchrone Variante (Standard-Pfad in allen Controllern)
+public override Task&lt;int&gt; SaveChangesAsync(CancellationToken cancellationToken = default)
+{
+    ApplyAuditFields();
+    return base.SaveChangesAsync(cancellationToken);
+}</code></pre></div>
+<div class="box box-info"><div class="box-title">Warum beide SaveChanges überschreiben?</div><p>EF Core kennt eine synchrone und eine asynchrone Variante. Würde nur eine überschrieben, blieben die Audit-Felder je nach Aufruf leer – ein Fehler, der schwer zu finden ist.</p></div>
+<div class="box box-warn"><div class="box-title">Der Benutzername kommt aus dem Token</div><p>Massgebend ist allein der Name aus dem geprüften JWT. Ein frei setzbarer Request-Header wird bewusst nicht gelesen, sonst liessen sich <code>CreatedBy</code> und <code>ChangedBy</code> fälschen. Controller setzen die Audit-Felder nie selbst.</p></div>
+<div class="box box-info"><div class="box-title">Kind=Unspecified</div><p>Die Zeitstempel liegen in Spalten vom Typ <code>timestamp without time zone</code>. Npgsql lehnt dafür Werte mit <code>Kind=Utc</code> ab, deshalb setzt <code>ApplyAuditFields</code> die Art ausdrücklich auf <code>Unspecified</code>.</p></div>
+<h2 id="kap3-3">3.3 AdresseDbContext</h2>
+<p>Der Kontext kennt die vier Tabellen und konfiguriert, was sich nicht über DataAnnotations ausdrücken lässt: die Audit-Spalten, die Tabellennamen, zwei Indizes und die Standardwerte für <code>Role</code> und <code>TokenVersion</code>.</p>
+<div class="code-block"><div class="code-label">Data/AdresseDbContext.cs – OnModelCreating</div><pre><code>protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    base.OnModelCreating(modelBuilder);
+
+    // ── Gemeinsame Audit-Spalten für alle AuditableEntity-Typen ─────────
+    // EF Core vererbt die Felder automatisch durch Vererbung.
+    // Wir konfigurieren sie explizit für maximale Kontrolle.
+
+    foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+    {
+        if (typeof(AuditableEntity).IsAssignableFrom(entityType.ClrType))
+        {
+            modelBuilder.Entity(entityType.ClrType, b =&gt;
+            {
+                b.Property&lt;DateTime&gt;("CreateDate")
+                    .IsRequired()
+                    .HasColumnType("timestamp without time zone");
+
+                b.Property&lt;string&gt;("CreatedBy")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
+
+                b.Property&lt;DateTime?&gt;("ChangeDate")
+                    .HasColumnType("timestamp without time zone");
+
+                b.Property&lt;string?&gt;("ChangedBy")
+                    .HasMaxLength(100)
+                    .HasColumnType("character varying(100)");
+
+                b.Property&lt;DateOnly&gt;("DateFrom")
+                    .IsRequired()
+                    .HasColumnType("date");
+
+                b.Property&lt;DateOnly?&gt;("DateTo")
+                    .HasColumnType("date");
+            });
+        }
+    }
+
+    // B-12: Pflichtfelder und Längen stehen als DataAnnotations an den Modellen (B-07).
+    // Hier folgt nur, was sich dort nicht ausdrücken lässt: Tabellennamen und Indizes.
+    modelBuilder.Entity&lt;Adresse&gt;().ToTable("Adressen");
+
+    modelBuilder.Entity&lt;City&gt;(entity =&gt;
+    {
+        entity.ToTable("Cities");
+
+        // Index für schnelle PLZ-Suche
+        entity.HasIndex(c =&gt; c.PostalCode);
+    });
+
+    modelBuilder.Entity&lt;User&gt;(entity =&gt;
+    {
+        entity.ToTable("Users");
+
+        // E-Mail muss eindeutig sein
+        entity.HasIndex(u =&gt; u.Email).IsUnique();
+
+        // Standardwerte in der Datenbank, damit auch Skripte mit eigenem SQL
+        // (create_user.sh) gültige Zeilen anlegen
+        entity.Property(u =&gt; u.Role).HasDefaultValue(Roles.User);
+        entity.Property(u =&gt; u.TokenVersion).HasDefaultValue(0);
+    });
+
+    modelBuilder.Entity&lt;Settings&gt;().ToTable("Settings");
+}</code></pre></div>
+<div class="box box-info"><div class="box-title">Standardwerte in der Datenbank</div><p>Skripte wie <code>create_user.sh</code> schreiben mit eigenem SQL in die Tabelle und laufen nicht durch EF Core. Damit auch sie gültige Zeilen anlegen, kennt die Datenbank selbst die Standardwerte <code>User</code> und <code>0</code>.</p></div>
+<h2 id="kap3-4">3.4 DbSeeder</h2>
+<p>Ohne Benutzer kann sich niemand anmelden. <code>DbSeeder</code> legt deshalb beim Start einen Admin-Benutzer an, falls die Tabelle leer ist. Ein fest einprogrammiertes Standardpasswort gibt es nicht:</p>
+<div class="code-block"><div class="code-label">DbSeeder.cs</div><pre><code>public static class DbSeeder
+{
+    /// &lt;summary&gt;
+    /// Legt den Admin-Benutzer an, falls noch kein Benutzer vorhanden ist.
+    /// Zugangsdaten werden aus der Konfiguration gelesen (Seed-Abschnitt).
+    /// Ohne Seed:AdminPassword wird ein zufälliges Passwort erzeugt und einmalig geloggt –
+    /// es gibt bewusst kein fest einprogrammiertes Standardpasswort.
+    /// &lt;/summary&gt;
+    public static void Seed(
+        AdresseDbContext db,
+        IPasswordHasher&lt;User&gt; hasher,
+        IConfiguration config,
+        ILogger logger)
+    {
+        // Nur seeden, wenn die Tabelle leer ist
+        if (db.Users.Any()) return;
+
+        var email    = config["Seed:AdminEmail"]    ?? "admin@example.com";
+        var password = config["Seed:AdminPassword"];
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(18));
+            logger.LogWarning(
+                "Seed:AdminPassword ist nicht gesetzt. Admin-Benutzer {Email} wurde mit dem zufälligen Passwort {Password} angelegt. Bitte nach dem ersten Login ändern.",
+                email, password);
+        }
+
+        var admin = new User
+        {
+            Email       = email,
+            DisplayName = "Admin",
+            Role        = Roles.Admin,
+        };
+        admin.PasswordHash = hasher.HashPassword(admin, password);
+
+        db.Users.Add(admin);
+        db.SaveChanges();
+    }
+}</code></pre></div>
+<div class="box box-tip"><div class="box-title">Clean Code: SRP</div><p><code>Program.cs</code> konfiguriert die Anwendung. Das Anlegen von Startdaten ist eine andere Aufgabe und steht deshalb in einer eigenen Klasse.</p></div>
+<h2 id="kap3-5">3.5 EnsureCreated statt Migrations</h2>
+<div class="code-block"><div class="code-label">Program.cs – Schema und Seed beim Start</div><pre><code>// === DATENBANKSCHEMA UND SEED-DATEN BEIM START ===
+using (var scope = app.Services.CreateScope())
+{
+    var db      = scope.ServiceProvider.GetRequiredService&lt;AdresseDbContext&gt;();
+    var hasher  = scope.ServiceProvider.GetRequiredService&lt;IPasswordHasher&lt;User&gt;&gt;();
+    var config  = scope.ServiceProvider.GetRequiredService&lt;IConfiguration&gt;();
+
+    // EnsureCreated erstellt alle Tabellen direkt aus dem EF-Modell.
+    // Zuverlässiger als Migrate() in Docker-Umgebungen, da keine
+    // Migrations-History-Konflikte entstehen können.
+    db.Database.EnsureCreated();
+
+    // Spalten nachziehen, die einer bestehenden Datenbank noch fehlen
+    SchemaUpgrader.Apply(db);
+
+    // B-01: Seed-Logik ausgelagert in DbSeeder (SRP)
+    DbSeeder.Seed(db, hasher, config, app.Logger);
+}</code></pre></div>
+<table><thead><tr><th>Methode</th><th>Was sie tut</th><th>Wann einsetzen?</th></tr></thead><tbody><tr><td><code>EnsureCreated()</code></td><td>Erstellt alle Tabellen aus dem Modell, wenn die Datenbank noch nicht existiert. Tut nichts, wenn sie schon existiert.</td><td>Lernprojekte und Wegwerf-Datenbanken</td></tr><tr><td>Migrations</td><td>Schrittweise Skripte für jede Schemaänderung; bestehende Daten bleiben erhalten.</td><td>Produktive Systeme</td></tr></tbody></table>
+<p>Weil <code>EnsureCreated</code> eine bestehende Datenbank nicht anfasst, zieht <code>SchemaUpgrader</code> gleich danach fehlende Spalten nach. Jede Anweisung ist so geschrieben, dass sie beliebig oft laufen kann:</p>
+<div class="code-block"><div class="code-label">SchemaUpgrader.cs</div><pre><code>public static class SchemaUpgrader
+{
+    public static void Apply(AdresseDbContext db)
+    {
+        // Rollen: Benutzer, die es vor der Einführung schon gab, hatten vollen Zugriff
+        // und behalten ihn als "Admin". Danach gilt für neue Zeilen der Standard "User".
+        db.Database.ExecuteSqlRaw("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name = 'Users' AND column_name = 'Role') THEN
+                    ALTER TABLE "Users" ADD COLUMN "Role" character varying(20) NOT NULL DEFAULT 'Admin';
+                    ALTER TABLE "Users" ALTER COLUMN "Role" SET DEFAULT 'User';
+                END IF;
+            END $$;
+            """);
+
+        // Token-Widerruf: Zähler, der bei der Abmeldung erhöht wird
+        db.Database.ExecuteSqlRaw("""
+            ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "TokenVersion" integer NOT NULL DEFAULT 0;
+            """);
+    }
+}</code></pre></div>
+<p>Benutzer, die es vor der Einführung der Rollen schon gab, hatten vollen Zugriff und werden deshalb <code>Admin</code>. Erst danach gilt für neue Zeilen der Standard <code>User</code>.</p>
+<div class="box box-warn"><div class="box-title">Modelländerungen erreichen eine bestehende Datenbank nicht von selbst</div><p>Fügst du einem Modell ein Feld hinzu, ändert sich eine bereits bestehende Datenbank nicht. Entweder ergänzt du die Spalte im <code>SchemaUpgrader</code>, oder du löschst das Volume mit <code>docker compose down -v</code> und startest neu – dann sind die Daten weg. Die Dateien im Ordner <code>Migrations/</code> werden zur Laufzeit nicht angewendet.</p></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 3</h4><ul><li>Vier Entitäten, alle abgeleitet von <code>AuditableEntity</code>.</li><li>Pflichtfelder und Längen stehen als DataAnnotations an den Modellen.</li><li><code>ApplyAuditFields</code> setzt Zeitstempel und Benutzer vor jedem Speichern; der Benutzer kommt aus dem Token.</li><li><code>DbSeeder</code> legt den ersten Benutzer als <code>Admin</code> an, ohne festes Standardpasswort.</li><li><code>EnsureCreated</code> erstellt das Schema nur einmal; neue Spalten zieht <code>SchemaUpgrader</code> nach.</li></ul></div>
+</section>
+<section id="kap4">
+  <div class="chapter-num">Kapitel 4</div>
+  <h1 id="kap4h">4. Backend – ASP.NET Core 10</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kennst die Ordnerstruktur des Backends.</li><li>Du kannst OData-Abfragen formulieren.</li><li>Du kannst erklären, wie der generische Controller die CRUD-Logik für alle Entitäten liefert.</li><li>Du verstehst Login, Registrierung und Abmeldung und ihre Schutzmassnahmen.</li></ul></div>
+<h2 id="kap4-1">4.1 Projektstruktur</h2>
+<div class="code-block"><div class="code-label">backend/AdressverwaltungApi/</div><pre><code>AdressverwaltungApi/
+├── Controllers/
+│   ├── ODataCrudController.cs     ← Generische Basisklasse (GET/POST/PATCH/DELETE)
+│   ├── AdressenController.cs      ← Adressen + Benachrichtigung
+│   ├── CitiesController.cs        ← Städte
+│   ├── AuthController.cs          ← Login, Registrierung, Abmeldung
+│   └── SettingsController.cs      ← Einstellungen
+├── Data/
+│   └── AdresseDbContext.cs        ← EF Core DbContext + Audit-Felder
+├── Dtos/                          ← Request- und Response-Typen (Auth, Settings)
+├── Models/                        ← Adresse, City, User, Roles, Settings, AuditableEntity
+├── Options/                       ← JwtOptions, SmtpOptions (typisierte Konfiguration)
+├── Services/
+│   ├── ITokenService.cs / JwtTokenService.cs
+│   ├── ILoginThrottle.cs / MemoryLoginThrottle.cs   ← Kontosperre
+│   ├── INotificationService.cs / EmailNotificationService.cs
+│   └── IEmailService.cs / EmailService.cs
+├── DbSeeder.cs                    ← Erster Admin-Benutzer
+├── SchemaUpgrader.cs              ← Fehlende Spalten nachziehen
+├── TokenUserValidator.cs          ← Token mit der Datenbank abgleichen
+├── ODataErrorDetailFilter.cs      ← Fehlerantworten ohne Stacktrace
+├── Program.cs                     ← Konfiguration und Middleware
+└── appsettings.json               ← Konfiguration ohne Geheimnisse</code></pre></div>
+<h2 id="kap4-2">4.2 OData</h2>
+<p>OData (Open Data Protocol) legt fest, wie Abfragen als URL-Parameter formuliert werden. Das Backend braucht keine eigenen Endpunkte für «Adressen aus Zürich» oder «die ersten zehn, sortiert nach Name» – OData übersetzt die Parameter in SQL.</p>
+<table><thead><tr><th>Option</th><th>Funktion</th><th>Beispiel</th></tr></thead><tbody><tr><td><code>$filter</code></td><td>Zeilen filtern</td><td><code>$filter=ort eq 'Zürich'</code></td></tr><tr><td><code>$select</code></td><td>Nur bestimmte Felder</td><td><code>$select=vorname,name,plz</code></td></tr><tr><td><code>$orderby</code></td><td>Sortieren</td><td><code>$orderby=name asc</code></td></tr><tr><td><code>$top</code></td><td>Höchstzahl (maximal 100)</td><td><code>$top=10</code></td></tr><tr><td><code>$skip</code></td><td>Überspringen</td><td><code>$skip=20</code></td></tr><tr><td><code>$count</code></td><td>Gesamtzahl mitliefern</td><td><code>$count=true</code></td></tr></tbody></table>
+<div class="code-block"><div class="code-label">Program.cs – EDM-Modell und OData-Optionen</div><pre><code>// === ODATA: EDM-Modell definieren ===
+var modelBuilder = new ODataConventionModelBuilder();
+modelBuilder.EnableLowerCamelCase(); // camelCase für alle Properties
+modelBuilder.EntitySet&lt;Adresse&gt;("Adressen");
+modelBuilder.EntitySet&lt;City&gt;("Cities");
+
+// === CONTROLLERS + ODATA aktivieren ===
+builder.Services.AddControllers(options =&gt; options.Filters.Add&lt;ODataErrorDetailFilter&gt;())
+    .AddJsonOptions(options =&gt;
+    {
+        // camelCase für REST-Antworten (auth, settings)
+        options.JsonSerializerOptions.PropertyNamingPolicy =
+            System.Text.Json.JsonNamingPolicy.CamelCase;
+    })
+    .AddOData(options =&gt; options
+        .Select()
+        .Filter()
+        .OrderBy()
+        .SetMaxTop(ODataCrudController&lt;Adresse&gt;.MaxPageSize)
+        .Count()
+        .Expand()
+        .AddRouteComponents("odata", modelBuilder.GetEdmModel())
+    );</code></pre></div>
+<div class="box box-warn"><div class="box-title">camelCase</div><p>Wegen <code>EnableLowerCamelCase()</code> heissen die Eigenschaften in Antworten und in Abfragen <code>vorname</code>, <code>postalCode</code> usw. – nicht <code>Vorname</code>. Eine Abfrage mit <code>$filter=Ort eq ...</code> liefert einen Fehler.</p></div>
+<div class="code-block"><div class="code-label">HTTP-Anfragen (alle mit Authorization: Bearer &lt;token&gt;)</div><pre><code># Adressen (höchstens 100 pro Antwort)
+GET https://localhost/odata/Adressen
+
+# Seite 2 mit je 25 Zeilen, dazu die Gesamtzahl
+GET https://localhost/odata/Adressen?$orderby=name&amp;$top=25&amp;$skip=25&amp;$count=true
+
+# Adressen aus Zürich, sortiert nach Name
+GET https://localhost/odata/Adressen?$filter=ort eq 'Zürich'&amp;$orderby=name
+
+# PLZ-Suche: Städte, deren PLZ mit 80 beginnt (höchstens 10)
+GET https://localhost/odata/Cities?$filter=startswith(postalCode,'80')&amp;$top=10&amp;$orderby=postalCode
+
+# Nur drei Felder
+GET https://localhost/odata/Adressen?$select=vorname,name,ort
+
+# Eine einzelne Adresse
+GET https://localhost/odata/Adressen(1)</code></pre></div>
+<div class="box box-info"><div class="box-title">Antwortformat</div><p>Listen kommen in einem Umschlag zurück: <code>{"@odata.context":"…","value":[…]}</code>. Das Frontend liest deshalb <code>data.value</code>. Ein einzelner Datensatz (<code>Adressen(1)</code>) kommt ohne <code>value</code>.</p></div>
+<div class="box box-info"><div class="box-title">Höchstens 100 Zeilen pro Antwort</div><p>Eine Liste enthält nie mehr als 100 Zeilen. Gibt es mehr, steht in der Antwort zusätzlich <code>@odata.nextLink</code> mit der Adresse der nächsten Seite. Mit <code>$count=true</code> liefert das Backend die Gesamtzahl als <code>@odata.count</code> mit – so blättert das Frontend (Kapitel 6.4).</p></div>
+<p>Fehlerantworten von OData enthielten ursprünglich den Ausnahmetyp und einen Stacktrace. Der <code>ODataErrorDetailFilter</code> entfernt beides; die eigentliche Fehlermeldung bleibt.</p>
+<h2 id="kap4-3">4.3 Generischer ODataCrudController&lt;T&gt;</h2>
+<p><code>AdressenController</code> und <code>CitiesController</code> bräuchten denselben Code für GET, POST, PATCH und DELETE. Stattdessen implementiert eine generische Basisklasse die CRUD-Logik einmal (DRY):</p>
+<div class="code-block"><div class="code-label">Controllers/ODataCrudController.cs</div><pre><code>[Authorize]   // Alle abgeleiteten Controller (Adressen, Cities) erfordern gültigen JWT
+public abstract class ODataCrudController&lt;TEntity&gt; : ODataController
+    where TEntity : class
+{
+    /// &lt;summary&gt;Grösste Seite, die eine Listenabfrage liefert (entspricht SetMaxTop in Program.cs).&lt;/summary&gt;
+    public const int MaxPageSize = 100;
+
+    protected readonly AdresseDbContext _context;
+
+    /// &lt;summary&gt;Das DbSet, auf dem dieser Controller operiert.&lt;/summary&gt;
+    protected abstract DbSet&lt;TEntity&gt; Entities { get; }
+
+    /// &lt;summary&gt;Anzeigename der Entität für Fehlermeldungen (z.B. "Adresse", "Stadt").&lt;/summary&gt;
+    protected abstract string EntityDisplayName { get; }
+
+    protected ODataCrudController(AdresseDbContext context)
+    {
+        _context = context;
+    }
+
+    // GET /odata/{EntitySet}
+    // Höchstens MaxPageSize Zeilen pro Antwort; für den Rest liefert OData "@odata.nextLink".
+    [EnableQuery(PageSize = MaxPageSize)]
+    public virtual IActionResult Get()
+        =&gt; Ok(Entities.AsNoTracking());
+
+    // GET /odata/{EntitySet}(5)
+    [EnableQuery]
+    public virtual async Task&lt;IActionResult&gt; Get([FromRoute] int key)
+    {
+        var entity = await Entities.FindAsync(key);
+
+        if (entity is null)
+            return EntityNotFound(key);
+
+        return Ok(entity);
+    }
+
+    // POST /odata/{EntitySet}
+    public virtual async Task&lt;IActionResult&gt; Post([FromBody] TEntity entity)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        // Den Schlüssel vergibt die Datenbank. Ein mitgeschickter Wert wird verworfen,
+        // sonst liessen sich Ids vorbelegen, die später mit der Sequenz kollidieren.
+        var entry = _context.Entry(entity);
+        foreach (var name in KeyPropertyNames)
+            entry.Property(name).CurrentValue = entry.Property(name).Metadata.Sentinel;
+
+        Entities.Add(entity);
+        await _context.SaveChangesAsync();
+        await OnCreatedAsync(entity);
+
+        return Created(entity);
+    }
+
+    // PATCH /odata/{EntitySet}(5)
+    public virtual async Task&lt;IActionResult&gt; Patch(
+        [FromRoute] int key,
+        [FromBody] Delta&lt;TEntity&gt; delta)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var entity = await Entities.FindAsync(key);
+
+        if (entity is null)
+            return EntityNotFound(key);
+
+        // Der Schlüssel ist nicht änderbar (EF Core würde sonst mit einer Ausnahme abbrechen)
+        foreach (var name in KeyPropertyNames)
+            delta.UpdatableProperties.Remove(name);
+
+        delta.Patch(entity);
+
+        if (!TryValidateModel(entity))
+            return BadRequest(ModelState);
+
+        await _context.SaveChangesAsync();
+
+        return Updated(entity);
+    }
+
+    // DELETE /odata/{EntitySet}(5)
+    public virtual async Task&lt;IActionResult&gt; Delete([FromRoute] int key)
+    {
+        var entity = await Entities.FindAsync(key);
+
+        if (entity is null)
+            return EntityNotFound(key);
+
+        Entities.Remove(entity);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    /// &lt;summary&gt;
+    /// Erweiterungspunkt: wird nach dem Speichern einer neuen Entität aufgerufen (B-11).
+    /// Unterklassen hängen hier Folgeaktionen an, statt Post zu kopieren.
+    /// &lt;/summary&gt;
+    protected virtual Task OnCreatedAsync(TEntity entity) =&gt; Task.CompletedTask;
+
+    private IEnumerable&lt;string&gt; KeyPropertyNames
+        =&gt; _context.Model.FindEntityType(typeof(TEntity))!.FindPrimaryKey()!.Properties.Select(p =&gt; p.Name);
+
+    private IActionResult EntityNotFound(int key)
+        =&gt; NotFound($"{EntityDisplayName} mit Id {key} wurde nicht gefunden.");
+}</code></pre></div>
+<table><thead><tr><th>Stelle</th><th>Wozu?</th></tr></thead><tbody><tr><td><code>[EnableQuery(PageSize = MaxPageSize)]</code></td><td>Begrenzt jede Liste auf 100 Zeilen, auch wenn die Abfrage kein <code>$top</code> enthält.</td></tr><tr><td><code>Post</code>: Schlüssel zurücksetzen</td><td>Die Id vergibt die Datenbank. Eine mitgeschickte <code>id</code> wird verworfen, sonst liessen sich Ids vorbelegen, die später mit der Sequenz kollidieren.</td></tr><tr><td><code>Patch</code>: Schlüssel aus dem Delta entfernen</td><td>Eine <code>id</code> im Body wird ignoriert; vorher endete eine solche Anfrage mit dem Status 500.</td></tr></tbody></table>
+<p>Ein konkreter Controller liefert nur noch das <code>DbSet</code> und einen Anzeigenamen:</p>
+<div class="code-block"><div class="code-label">Controllers/CitiesController.cs</div><pre><code>public class CitiesController : ODataCrudController&lt;City&gt;
+{
+    protected override DbSet&lt;City&gt; Entities     =&gt; _context.Cities;
+    protected override string EntityDisplayName =&gt; "Stadt";
+
+    public CitiesController(AdresseDbContext context) : base(context) { }
+}</code></pre></div>
+<p>Der <code>AdressenController</code> braucht zusätzlich die Benachrichtigung. Er kopiert dafür nicht die <code>Post</code>-Methode, sondern hängt sich an den Erweiterungspunkt <code>OnCreatedAsync</code>:</p>
+<div class="code-block"><div class="code-label">Controllers/AdressenController.cs</div><pre><code>public class AdressenController : ODataCrudController&lt;Adresse&gt;
+{
+    protected override DbSet&lt;Adresse&gt; Entities    =&gt; _context.Adressen;
+    protected override string EntityDisplayName   =&gt; "Adresse";
+
+    private readonly INotificationService _notificationService;
+
+    public AdressenController(
+        AdresseDbContext context,
+        INotificationService notificationService) : base(context)
+    {
+        _notificationService = notificationService;
+    }
+
+    protected override Task OnCreatedAsync(Adresse adresse)
+        =&gt; _notificationService.NotifyNewAdresseAsync(adresse);
+}</code></pre></div>
+<div class="box box-tip"><div class="box-title">Neue Entität über OData anbieten</div><p>Vier Schritte: Modell anlegen, <code>DbSet</code> im <code>AdresseDbContext</code> ergänzen, <code>modelBuilder.EntitySet&lt;T&gt;("Name")</code> in <code>Program.cs</code> eintragen und einen Controller schreiben, dessen Name zum EntitySet passt.</p></div>
+<h2 id="kap4-4">4.4 AuthController – Login, Registrierung und Abmeldung</h2>
+<div class="code-block"><div class="code-label">Dtos/AuthDtos.cs</div><pre><code>/// &lt;summary&gt;Request-Body für POST /auth/register&lt;/summary&gt;
+public record RegisterRequest(
+    [Required][EmailAddress][MaxLength(256)] string Email,
+    [Required][MinLength(8)][MaxLength(128)] string Password,
+    [Required][MaxLength(100)] string DisplayName,
+    /// &lt;summary&gt;"Admin" oder "User"; ohne Angabe "User".&lt;/summary&gt;
+    [MaxLength(20)] string? Role = null
+);
+
+/// &lt;summary&gt;Request-Body für POST /auth/login&lt;/summary&gt;
+public record LoginRequest(
+    [Required][EmailAddress][MaxLength(256)] string Email,
+    [Required][MaxLength(128)] string Password
+);
+
+/// &lt;summary&gt;
+/// Antwort-Body für erfolgreichen POST /auth/login.
+/// Enthält den JWT Bearer-Token, den das Frontend bei jedem API-Aufruf
+/// im Authorization-Header mitsendet.
+/// &lt;/summary&gt;
+public record LoginResponse(
+    string Id,
+    string Name,
+    string Email,
+    string Role,
+    string Token
+);</code></pre></div>
+<div class="code-block"><div class="code-label">Controllers/AuthController.cs – Login</div><pre><code>// POST /auth/login
+// Gibt { id, name, email, token } zurück – das Format, das NextAuth.js erwartet
+[AllowAnonymous]
+[HttpPost("login")]
+public async Task&lt;IActionResult&gt; Login([FromBody] LoginRequest req)
+{
+    if (!ModelState.IsValid)
+    {
+        return BadRequest(ModelState);
+    }
+
+    // Nach zu vielen Fehlversuchen ist die Adresse vorübergehend gesperrt –
+    // auch für das richtige Passwort und auch für unbekannte Adressen.
+    if (_throttle.IsBlocked(req.Email))
+    {
+        return StatusCode(StatusCodes.Status429TooManyRequests,
+            new { message = "Zu viele Anmeldeversuche. Bitte später erneut versuchen." });
+    }
+
+    var user = await FindUserByEmailAsync(req.Email);
+
+    // Passwort prüfen – bei ungültigem Benutzer trotzdem "prüfen"
+    // (verhindert Timing-Angriffe durch gleiche Ausführungszeit)
+    var result = _hasher.VerifyHashedPassword(
+        user ?? DummyUser,
+        user?.PasswordHash ?? DummyHash,
+        req.Password);
+
+    if (user is null || result == PasswordVerificationResult.Failed)
+    {
+        _throttle.RegisterFailure(req.Email);
+
+        // Bewusst generische Fehlermeldung
+        return Unauthorized(new { message = "Ungültige Anmeldedaten." });
+    }
+
+    _throttle.Reset(req.Email);
+
+    return Ok(new LoginResponse(
+        Id:    user.Id.ToString(),
+        Name:  user.DisplayName,
+        Email: user.Email,
+        Role:  user.Role,
+        Token: _tokenService.CreateToken(user)
+    ));
+}</code></pre></div>
+<div class="code-block"><div class="code-label">Controllers/AuthController.cs – Benutzer suchen</div><pre><code>private Task&lt;User?&gt; FindUserByEmailAsync(string email)
+{
+    var normalized = email.Trim().ToUpperInvariant();
+    return _context.Users.FirstOrDefaultAsync(u =&gt; u.Email.ToUpper() == normalized);
+}</code></pre></div>
+<div class="box box-danger"><div class="box-title">Was ist ein Timing-Angriff?</div><p>Ein Angreifer misst die Antwortzeit. Antwortet die API bei unbekannter E-Mail schneller als bei falschem Passwort, verrät sie, welche Adressen registriert sind. Deshalb wird das Passwort immer geprüft – bei unbekannter E-Mail gegen einen festen, einmal berechneten Ersatz-Hash (<code>DummyHash</code>). Auch die Fehlermeldung ist in beiden Fällen dieselbe.</p></div>
+<p>Vor der Passwortprüfung fragt der Controller den <code>ILoginThrottle</code>. Nach fünf Fehlversuchen ist eine E-Mail-Adresse 15 Minuten gesperrt, und das Backend antwortet mit 429 – auch auf das richtige Passwort. Gezählt wird pro Adresse, unabhängig davon, ob es dazu ein Konto gibt. Die Sperre verrät also nicht, welche Konten existieren.</p>
+<div class="code-block"><div class="code-label">Services/MemoryLoginThrottle.cs</div><pre><code>public sealed class MemoryLoginThrottle : ILoginThrottle, IDisposable
+{
+    public const int MaxFailures = 5;
+    public static readonly TimeSpan Window = TimeSpan.FromMinutes(15);
+
+    // Obergrenze, damit sich der Speicher nicht mit erfundenen Adressen füllen lässt
+    private const int MaxTrackedEmails = 10_000;
+
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = MaxTrackedEmails });
+
+    private sealed class Counter { public int Failures; }
+
+    public bool IsBlocked(string email)
+        =&gt; _cache.TryGetValue(Key(email), out Counter? counter)
+           &amp;&amp; Volatile.Read(ref counter!.Failures) &gt;= MaxFailures;
+
+    public void RegisterFailure(string email)
+    {
+        var counter = _cache.GetOrCreate(Key(email), entry =&gt;
+        {
+            entry.AbsoluteExpirationRelativeToNow = Window;
+            entry.Size = 1;
+            return new Counter();
+        });
+
+        Interlocked.Increment(ref counter!.Failures);
+    }
+
+    public void Reset(string email) =&gt; _cache.Remove(Key(email));
+
+    public void Dispose() =&gt; _cache.Dispose();
+
+    private static string Key(string email) =&gt; email.Trim().ToUpperInvariant();
+}</code></pre></div>
+<div class="box box-info"><div class="box-title">Zwei Bremsen</div><p>nginx begrenzt die Anmeldeversuche pro Client-IP (Kapitel 7.3), der Throttle pro E-Mail-Adresse. Die zweite Bremse wirkt auch dann, wenn ein Angreifer seine Versuche über viele IP-Adressen verteilt. Der Zähler liegt im Arbeitsspeicher und geht bei einem Neustart des Backends verloren.</p></div>
+<p>Die Registrierung verlangt die Rolle <code>Admin</code>. Der Grund: Jeder Benutzer hat Zugriff auf alle Adressen. Könnte sich jeder selbst registrieren, wäre die Anmeldung wirkungslos. Die Rolle des neuen Benutzers steht im optionalen Feld <code>role</code>; ohne Angabe ist es <code>User</code>.</p>
+<div class="code-block"><div class="code-label">Controllers/AuthController.cs – Registrierung</div><pre><code>// POST /auth/register
+// Nur für Administratoren: Neue Benutzer erhalten Zugriff auf alle Adressen,
+// deshalb darf sich niemand selbst registrieren.
+[Authorize(Roles = Roles.Admin)]
+[HttpPost("register")]
+public async Task&lt;IActionResult&gt; Register([FromBody] RegisterRequest req)
+{
+    if (!ModelState.IsValid)
+    {
+        return BadRequest(ModelState);
+    }
+
+    var role = string.IsNullOrWhiteSpace(req.Role) ? Roles.User : req.Role.Trim();
+    if (!Roles.IsValid(role))
+    {
+        return BadRequest(new { message = $"Unbekannte Rolle. Erlaubt sind {Roles.Admin} und {Roles.User}." });
+    }
+
+    // Gleiche Meldung für neue und bestehende E-Mail → kein User-Enumeration-Angriff möglich
+    if (await FindUserByEmailAsync(req.Email) is null)
+    {
+        var user = new User
+        {
+            Email       = req.Email.Trim().ToLowerInvariant(),
+            DisplayName = req.DisplayName.Trim(),
+            Role        = role,
+        };
+        user.PasswordHash = _hasher.HashPassword(user, req.Password);
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+    }
+
+    return Ok(new { message = RegisterMessage });
+}</code></pre></div>
+<p>Die Abmeldung erhöht die Token-Version des Benutzers. Alle Tokens, die er bis dahin erhalten hat, sind danach ungültig (Kapitel 5.5):</p>
+<div class="code-block"><div class="code-label">Controllers/AuthController.cs – Abmeldung</div><pre><code>// POST /auth/logout
+// Widerruft alle Tokens des angemeldeten Benutzers (auch die anderer Geräte):
+// Die Token-Version wird erhöht, ältere Tokens weist TokenUserValidator danach ab.
+[HttpPost("logout")]
+public async Task&lt;IActionResult&gt; Logout()
+{
+    if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+    {
+        return Unauthorized();
+    }
+
+    await _context.Users
+        .Where(u =&gt; u.Id == userId)
+        .ExecuteUpdateAsync(s =&gt; s.SetProperty(u =&gt; u.TokenVersion, u =&gt; u.TokenVersion + 1));
+
+    return NoContent();
+}</code></pre></div>
+<h2 id="kap4-5">4.5 Typisierte Konfiguration</h2>
+<p>Konfigurationswerte liest das Backend nicht über Zeichenketten wie <code>config["Jwt:Key"]</code>, sondern über typisierte Klassen (Options-Pattern). Tippfehler in Schlüsselnamen fallen so beim Kompilieren auf, und Zahlen oder Wahrheitswerte müssen nicht von Hand geparst werden.</p>
+<div class="code-block"><div class="code-label">Options/JwtOptions.cs</div><pre><code>public class JwtOptions
+{
+    public const string SectionName = "Jwt";
+
+    /// &lt;summary&gt;HS256 braucht mindestens 256 Bit, also 32 Zeichen.&lt;/summary&gt;
+    public const int MinKeyLength = 32;
+
+    public string Key            { get; set; } = string.Empty;
+    public string Issuer         { get; set; } = string.Empty;
+    public string Audience       { get; set; } = string.Empty;
+    public double ExpiresInHours { get; set; } = 8;
+}</code></pre></div>
+<div class="box box-info"><div class="box-title">Doppelter Unterstrich in Umgebungsvariablen</div><p>ASP.NET Core trennt Konfigurationsebenen mit <code>:</code> (<code>Jwt:Key</code>). In Umgebungsvariablen steht dafür <code>__</code>: <code>Jwt__Key</code> entspricht <code>Jwt:Key</code>. So überschreibt <code>docker-compose.yml</code> die Werte aus <code>appsettings.json</code>.</p></div>
+<h2 id="kap4-6">4.6 E-Mail-Benachrichtigung</h2>
+<table><thead><tr><th>Interface</th><th>Implementierung</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>INotificationService</code></td><td><code>EmailNotificationService</code></td><td>Fachlogik: «Neue Adresse erfasst», kennt Empfänger und Text</td></tr><tr><td><code>IEmailService</code></td><td><code>EmailService</code></td><td>Technik: eine E-Mail über SMTP senden</td></tr></tbody></table>
+<div class="code-block"><div class="code-label">Services/EmailNotificationService.cs</div><pre><code>public async Task NotifyNewAdresseAsync(Adresse adresse)
+{
+    try
+    {
+        var settings = await _context.Settings.FirstOrDefaultAsync();
+
+        if (settings is null || string.IsNullOrWhiteSpace(settings.NotificationEmail))
+        {
+            _logger.LogInformation(
+                "Keine Benachrichtigungs-E-Mail konfiguriert. Adresse {Id} gespeichert.", adresse.Id);
+            return;
+        }
+
+        var betreff = $"Neue Adresse erfasst: {adresse.Vorname} {adresse.Name}";
+        var inhalt  = $"""
+            Neue Adresse wurde erfasst:
+
+            Name:    {adresse.Vorname} {adresse.Name}
+            Strasse: {adresse.Strasse} {adresse.Strassennummer}
+            PLZ/Ort: {adresse.Plz} {adresse.Ort}
+            """;
+
+        await _emailService.SendAsync(settings.NotificationEmail, betreff, inhalt);
+    }
+    catch (Exception ex)
+    {
+        // Fehler beim E-Mail-Versand blockiert NICHT die API-Antwort
+        _logger.LogError(ex, "Fehler beim E-Mail-Versand für Adresse {Id}.", adresse.Id);
+    }
+}</code></pre></div>
+<div class="box box-tip"><div class="box-title">Warum der Fehler nicht weitergegeben wird</div><p>Die Adresse ist bereits gespeichert, wenn die E-Mail versendet wird. Würde ein Fehler beim Versand die Anfrage scheitern lassen, sähe der Benutzer eine Fehlermeldung, obwohl seine Daten gespeichert sind. Deshalb wird der Fehler nur geloggt.</p></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 4</h4><ul><li>Ordner nach Aufgabe: <code>Controllers</code>, <code>Data</code>, <code>Dtos</code>, <code>Models</code>, <code>Options</code>, <code>Services</code>.</li><li>OData-Optionen und Eigenschaften in camelCase; <code>$top</code> ist auf 100 begrenzt.</li><li>Die CRUD-Logik steht einmal in <code>ODataCrudController&lt;T&gt;</code>; <code>[Authorize]</code> schützt alle abgeleiteten Controller.</li><li>Listen liefern höchstens 100 Zeilen; eine mitgeschickte <code>id</code> wird verworfen.</li><li>Login mit gleicher Antwortzeit und gleicher Meldung für alle Fehlerfälle; Sperre nach fünf Fehlversuchen.</li><li>Registrierung nur für die Rolle <code>Admin</code>; die Abmeldung widerruft die Tokens des Benutzers.</li><li>Konfiguration über typisierte Options-Klassen.</li></ul></div>
+</section>
+<section id="kap5">
+  <div class="chapter-num">Kapitel 5</div>
+  <h1 id="kap5h">5. JWT – JSON Web Token</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kannst den Aufbau eines JWT erklären.</li><li>Du weisst, wo das Backend Tokens ausstellt und wo es sie prüft.</li><li>Du kannst erklären, wie Rollen geprüft und Tokens widerrufen werden.</li><li>Du verstehst, wie das Frontend das Token aufbewahrt, ohne dass es den Browser erreicht.</li></ul></div>
+<h2 id="kap5-1">5.1 Was ist ein JWT?</h2>
+<p>Ein <strong>JSON Web Token</strong> (RFC 7519) ist ein signiertes Datenpaket. Es enthält Angaben zum Benutzer und ein Ablaufdatum. Der Server muss keine Sitzungstabelle führen: Alles Nötige steht im Token selbst.</p>
+<div class="jwt-vis"><span class="jwt-h">Header</span><span class="jwt-dot">.</span><span class="jwt-p">Payload</span><span class="jwt-dot">.</span><span class="jwt-s">Signatur</span></div>
+<table><thead><tr><th>Teil</th><th>Inhalt</th><th>Zweck</th></tr></thead><tbody><tr><td>Header</td><td><code>{"alg":"HS256","typ":"JWT"}</code></td><td>Signaturverfahren</td></tr><tr><td>Payload</td><td><code>sub</code>, <code>email</code>, <code>name</code>, <code>jti</code>, <code>tv</code>, <code>exp</code>, <code>iss</code>, <code>aud</code></td><td>Angaben (Claims) zum Benutzer und zur Gültigkeit</td></tr><tr><td>Signatur</td><td>HMAC-SHA256 über Header und Payload</td><td>Schutz vor Veränderung</td></tr></tbody></table>
+<div class="box box-warn"><div class="box-title">Signiert, nicht verschlüsselt</div><p>Header und Payload sind nur Base64url-kodiert; jeder kann sie lesen (zum Beispiel auf jwt.io). Vertrauliche Daten gehören nicht ins Token. Die Signatur verhindert nur, dass jemand den Inhalt ändert, ohne den Schlüssel zu kennen.</p></div>
+<h2 id="kap5-2">5.2 Zwei Tokens</h2>
+<p>Im Projekt gibt es zwei Schichten:</p>
+<ol><li>Das <strong>Backend-JWT</strong> stellt das Backend beim Login aus. Es weist den Benutzer gegenüber der API aus.</li><li>Das <strong>Session-Cookie</strong> von NextAuth ist die Sitzung des Frontends. NextAuth legt das Backend-JWT verschlüsselt darin ab.</li></ol>
+<p>Beide gelten 8 Stunden (<code>Jwt:ExpiresInHours</code> im Backend, <code>maxAge</code> in NextAuth) und müssen gemeinsam geändert werden. Bei der Abmeldung löscht NextAuth das Cookie und meldet die Abmeldung dem Backend, das die Tokens des Benutzers widerruft.</p>
+<h2 id="kap5-3">5.3 JWT im Backend konfigurieren</h2>
+<div class="code-block"><div class="code-label">Program.cs – JWT-Authentifizierung</div><pre><code>// === JWT-AUTHENTIFIZIERUNG ===
+// Der Bearer-Token wird vom AuthController ausgestellt und bei jedem
+// geschützten API-Aufruf im Authorization-Header mitgesendet.
+var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
+var jwtOptions = jwtSection.Get&lt;JwtOptions&gt;() ?? new JwtOptions();
+
+if (string.IsNullOrWhiteSpace(jwtOptions.Key))
+    throw new InvalidOperationException("JWT-Schlüssel (Jwt:Key) ist nicht konfiguriert.");
+
+// HS256 braucht mindestens 256 Bit; Platzhalter aus Vorlagen werden abgelehnt,
+// weil sich mit einem bekannten Schlüssel beliebige Tokens fälschen lassen.
+if (Encoding.UTF8.GetByteCount(jwtOptions.Key) &lt; JwtOptions.MinKeyLength
+    || jwtOptions.Key.StartsWith("dein-geheimer-jwt-schluessel"))
+    throw new InvalidOperationException(
+        "JWT-Schlüssel (Jwt:Key) ist zu kurz oder ein Platzhalter. Eigenen Schlüssel mit mindestens 32 Zeichen setzen, z.B. mit 'openssl rand -base64 32'.");
+
+builder.Services.Configure&lt;JwtOptions&gt;(jwtSection);
+builder.Services.AddSingleton&lt;ITokenService, JwtTokenService&gt;();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =&gt;
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer           = true,
+            ValidateAudience         = true,
+            ValidateLifetime         = true,
+            ValidateIssuerSigningKey = true,
+            // Nur das Verfahren akzeptieren, mit dem JwtTokenService signiert
+            ValidAlgorithms          = [SecurityAlgorithms.HmacSha256],
+            ValidIssuer              = jwtOptions.Issuer,
+            ValidAudience            = jwtOptions.Audience,
+            IssuerSigningKey         = new SymmetricSecurityKey(
+                                           Encoding.UTF8.GetBytes(jwtOptions.Key)),
+            // Claim "name" aus dem Token als Identity.Name verwenden
+            // (wird für die Audit-Felder CreatedBy/ChangedBy benötigt)
+            NameClaimType            = "name",
+        };
+
+        // Bei jeder Anfrage prüfen, ob es den Benutzer noch gibt und das Token
+        // nicht widerrufen ist; dabei die aktuelle Rolle aus der Datenbank übernehmen.
+        options.Events = new JwtBearerEvents { OnTokenValidated = TokenUserValidator.ValidateAsync };
+    });
+
+// Jeder Endpunkt verlangt ein gültiges JWT, auch ohne eigenes [Authorize] – das gilt
+// damit ebenso für /odata und /odata/$metadata. Ausnahmen brauchen [AllowAnonymous].
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());</code></pre></div>
+<table><thead><tr><th>Prüfung</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>ValidateIssuerSigningKey</code></td><td>Die Signatur passt zum geheimen Schlüssel.</td></tr><tr><td><code>ValidateIssuer</code>, <code>ValidateAudience</code></td><td>Das Token wurde von dieser API für dieses Frontend ausgestellt.</td></tr><tr><td><code>ValidateLifetime</code></td><td>Das Token ist noch nicht abgelaufen.</td></tr><tr><td><code>ValidAlgorithms</code></td><td>Nur HS256 wird akzeptiert – das Verfahren, mit dem das Backend selbst signiert.</td></tr><tr><td><code>NameClaimType = "name"</code></td><td>Der Claim <code>name</code> wird zu <code>User.Identity.Name</code> – daraus entstehen <code>CreatedBy</code> und <code>ChangedBy</code>.</td></tr><tr><td><code>OnTokenValidated</code></td><td>Nach der Signaturprüfung gleicht <code>TokenUserValidator</code> das Token mit der Datenbank ab (Kapitel 5.5).</td></tr><tr><td><code>SetFallbackPolicy</code></td><td>Jeder Endpunkt verlangt ein Token, auch ohne eigenes <code>[Authorize]</code>.</td></tr></tbody></table>
+<div class="box box-danger"><div class="box-title">Schlüssel schützen</div><p>Wer den Schlüssel kennt, kann Tokens für beliebige Benutzer fälschen. Deshalb steht er in <code>.env</code>, und das Backend verweigert den Start bei einem fehlenden, zu kurzen oder als Platzhalter erkannten Schlüssel.</p></div>
+<h2 id="kap5-4">5.4 JWT ausstellen</h2>
+<p>Das Ausstellen ist eine eigene Aufgabe und steht deshalb nicht im Controller, sondern in einem Dienst hinter dem Interface <code>ITokenService</code> (SRP):</p>
+<div class="code-block"><div class="code-label">Services/JwtTokenService.cs</div><pre><code>public class JwtTokenService : ITokenService
+{
+    public const string TokenVersionClaim = "tv";
+
+    private readonly JwtOptions _options;
+
+    public JwtTokenService(IOptions&lt;JwtOptions&gt; options)
+    {
+        _options = options.Value;
+    }
+
+    public string CreateToken(User user)
+    {
+        var key   = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Key));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        // Claims = Informationen, die im Token gespeichert werden
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub,   user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim(JwtRegisteredClaimNames.Name,  user.DisplayName),
+            new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
+            // Version für den Widerruf: Nach einer Abmeldung passt sie nicht mehr
+            new Claim(TokenVersionClaim, user.TokenVersion.ToString(), ClaimValueTypes.Integer32),
+        };
+
+        var token = new JwtSecurityToken(
+            issuer:             _options.Issuer,
+            audience:           _options.Audience,
+            claims:             claims,
+            expires:            DateTime.UtcNow.AddHours(_options.ExpiresInHours),
+            signingCredentials: creds
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}</code></pre></div>
+<table><thead><tr><th>Claim</th><th>Inhalt</th></tr></thead><tbody><tr><td><code>sub</code></td><td>Id des Benutzers</td></tr><tr><td><code>email</code></td><td>E-Mail-Adresse</td></tr><tr><td><code>name</code></td><td>Anzeigename, erscheint in den Audit-Feldern</td></tr><tr><td><code>jti</code></td><td>Eindeutige Id des Tokens</td></tr><tr><td><code>tv</code></td><td>Token-Version des Benutzers beim Ausstellen</td></tr><tr><td><code>exp</code></td><td>Ablaufzeitpunkt</td></tr></tbody></table>
+<div class="box box-info"><div class="box-title">Die Rolle steht nicht im Token</div><p>Ein Token gilt 8 Stunden. Stünde die Rolle darin, bliebe ein herabgestufter Admin bis zum Ablauf Admin. Deshalb liest das Backend die Rolle bei jeder Anfrage aus der Datenbank.</p></div>
+<h2 id="kap5-5">5.5 Endpunkte schützen</h2>
+<p>Die Fallback-Policy in <code>Program.cs</code> verlangt für jeden Endpunkt ein gültiges Token – auch für <code>/odata/$metadata</code> und für Controller ohne eigenes <code>[Authorize]</code>. Die einzige Ausnahme trägt <code>[AllowAnonymous]</code>: <code>POST /auth/login</code>.</p>
+<p>Zwei Endpunkte verlangen zusätzlich die Rolle <code>Admin</code>. Sie tragen <code>[Authorize(Roles = Roles.Admin)]</code>:</p>
+<table><thead><tr><th>Endpunkt</th><th>Ohne Token</th><th>Als <code>User</code></th><th>Als <code>Admin</code></th></tr></thead><tbody><tr><td><code>POST /auth/register</code></td><td>401</td><td>403</td><td>Benutzer wird angelegt</td></tr><tr><td><code>PUT /settings</code></td><td>401</td><td>403</td><td>Einstellungen werden gespeichert</td></tr><tr><td>alle übrigen ausser Login</td><td>401</td><td>erlaubt</td><td>erlaubt</td></tr></tbody></table>
+<p>Eine gültige Signatur allein genügt nicht. Nach der Signaturprüfung gleicht <code>TokenUserValidator</code> das Token mit der Datenbank ab:</p>
+<div class="code-block"><div class="code-label">TokenUserValidator.cs</div><pre><code>public static class TokenUserValidator
+{
+    public static async Task ValidateAsync(TokenValidatedContext context)
+    {
+        var principal = context.Principal;
+
+        if (!int.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+        {
+            context.Fail("Token ohne Benutzer-Id.");
+            return;
+        }
+
+        var db   = context.HttpContext.RequestServices.GetRequiredService&lt;AdresseDbContext&gt;();
+        var user = await db.Users.AsNoTracking()
+            .Where(u =&gt; u.Id == userId)
+            .Select(u =&gt; new { u.Role, u.TokenVersion })
+            .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
+
+        // Tokens aus der Zeit vor dem Widerruf tragen keine Version und gelten als Version 0
+        _ = int.TryParse(principal!.FindFirstValue(JwtTokenService.TokenVersionClaim), out var tokenVersion);
+
+        if (user is null || user.TokenVersion != tokenVersion)
+        {
+            context.Fail("Token widerrufen oder Benutzer nicht mehr vorhanden.");
+            return;
+        }
+
+        ((ClaimsIdentity)principal.Identity!).AddClaim(new Claim(ClaimTypes.Role, user.Role));
+    }
+}</code></pre></div>
+<table><thead><tr><th>Ereignis</th><th>Wirkung</th></tr></thead><tbody><tr><td>Benutzer wurde gelöscht</td><td>Sein Token wird sofort abgewiesen (401).</td></tr><tr><td>Abmeldung oder <code>reset_password.sh</code></td><td><code>TokenVersion</code> steigt um eins; alle älteren Tokens des Benutzers sind ungültig.</td></tr><tr><td>Rolle wurde geändert</td><td>Die neue Rolle gilt ab der nächsten Anfrage.</td></tr></tbody></table>
+<div class="box box-info"><div class="box-title">Der Preis des Widerrufs</div><p>Ein JWT lässt sich eigentlich ohne Datenbank prüfen. Dafür bliebe ein gestohlenes Token bis zu 8 Stunden gültig, und niemand könnte es zurückziehen. Der Abgleich kostet eine kleine Abfrage pro Anfrage; dafür wirken Abmeldung, Löschung und Rollenwechsel sofort.</p></div>
+<div class="box box-warn"><div class="box-title">Reihenfolge der Middleware</div><p>In <code>Program.cs</code> muss <code>app.UseAuthentication()</code> vor <code>app.UseAuthorization()</code> stehen. Sonst kennt die Autorisierung den Benutzer noch nicht, und jede Anfrage endet mit 401.</p></div>
+<h2 id="kap5-6">5.6 JWT im Frontend</h2>
+<p>Der Grundsatz: Das Backend-JWT erreicht den Browser nie. Es liegt im verschlüsselten Session-Cookie von NextAuth, und nur Code auf dem Next.js-Server liest es. JavaScript im Browser – auch eingeschleustes – bekommt das Token nicht zu sehen.</p>
+<p>NextAuth kennt von Haus aus weder <code>accessToken</code> noch <code>role</code>. Eine Typ-Erweiterung macht beide bekannt:</p>
+<div class="code-block"><div class="code-label">types/next-auth.d.ts</div><pre><code>import 'next-auth';
+
+declare module 'next-auth' {
+  // Erweiterung des User-Objekts (Rückgabe von authorize())
+  interface User {
+    accessToken?: string;
+    role?: string;
+  }
+
+  interface Session {
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      /** "Admin" oder "User" – nur für die Anzeige; massgebend ist die Prüfung im Backend. */
+      role?: string;
+    };
+    // Backend-JWT – nur serverseitig gesetzt (getServerSession mit serverAuthOptions)
+    accessToken?: string;
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id?: string;
+    role?: string;
+    accessToken?: string;   // Backend-JWT im verschlüsselten NextAuth-Cookie
+  }
+}</code></pre></div>
+<p>Beim Login ruft NextAuth die Funktion <code>authorize</code> auf. Sie läuft auf dem Next.js-Server und fragt das Backend direkt über das Docker-Netzwerk (<code>INTERNAL_API_URL</code>):</p>
+<div class="code-block"><div class="code-label">lib/auth.ts – authorize</div><pre><code>async authorize(credentials) {
+  if (!credentials?.email || !credentials?.password) return null;
+
+  try {
+    const response = await fetch(`${INTERNAL_API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email:    credentials.email,
+        password: credentials.password,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    // Backend gibt { id, name, email, role, token } zurück (LoginResponse DTO)
+    const user = await response.json() as {
+      id:    string;
+      name:  string;
+      email: string;
+      role:  string;   // "Admin" oder "User"
+      token: string;   // JWT Bearer-Token
+    };
+
+    return {
+      id:          String(user.id),
+      email:       user.email,
+      name:        user.name,
+      role:        user.role,
+      accessToken: user.token,   // wird in jwt-Callback weitergegeben
+    };
+  } catch {
+    // Netzwerk- oder Parse-Fehler → Login verweigern
+    return null;
+  }
+},</code></pre></div>
+<div class="code-block"><div class="code-label">lib/auth.ts – Callbacks</div><pre><code>callbacks: {
+  // Nur Anmeldungen zulassen, für die das Backend ein Token ausgestellt hat.
+  // Google bestätigt lediglich, dass es das Konto gibt – ohne diese Prüfung
+  // erhielte jedes beliebige Google-Konto eine Session.
+  async signIn({ user }) {
+    return user.accessToken ? true : '/login?error=AccessDenied';
+  },
+  // ID und Backend-JWT aus User-Objekt in den NextAuth-Token übernehmen.
+  // Dieser Callback wird beim Login (user vorhanden) und bei jedem Request ausgeführt.
+  async jwt({ token, user }) {
+    if (user) {
+      token.id          = user.id;
+      token.role        = user.role;
+      token.accessToken = user.accessToken;   // Backend-JWT im verschlüsselten Cookie
+    }
+    return token;
+  },
+  // NextAuth-Token in Session-Objekt umwandeln, das das Frontend lesen kann.
+  // F-04: Typsicherer Zugriff dank Module Augmentation in types/next-auth.d.ts
+  // Diese Session geht über /api/auth/session an den Browser – der Backend-JWT
+  // gehört deshalb bewusst NICHT hinein (siehe serverAuthOptions).
+  async session({ session, token }) {
+    if (token?.id &amp;&amp; session.user) {
+      session.user.id   = token.id;
+      session.user.role = token.role;
+    }
+    return session;
+  },
+},</code></pre></div>
+<table><thead><tr><th>Callback</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>signIn</code></td><td>Lässt nur Anmeldungen zu, für die das Backend ein Token ausgestellt hat. Ein Google-Konto ohne Backend-Token wird abgelehnt.</td></tr><tr><td><code>jwt</code></td><td>Legt Id, Rolle und Backend-JWT im verschlüsselten Cookie ab.</td></tr><tr><td><code>session</code></td><td>Bestimmt, was der Browser über <code>/api/auth/session</code> erfährt: nur Id und Rolle, kein Token.</td></tr></tbody></table>
+<p>Server Components brauchen das Token, um das Backend aufzurufen. Für sie gibt es eine zweite Variante der Optionen, die nur mit <code>getServerSession</code> verwendet wird und den Server nie verlässt:</p>
+<div class="code-block"><div class="code-label">lib/auth.ts – serverAuthOptions</div><pre><code>// Variante für getServerSession() in Server Components: Hier bleibt die Session auf
+// dem Server, deshalb darf sie den Backend-JWT für API-Aufrufe enthalten.
+// Nicht im NextAuth-Handler (app/api/auth) verwenden.
+export const serverAuthOptions: NextAuthOptions = {
+  ...authOptions,
+  callbacks: {
+    ...authOptions.callbacks,
+    async session(params) {
+      const session = await authOptions.callbacks!.session!(params) as Session;
+      session.accessToken = params.token.accessToken;
+      return session;
+    },
+  },
+};</code></pre></div>
+<p>Bei der Abmeldung meldet NextAuth dem Backend, dass die Tokens des Benutzers zu widerrufen sind:</p>
+<div class="code-block"><div class="code-label">lib/auth.ts – Abmeldung</div><pre><code>events: {
+  // Abmeldung auch dem Backend melden: Es widerruft dann die ausgestellten Tokens.
+  // Schlägt der Aufruf fehl, läuft das Token spätestens nach 8 Stunden ab.
+  async signOut({ token }) {
+    if (!token?.accessToken) return;
+
+    try {
+      await fetch(`${INTERNAL_API}/auth/logout`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${token.accessToken}` },
+      });
+    } catch (err) {
+      console.error('Abmeldung am Backend fehlgeschlagen', err);
+    }
+  },
+},</code></pre></div>
+<p>Client Components laufen im Browser und haben kein Token. Sie rufen deshalb nicht das Backend auf, sondern den Proxy <code>/api/backend</code> der eigenen Anwendung. Er liest das Token aus dem Cookie und reicht die Anfrage weiter:</p>
+<div class="code-block"><div class="code-label">app/api/backend/[...pfad]/route.ts (Ausschnitt)</div><pre><code>// Nur diese Bereiche des Backends sind über den Proxy erreichbar (nicht /auth)
+const ERLAUBTE_BEREICHE = ['odata', 'settings'];
+
+function fehler(status: number, message: string) {
+  return NextResponse.json({ message }, { status, headers: { 'Cache-Control': 'no-store' } });
+}
+
+async function weiterleiten(req: NextRequest, { params }: { params: Promise&lt;{ pfad: string[] }&gt; }) {
+  const { pfad } = await params;
+
+  const pfadErlaubt =
+    ERLAUBTE_BEREICHE.includes(pfad[0]) &amp;&amp;
+    pfad.every((teil) =&gt; teil !== '.' &amp;&amp; teil !== '..' &amp;&amp; !/[\\/]/.test(teil));
+  if (!pfadErlaubt) return fehler(404, 'Nicht gefunden.');
+
+  // Schutz vor Cross-Site-Request-Forgery: Der Aufruf ist über ein Cookie angemeldet,
+  // also darf ihn keine fremde Seite auslösen können. Den eigenen Header kann eine
+  // fremde Seite nicht setzen (der Browser verlangt dafür eine CORS-Freigabe, die es
+  // nicht gibt), und ein mitgeschickter Origin muss der eigene sein.
+  const origin = req.headers.get('origin');
+  if (!req.headers.has(API_HEADER) || (origin &amp;&amp; new URL(origin).host !== req.headers.get('host'))) {
+    return fehler(403, 'Aufruf nicht erlaubt.');
+  }
+
+  const token = await getToken({ req });
+  if (!token?.accessToken) return fehler(401, 'Nicht angemeldet.');
+
+  const headers: Record&lt;string, string&gt; = { Authorization: `Bearer ${token.accessToken}` };
+  const contentType = req.headers.get('content-type');
+  if (contentType) headers['Content-Type'] = contentType;
+
+  const mitBody = req.method !== 'GET' &amp;&amp; req.method !== 'DELETE';
+  const antwort = await fetch(`${INTERNAL_API}/${pfad.join('/')}${req.nextUrl.search}`, {
+    method: req.method,
+    headers,
+    body: mitBody ? await req.text() : undefined,
+    cache: 'no-store',
+  });
+
+  return new NextResponse(antwort.status === 204 ? null : await antwort.text(), {
+    status: antwort.status,
+    statusText: antwort.statusText,
+    headers: {
+      'Content-Type': antwort.headers.get('content-type') ?? 'application/json',
+      'Cache-Control': 'no-store',
+    },
+  });
+}</code></pre></div>
+<table><thead><tr><th>Prüfung</th><th>Antwort bei Fehler</th><th>Grund</th></tr></thead><tbody><tr><td>Pfad beginnt mit <code>odata</code> oder <code>settings</code></td><td>404</td><td>Der Proxy ist kein allgemeiner Durchgang; <code>/auth</code> ist nicht erreichbar.</td></tr><tr><td>Header <code>x-adressverwaltung</code> vorhanden, <code>Origin</code> ist die eigene Adresse</td><td>403</td><td>Schutz vor Cross-Site-Request-Forgery</td></tr><tr><td>Session mit Backend-Token</td><td>401</td><td>Nicht angemeldet</td></tr></tbody></table>
+<div class="box box-danger"><div class="box-title">Was ist Cross-Site-Request-Forgery?</div><p>Der Proxy erkennt den Benutzer am Cookie, und Cookies schickt der Browser automatisch mit – auch wenn eine fremde Seite den Aufruf auslöst. Ohne Schutz könnte eine präparierte Seite im Namen des angemeldeten Benutzers Adressen löschen. Den eigenen Header kann eine fremde Seite nicht setzen: Der Browser verlangt dafür eine CORS-Freigabe, und die gibt es nicht.</p></div>
+<p><code>apiFetch</code> wählt den Weg nach dem Ort, an dem der Code läuft. Die Funktion arbeitet in beiden Welten – im Browser und auf dem Server:</p>
+<div class="code-block"><div class="code-label">lib/api.ts – apiFetch</div><pre><code>const IM_BROWSER = typeof window !== 'undefined';
+const BASE_URL   = IM_BROWSER
+  ? '/api/backend'
+  : (process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000');
+const ODATA_URL  = `${BASE_URL}/odata`;
+
+async function apiFetch(url: string, init: RequestInit = {}): Promise&lt;Response&gt; {
+  const headers: Record&lt;string, string&gt; = {
+    ...(init.headers as Record&lt;string, string&gt; | undefined ?? {}),
+  };
+
+  if (IM_BROWSER) {
+    // Vom Proxy verlangter Header (Schutz vor Cross-Site-Request-Forgery)
+    headers[API_HEADER] = '1';
+  } else {
+    const session = await getServerSession(serverAuthOptions);
+    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+  }
+
+  const response = await fetch(url, { ...init, headers });
+
+  // 401 im Browser: Die Session ist abgelaufen oder das Token wurde widerrufen
+  // (z.B. Abmeldung auf einem anderen Gerät) → zurück zum Login
+  if (IM_BROWSER &amp;&amp; response.status === 401) {
+    await signOut({ callbackUrl: '/login' });
+  }
+
+  return response;
+}</code></pre></div>
+<table><thead><tr><th></th><th>Im Browser</th><th>Auf dem Server</th></tr></thead><tbody><tr><td>Ziel</td><td><code>/api/backend/…</code> (Proxy)</td><td><code>http://backend:8080/…</code> direkt</td></tr><tr><td>Anmeldung</td><td>Session-Cookie und Header <code>x-adressverwaltung</code></td><td><code>Authorization: Bearer …</code> aus <code>getServerSession</code></td></tr><tr><td>Bei 401</td><td><code>signOut</code> – zurück zur Login-Seite</td><td>Fehler an die aufrufende Seite</td></tr></tbody></table>
+<div class="box box-tip"><div class="box-title">Neuer Backend-Bereich?</div><p>Soll der Browser einen neuen Pfad des Backends erreichen, zum Beispiel <code>/berichte</code>, gehört der Bereich in <code>ERLAUBTE_BEREICHE</code> des Proxys.</p></div>
+<h2 id="kap5-7">5.7 Ablauf: Login bis API-Aufruf</h2>
+<p>Das Sequenzdiagramm zeigt den gesamten Ablauf in 44 Schritten. Jeder Schritt ist in der Schulungsunterlage <code>documentation/Schulungsunterlage_Sequenzdiagramm.pdf</code> einzeln erklärt.</p>
+<p><img src="Sequenzdiagramm.svg" style="width:100%"></p>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 5</h4><ul><li>Ein JWT ist signiert, aber lesbar; es enthält Claims und ein Ablaufdatum.</li><li><code>JwtTokenService</code> stellt das Token aus; die JwtBearer-Middleware und <code>TokenUserValidator</code> prüfen es bei jeder Anfrage.</li><li>Rolle und Token-Version stehen in der Datenbank: Die Abmeldung widerruft Tokens, ein Rollenwechsel gilt sofort.</li><li>NextAuth legt das Backend-JWT im verschlüsselten Session-Cookie ab; der Browser sieht es nie.</li><li>Im Browser ruft <code>apiFetch</code> den Proxy <code>/api/backend</code> auf, auf dem Server sendet es das Token direkt als <code>Authorization: Bearer …</code>.</li><li>Sitzung und Token gelten beide 8 Stunden.</li></ul></div>
+</section>
+<section id="kap6">
+  <div class="chapter-num">Kapitel 6</div>
+  <h1 id="kap6h">6. Frontend – Next.js 15</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kennst die Struktur des Frontends und die Aufgabe jedes Ordners.</li><li>Du kannst Server- und Client-Komponenten unterscheiden.</li><li>Du verstehst, wie alle API-Aufrufe über eine gemeinsame Schicht laufen.</li></ul></div>
+<h2 id="kap6-1">6.1 Projektstruktur</h2>
+<div class="code-block"><div class="code-label">frontend/</div><pre><code>frontend/
+├── app/
+│   ├── layout.tsx                    ← Rahmen mit Navigation und SessionProvider
+│   ├── page.tsx                      ← Adressliste (/)
+│   ├── adressen/neu/page.tsx         ← Adresse erfassen
+│   ├── adressen/[id]/bearbeiten/     ← Adresse bearbeiten
+│   ├── cities/                       ← Städteliste, erfassen, bearbeiten
+│   ├── einstellungen/page.tsx        ← Einstellungen
+│   ├── login/                        ← Login-Seite und -Formular
+│   ├── api/auth/[...nextauth]/       ← NextAuth-Endpunkte
+│   └── api/backend/[...pfad]/        ← Proxy zum Backend (hängt das Token an)
+├── components/
+│   ├── AdresseForm.tsx, CityForm.tsx ← Formulare
+│   ├── ConfirmDialog.tsx             ← Bestätigungsdialog
+│   ├── Fehlermeldung.tsx, Ladeanzeige.tsx
+│   ├── NavBar.tsx
+│   ├── Seitenwahl.tsx                ← Blättern in Listen
+│   └── formStyles.ts                 ← Gemeinsame Tailwind-Klassen
+├── lib/
+│   ├── api.ts                        ← Alle Backend-Aufrufe
+│   ├── apiHeader.ts                  ← Name des Headers für den Proxy
+│   └── auth.ts                       ← NextAuth-Konfiguration
+├── types/                            ← Adresse, City, Audit-Felder, NextAuth-Erweiterung
+└── middleware.ts                     ← Seitenschutz und Content-Security-Policy</code></pre></div>
+<p>Fachliche Namen sind deutsch (<code>getAdressenSeite</code>, <code>erstelleAdresse</code>, <code>fehler</code>), technische englisch.</p>
+<h2 id="kap6-2">6.2 Middleware – Seiten schützen</h2>
+<p>Die Middleware läuft vor jeder Seite und hat zwei Aufgaben: Sie verlangt eine Sitzung, und sie gibt jeder Antwort eine Content-Security-Policy mit.</p>
+<div class="code-block"><div class="code-label">middleware.ts</div><pre><code>import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+
+function contentSecurityPolicy(nonce: string): string {
+  // next dev lädt Code über eval() nach; im ausgelieferten Build ist das nicht nötig
+  const dev = process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : '';
+
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join('; ');
+}
+
+export async function middleware(req: NextRequest) {
+  const { pathname, search } = req.nextUrl;
+  const istLogin = pathname === '/login';
+
+  if (!istLogin) {
+    const token = await getToken({ req });
+
+    if (!token?.accessToken) {
+      // API-Aufrufe beantwortet der Proxy selbst mit 401; Seiten leiten zum Login um
+      if (pathname.startsWith('/api/')) return NextResponse.next();
+
+      const login = new URL('/login', req.url);
+      if (pathname !== '/') login.searchParams.set('callbackUrl', pathname + search);
+      return NextResponse.redirect(login);
+    }
+  }
+
+  const nonce = btoa(crypto.randomUUID());
+  const csp   = contentSecurityPolicy(nonce);
+
+  // Next.js liest die Nonce aus dem CSP-Header der Anfrage und setzt sie in seine Skripte ein
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('Content-Security-Policy', csp);
+  return response;
+}
+
+export const config = {
+  matcher: [
+    '/((?!api/auth|_next/static|_next/image|favicon\\.ico).*)',
+  ],
+};</code></pre></div>
+<p>Jede Seite ausser <code>/login</code> verlangt eine Sitzung, die ein Backend-Token enthält. Wer keine hat, wird auf die Login-Seite umgeleitet; die gewünschte Seite reist als <code>callbackUrl</code> mit.</p>
+<p>Die <strong>Content-Security-Policy</strong> (CSP) sagt dem Browser, woher eine Seite Skripte, Styles und Bilder laden darf. Hier gilt: nur von der eigenen Adresse, und Skripte nur mit der <strong>Nonce</strong> – einem Zufallswert, der für genau eine Antwort gilt. Eingeschleuster Code kennt die Nonce nicht und wird vom Browser nicht ausgeführt.</p>
+<div class="box box-info"><div class="box-title">Warum jede Seite pro Anfrage gerendert wird</div><p>Next.js setzt die Nonce in seine eigenen Skripte ein. Das geht nur, wenn die Seite für jede Anfrage neu entsteht. <code>app/layout.tsx</code> ruft deshalb <code>await headers()</code> auf. Eine statisch erzeugte Seite hätte keine Nonce, und der Browser würde ihre Skripte blockieren.</p></div>
+<div class="box box-warn"><div class="box-title">Die Middleware schützt nur die Seiten</div><p>Die Daten schützt das Backend mit <code>[Authorize]</code>. Auch wenn jemand die Middleware umginge, bekäme er ohne gültiges Token keine Daten.</p></div>
+<h2 id="kap6-3">6.3 Server und Client Components</h2>
+<table><thead><tr><th></th><th>Server Component</th><th>Client Component</th></tr></thead><tbody><tr><td>Kennzeichen</td><td>kein <code>use client</code></td><td><code>'use client'</code> in der ersten Zeile</td></tr><tr><td>Läuft</td><td>auf dem Next.js-Server</td><td>im Browser</td></tr><tr><td>Kann</td><td>direkt <code>await</code> verwenden, Umgebungsvariablen lesen</td><td>auf Eingaben reagieren, <code>useState</code> und <code>useEffect</code> verwenden</td></tr><tr><td>Im Projekt</td><td>Städteliste, Login-Seite, Layout</td><td>Adressliste, alle Formulare, Navigation</td></tr></tbody></table>
+<p>Die Städteliste lädt ihre Daten auf dem Server und liefert fertiges HTML:</p>
+<div class="code-block"><div class="code-label">app/cities/page.tsx (Ausschnitt)</div><pre><code>export const dynamic = 'force-dynamic'; // Kein statisches Caching
+
+interface Props {
+  // ?seite=2&amp;suche=80 – Blättern und Suchen laufen über die URL
+  searchParams: Promise&lt;{ seite?: string; suche?: string }&gt;;
+}
+
+export default async function CitiesPage({ searchParams }: Props) {
+  const parameter = await searchParams;
+  const suche     = (parameter.suche ?? '').slice(0, 100);
+  const seite     = Math.max(1, Number.parseInt(parameter.seite ?? '1', 10) || 1);
+
+  let ladefehler: string | null = null;
+  let cities: Awaited&lt;ReturnType&lt;typeof getCitiesSeite&gt;&gt;['eintraege'] = [];
+  let gesamt = 0;
+
+  try {
+    const daten = await getCitiesSeite(seite, suche);
+    cities = daten.eintraege;
+    gesamt = daten.gesamt;
+  } catch (err) {
+    console.error(err);
+    ladefehler = 'Städte konnten nicht geladen werden.';
+  }</code></pre></div>
+<p>Blättern und Suchen laufen über die URL: <code>/cities?seite=2&amp;suche=80</code>. Das Suchfeld ist ein gewöhnliches GET-Formular, die Seitenwahl besteht aus Links – beides funktioniert ohne JavaScript im Browser.</p>
+<p>Die Adressliste lädt im Browser, damit sie nach dem Löschen sofort reagieren kann. Die aktuelle Seite liegt hier im Zustand (<code>useState</code>):</p>
+<div class="code-block"><div class="code-label">app/page.tsx (Ausschnitt)</div><pre><code>// F-06: useCallback – ladeDaten hat stabile Referenz, kein Rebuild bei jedem Render
+const ladeDaten = useCallback(async () =&gt; {
+  try {
+    setLadevorgang(true);
+    setFehler(null);
+    const daten = await getAdressenSeite(seite);
+    setAdressen(daten.eintraege);
+    setGesamt(daten.gesamt);
+
+    // Letzte Zeile der letzten Seite gelöscht → eine Seite zurück
+    if (daten.eintraege.length === 0 &amp;&amp; seite &gt; 1) setSeite(seite - 1);
+  } catch (err) {
+    setFehler(
+      'Fehler beim Laden der Adressen. Läuft das Backend und ist nginx erreichbar?'
+    );
+    console.error(err);
+  } finally {
+    setLadevorgang(false);
+  }
+}, [seite]);
+
+useEffect(() =&gt; {
+  ladeDaten();
+}, [ladeDaten]);</code></pre></div>
+<div class="box box-info"><div class="box-title">Eine API-Schicht für beide Welten</div><p><code>lib/api.ts</code> wird von Server- und Client-Komponenten verwendet. Auf dem Server spricht sie das Backend direkt an (<code>INTERNAL_API_URL</code>), im Browser den Proxy <code>/api/backend</code> (Kapitel 5.6). Alles, was dort neu hinzukommt, muss in beiden Welten funktionieren.</p></div>
+<h2 id="kap6-4">6.4 Die API-Schicht lib/api.ts</h2>
+<p>Jeder Aufruf besteht aus denselben Schritten: senden, Status prüfen, bei Fehler abbrechen. Hilfsfunktionen übernehmen das (DRY); <code>leseSeite</code> ergänzt das Blättern:</p>
+<div class="code-block"><div class="code-label">lib/api.ts – Hilfsfunktionen</div><pre><code>type RawEntity = Record&lt;string, unknown&gt;;
+
+// Führt den Aufruf aus und wirft einen Fehler, wenn das Backend keinen Erfolg meldet.
+async function apiRequest(url: string, fehlertext: string, init: RequestInit = {}): Promise&lt;Response&gt; {
+  const response = await apiFetch(url, { cache: 'no-store', ...init });
+
+  if (!response.ok) {
+    throw new Error(`${fehlertext}: ${response.statusText}`);
+  }
+
+  return response;
+}
+
+// Request-Optionen für Aufrufe mit JSON-Body (POST, PATCH, PUT)
+function jsonRequest(method: 'POST' | 'PATCH' | 'PUT', daten: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(daten),
+  };
+}
+
+// OData-Collection ({ value: [...] }) lesen und jede Zeile normalisieren
+async function leseListe&lt;T&gt;(response: Response, normalize: (raw: RawEntity) =&gt; T): Promise&lt;T[]&gt; {
+  const data = await response.json() as { value: RawEntity[] };
+  return data.value.map(normalize);
+}
+
+// Eine Seite einer Liste samt Gesamtzahl aller Treffer
+export interface Seite&lt;T&gt; {
+  eintraege: T[];
+  gesamt: number;
+}
+
+// Zeilen pro Seite in den Listen. Das Backend liefert höchstens 100 Zeilen pro Antwort.
+export const SEITENGROESSE = 25;
+
+// Hochkomma verdoppeln, damit eine Eingabe das OData-Stringliteral nicht verlassen kann
+function odataText(wert: string): string {
+  return wert.replace(/'/g, "''");
+}
+
+// Liest eine Seite: $top/$skip blättern, $count=true liefert die Gesamtzahl mit
+async function leseSeite&lt;T&gt;(
+  url: string,
+  seite: number,
+  fehlertext: string,
+  normalize: (raw: RawEntity) =&gt; T
+): Promise&lt;Seite&lt;T&gt;&gt; {
+  const trenner = url.includes('?') ? '&amp;' : '?';
+  const skip    = (Math.max(1, seite) - 1) * SEITENGROESSE;
+  const response = await apiRequest(
+    `${url}${trenner}$top=${SEITENGROESSE}&amp;$skip=${skip}&amp;$count=true`,
+    fehlertext
+  );
+  const data = await response.json() as { value: RawEntity[]; '@odata.count'?: number };
+
+  return {
+    eintraege: data.value.map(normalize),
+    gesamt:    data['@odata.count'] ?? data.value.length,
+  };
+}</code></pre></div>
+<p>Die eigentlichen Funktionen sind dadurch kurz:</p>
+<div class="code-block"><div class="code-label">lib/api.ts – Adressen</div><pre><code>// GET /odata/Adressen?$orderby=…&amp;$top=…&amp;$skip=…&amp;$count=true – Eine Seite der Adressen
+export async function getAdressenSeite(seite: number): Promise&lt;Seite&lt;Adresse&gt;&gt; {
+  return leseSeite(
+    `${ODATA_URL}/Adressen?$orderby=name,vorname,id`,
+    seite,
+    'Fehler beim Abrufen der Adressen',
+    normalizeAdresse
+  );
+}
+
+// GET /odata/Adressen(id) – Einzelne Adresse abrufen
+export async function getAdresse(id: number): Promise&lt;Adresse&gt; {
+  const response = await apiRequest(`${ODATA_URL}/Adressen(${id})`, `Adresse ${id} nicht gefunden`);
+  return normalizeAdresse(await response.json() as RawEntity);
+}
+
+// POST /odata/Adressen – Neue Adresse erstellen
+export async function erstelleAdresse(adresse: AdresseCreate): Promise&lt;Adresse&gt; {
+  const response = await apiRequest(
+    `${ODATA_URL}/Adressen`,
+    'Fehler beim Erstellen',
+    jsonRequest('POST', adresse)
+  );
+  return normalizeAdresse(await response.json() as RawEntity);
+}</code></pre></div>
+<div class="box box-info"><div class="box-title">Blättern braucht eine feste Reihenfolge</div><p>Ohne <code>$orderby</code> ist die Reihenfolge der Zeilen nicht festgelegt; dieselbe Adresse könnte auf zwei Seiten erscheinen oder ganz fehlen. Die <code>id</code> am Schluss macht die Sortierung auch bei gleichen Namen eindeutig.</p></div>
+<h3>Typen</h3>
+<p>Was an die API gesendet wird, ist vom gespeicherten Datensatz abgeleitet: ohne <code>id</code> und ohne Audit-Felder. Zwei generische Typen erledigen das für alle Entitäten:</p>
+<div class="code-block"><div class="code-label">types/auditable.ts (Ausschnitt)</div><pre><code>/** Felder, die das Backend selbst vergibt und die der Client nie sendet. */
+type ServerFields = 'id' | 'createDate' | 'createdBy' | 'changeDate' | 'changedBy';
+
+/**
+ * F-08: Typ für das Erstellen einer Entität.
+ * id und Audit-Felder entfallen; der Gültigkeitszeitraum ist optional
+ * (dateFrom: Standard heute, dateTo: Standard null = unbegrenzt gültig).
+ */
+export type CreateOf&lt;T extends AuditFields&gt; = Omit&lt;T, ServerFields | 'dateFrom' | 'dateTo'&gt; &amp; {
+  dateFrom?: string;
+  dateTo?: string | null;
+};
+
+/** F-08: Typ für das Aktualisieren (alle Felder optional, Server-Felder ausgeschlossen). */
+export type UpdateOf&lt;T extends AuditFields&gt; = Partial&lt;Omit&lt;T, ServerFields&gt;&gt;;</code></pre></div>
+<div class="code-block"><div class="code-label">types/adresse.ts</div><pre><code>/**
+ * Repräsentiert eine vollständige Adresse (wie in der Datenbank gespeichert).
+ * Enthält alle Audit-Felder via AuditFields (read-only, vom Backend gesetzt).
+ */
+export interface Adresse extends AuditFields {
+  id: number;
+  vorname: string;
+  name: string;
+  strasse: string;
+  strassennummer: string;
+  plz: string;
+  ort: string;
+}
+
+/** Typ für das Erstellen einer neuen Adresse (siehe CreateOf). */
+export type AdresseCreate = CreateOf&lt;Adresse&gt;;
+
+/** Typ für das Aktualisieren einer Adresse (siehe UpdateOf). */
+export type AdresseUpdate = UpdateOf&lt;Adresse&gt;;</code></pre></div>
+<h2 id="kap6-5">6.5 Formulare und PLZ-Wertehilfe</h2>
+<p>Alle Formularfelder sind <strong>Controlled Inputs</strong>: Ihr Wert liegt im React-Zustand (<code>useState</code>), jede Eingabe aktualisiert ihn. Beim Absenden liest das Formular die Werte aus dem Zustand.</p>
+<p>Die PLZ-Wertehilfe fragt ab zwei Zeichen passende Städte ab. Damit nicht jeder Tastendruck eine Anfrage auslöst, wartet sie 300 Millisekunden (Debounce):</p>
+<div class="code-block"><div class="code-label">components/AdresseForm.tsx – PLZ-Suche</div><pre><code>// Debounced PLZ-Suche: API erst nach einer kurzen Eingabepause aufrufen
+useEffect(() =&gt; {
+  if (plz.length &lt; PLZ_SUCHE_MIN_LAENGE) {
+    setVorschlaege([]);
+    setZeigeDropdown(false);
+    return;
+  }
+
+  setSucheLaeuft(true);
+  const timer = setTimeout(async () =&gt; {
+    const treffer = await sucheStaedteNachPlz(plz);
+    setVorschlaege(treffer);
+    setZeigeDropdown(treffer.length &gt; 0);
+    setSucheLaeuft(false);
+  }, PLZ_SUCHE_VERZOEGERUNG_MS);
+
+  return () =&gt; clearTimeout(timer);
+}, [plz]);</code></pre></div>
+<div class="code-block"><div class="code-label">lib/api.ts – sucheStaedteNachPlz</div><pre><code>// GET /odata/Cities?$filter=startswith(postalCode,'prefix')&amp;$top=10
+// Für die PLZ-Wertehilfe im Adressformular. Liefert bei Fehlern eine leere Liste,
+// damit die Eingabe im Formular nicht blockiert wird.
+export async function sucheStaedteNachPlz(plzPrefix: string): Promise&lt;City[]&gt; {
+  if (!plzPrefix || plzPrefix.length &lt; PLZ_SUCHE_MIN_LAENGE) return [];
+
+  const filter = encodeURIComponent(`startswith(postalCode,'${odataText(plzPrefix)}')`);
+  const response = await apiFetch(
+    `${ODATA_URL}/Cities?$filter=${filter}&amp;$top=${PLZ_SUCHE_MAX_TREFFER}&amp;$orderby=postalCode`,
+    { cache: 'no-store' }
+  );
+
+  if (!response.ok) return [];
+
+  return leseListe(response, normalizeCity);
+}</code></pre></div>
+<div class="box box-warn"><div class="box-title">Eingaben nie ungeprüft in Abfragen einsetzen</div><p>Ein Hochkomma in der Eingabe würde das OData-Stringliteral beenden und den Filter verändern. Deshalb verdoppelt <code>odataText</code> es – in der Wertehilfe ebenso wie in der Suche der Städteliste.</p></div>
+<h2 id="kap6-6">6.6 Gemeinsame Bausteine</h2>
+<p>Fehlermeldungen erscheinen im Formular, nicht in einem Browser-Dialog. <code>alert()</code> und <code>confirm()</code> kommen im Projekt nicht vor; stattdessen gibt es kleine, wiederverwendbare Komponenten:</p>
+<div class="code-block"><div class="code-label">components/Fehlermeldung.tsx</div><pre><code>interface Props {
+  /** Fehlertext; bei null oder leerem Text wird nichts gerendert. */
+  meldung: string | null;
+  className?: string;
+}
+
+export default function Fehlermeldung({ meldung, className = '' }: Props) {
+  if (!meldung) return null;
+
+  return (
+    &lt;div
+      role="alert"
+      className={`bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm ${className}`}
+    &gt;
+      {meldung}
+    &lt;/div&gt;
+  );
+}</code></pre></div>
+<div class="code-block"><div class="code-label">app/cities/DeleteButton.tsx</div><pre><code>// F-03: ConfirmDialog und Fehler-State statt nativem confirm()/alert()
+export default function DeleteButton({ id }: Props) {
+  const router = useRouter();
+  const [dialogOffen, setDialogOffen] = useState(false);
+  const [fehler, setFehler]           = useState&lt;string | null&gt;(null);
+
+  async function handleLoeschenBestaetigt() {
+    setDialogOffen(false);
+
+    try {
+      await loescheCity(id);
+      router.refresh();
+    } catch (err) {
+      setFehler('Löschen fehlgeschlagen');
+      console.error(err);
+    }
+  }
+
+  return (
+    &lt;&gt;
+      &lt;ConfirmDialog
+        offen={dialogOffen}
+        meldung="Stadt wirklich löschen?"
+        onBestaetigen={handleLoeschenBestaetigt}
+        onAbbrechen={() =&gt; setDialogOffen(false)}
+      /&gt;
+      &lt;button
+        onClick={() =&gt; {
+          setFehler(null);
+          setDialogOffen(true);
+        }}
+        className="text-red-500 hover:text-red-700 font-medium"
+      &gt;
+        Löschen
+      &lt;/button&gt;
+      {fehler &amp;&amp; (
+        &lt;span role="alert" className="block text-xs text-red-600 mt-1"&gt;
+          {fehler}
+        &lt;/span&gt;
+      )}
+    &lt;/&gt;
+  );
+}</code></pre></div>
+<p>Die Seitenwahl ist ein Baustein für beide Welten: Server-Komponenten übergeben <code>hrefFuer</code> und erhalten Links, Client-Komponenten übergeben <code>onWechsel</code> und erhalten Schaltflächen:</p>
+<div class="code-block"><div class="code-label">components/Seitenwahl.tsx</div><pre><code>interface Props {
+  seite: number;
+  seiten: number;
+  hrefFuer?: (seite: number) =&gt; string;
+  onWechsel?: (seite: number) =&gt; void;
+}
+
+const aktivClass   = 'px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors';
+const inaktivClass = 'px-3 py-1 rounded-md border border-gray-200 bg-gray-50 text-gray-300';
+
+export default function Seitenwahl({ seite, seiten, hrefFuer, onWechsel }: Props) {
+  if (seiten &lt;= 1) return null;
+
+  function schritt(ziel: number, text: string) {
+    if (ziel &lt; 1 || ziel &gt; seiten) {
+      return &lt;span className={inaktivClass}&gt;{text}&lt;/span&gt;;
+    }
+    if (hrefFuer) {
+      return &lt;Link href={hrefFuer(ziel)} className={aktivClass}&gt;{text}&lt;/Link&gt;;
+    }
+    return (
+      &lt;button type="button" onClick={() =&gt; onWechsel?.(ziel)} className={aktivClass}&gt;
+        {text}
+      &lt;/button&gt;
+    );
+  }
+
+  return (
+    &lt;nav aria-label="Seiten" className="flex items-center justify-between mt-4 text-sm"&gt;
+      {schritt(seite - 1, '← Zurück')}
+      &lt;span className="text-gray-500"&gt;Seite {seite} von {seiten}&lt;/span&gt;
+      {schritt(seite + 1, 'Weiter →')}
+    &lt;/nav&gt;
+  );
+}</code></pre></div>
+<p>Nach dem Login leitet das Formular auf die ursprünglich gewünschte Seite weiter – aber nur innerhalb der eigenen App:</p>
+<div class="code-block"><div class="code-label">app/login/LoginForm.tsx – sichere Weiterleitung</div><pre><code>// Nur Pfade innerhalb der eigenen App als Rücksprungziel zulassen.
+// Verhindert Open Redirects über ?callbackUrl=https://fremde-seite.example
+function sichereCallbackUrl(wert: string | null): string {
+  if (!wert || !wert.startsWith('/') || wert.startsWith('//') || wert.includes('\\')) {
+    return '/';
+  }
+  return wert;
+}</code></pre></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 6</h4><ul><li>App Router: Ordner unter <code>app/</code> sind Routen; die Adressliste liegt auf <code>/</code>.</li><li><code>middleware.ts</code> schützt die Seiten und setzt die CSP mit Nonce; das Backend schützt die Daten.</li><li>Server-Komponenten laden auf dem Server, Client-Komponenten reagieren im Browser.</li><li>Alle Aufrufe laufen über <code>lib/api.ts</code> mit <code>apiFetch</code> und <code>apiRequest</code>; Listen blättern mit <code>leseSeite</code> in Seiten zu 25 Zeilen.</li><li>Formulare mit Controlled Inputs; Fehler und Bestätigungen als eigene Komponenten.</li></ul></div>
+</section>
+<section id="kap7">
+  <div class="chapter-num">Kapitel 7</div>
+  <h1 id="kap7h">7. nginx und HTTPS</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kannst erklären, wie nginx Anfragen an Frontend und Backend verteilt.</li><li>Du kennst die Sicherheits-Header und die Ratenbegrenzung.</li></ul></div>
+<h2 id="kap7-1">7.1 Weiterleitung nach Pfad</h2>
+<p><code>nginx/nginx.conf</code> enthält zwei Server: Der erste leitet HTTP auf HTTPS um, der zweite beendet TLS und verteilt die Anfragen. Für jedes Backend-Präfix gibt es einen <code>location</code>-Block:</p>
+<div class="code-block"><div class="code-label">nginx/nginx.conf – OData</div><pre><code>location /odata/ {
+    proxy_pass         http://backend:8080/odata/;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+}</code></pre></div>
+<p>Diese Blöcke nutzen nur noch Werkzeuge wie curl oder Postman. Der Browser ruft <code>/api/backend/…</code> auf, und das fällt unter «alles andere», geht also an Next.js.</p>
+<div class="box box-warn"><div class="box-title">Neue Backend-Route? nginx und Proxy anpassen</div><p>Bekommt das Backend einen neuen Pfad, zum Beispiel <code>/berichte</code>, braucht nginx einen passenden <code>location</code>-Block. Sonst landet eine direkte Anfrage bei Next.js und endet mit 404. Soll auch der Browser den Pfad erreichen, gehört er zusätzlich in <code>ERLAUBTE_BEREICHE</code> des Proxys (Kapitel 5.6).</p></div>
+<h2 id="kap7-2">7.2 Sicherheits-Header</h2>
+<div class="code-block"><div class="code-label">nginx/nginx.conf – Header</div><pre><code># Verbesserte Sicherheitsheader
+add_header Strict-Transport-Security "max-age=31536000" always;
+add_header X-Frame-Options SAMEORIGIN always;
+add_header X-Content-Type-Options nosniff always;
+add_header Referrer-Policy strict-origin-when-cross-origin always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+# Nur setzen, wenn die Antwort keine eigene CSP mitbringt (siehe map oben);
+# ein leerer Wert erzeugt keinen Header.
+add_header Content-Security-Policy $csp_ohne_nonce always;</code></pre></div>
+<div class="code-block"><div class="code-label">nginx/nginx.conf – CSP für Antworten ohne eigene Richtlinie</div><pre><code># Content-Security-Policy:
+# Seiten des Frontends bringen ihre eigene CSP mit (frontend/middleware.ts, mit einer
+# Nonce pro Antwort). Alle übrigen Antworten – API, statische Dateien, Fehlerseiten –
+# erhalten diese feste Richtlinie ohne Inline-Skripte.
+map $upstream_http_content_security_policy $csp_ohne_nonce {
+    ''      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'";
+    default "";
+}</code></pre></div>
+<table><thead><tr><th>Header</th><th>Wirkung</th></tr></thead><tbody><tr><td><code>Strict-Transport-Security</code></td><td>Der Browser verwendet für diese Adresse nur noch HTTPS.</td></tr><tr><td><code>X-Frame-Options</code>, <code>frame-ancestors</code></td><td>Die App lässt sich nicht in fremde Seiten einbetten (Schutz vor Clickjacking).</td></tr><tr><td><code>X-Content-Type-Options</code></td><td>Der Browser rät den Dateityp nicht.</td></tr><tr><td><code>Referrer-Policy</code></td><td>Fremde Seiten erfahren nur die Herkunft, nicht den ganzen Pfad.</td></tr><tr><td><code>Content-Security-Policy</code></td><td>Skripte, Styles, Bilder und Verbindungen nur von der eigenen Adresse; Formulare senden nur dorthin, Plugins sind verboten.</td></tr></tbody></table>
+<p>Die CSP kommt aus zwei Quellen. Seiten bringen ihre eigene mit, samt Nonce (<code>middleware.ts</code>, Kapitel 6.2). Alle übrigen Antworten – API, statische Dateien, Fehlerseiten – erhalten von nginx eine feste Richtlinie. Die <code>map</code>-Anweisung liefert sie nur, wenn die Antwort noch keine CSP hat.</p>
+<div class="box box-warn"><div class="box-title">Fremde Quelle? Zwei Stellen anpassen</div><p>Lädt die Anwendung etwas von einer anderen Adresse, etwa eine Schrift oder ein Bild, braucht es einen passenden Eintrag in <code>middleware.ts</code> und in <code>nginx.conf</code>. Sonst blockiert der Browser die Quelle.</p></div>
+<p>Für TLS 1.2 lässt nginx nur Verfahren mit Forward Secrecy (ECDHE) und AEAD zu; TLS 1.3 ist ohnehin so gebaut. Das Backend ergänzt jede seiner Antworten um <code>Cache-Control: no-store</code>, weil sie Personendaten enthalten.</p>
+<h2 id="kap7-3">7.3 Ratenbegrenzung</h2>
+<p>Ohne Begrenzung könnte ein Angreifer beliebig viele Passwörter durchprobieren. nginx lässt pro Client-IP höchstens 10 Anfragen pro Minute an die Anmeldung von NextAuth und an <code>/auth/</code> zu und antwortet danach mit 429. Zusätzlich sperrt das Backend eine E-Mail-Adresse nach fünf Fehlversuchen (Kapitel 4.4).</p>
+<div class="code-block"><div class="code-label">nginx/nginx.conf – Zone</div><pre><code># nginx-Version nicht in Antworten und Fehlerseiten preisgeben
+server_tokens off;
+
+# Schutz vor Passwort-Raten: höchstens 10 Anmeldeversuche pro Minute und Client-IP
+limit_req_zone $binary_remote_addr zone=anmeldung:10m rate=10r/m;
+limit_req_status 429;</code></pre></div>
+<div class="code-block"><div class="code-label">nginx/nginx.conf – Anmeldung</div><pre><code>location /api/auth/callback/credentials {
+    limit_req          zone=anmeldung burst=5 nodelay;
+    proxy_pass         http://frontend:3000;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+}</code></pre></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 7</h4><ul><li>nginx ist der einzige Eingang; Backend und Datenbank sind nur lokal erreichbar.</li><li>Ein <code>location</code>-Block pro Backend-Präfix, alles andere geht an Next.js.</li><li>Sicherheits-Header und Ratenbegrenzung stehen an einer zentralen Stelle; die CSP der Seiten kommt mit Nonce aus der Middleware.</li></ul></div>
+</section>
+<section id="kap8">
+  <div class="chapter-num">Kapitel 8</div>
+  <h1 id="kap8h">8. Tests</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kannst die Backend-Tests ausführen.</li><li>Du verstehst, wie ein Integrationstest die API gegen eine echte Datenbank prüft.</li></ul></div>
+<h2 id="kap8-1">8.1 Aufbau</h2>
+<p>Das Projekt <code>backend/AdressverwaltungApi.Tests</code> enthält 69 Integrationstests. Sie starten die API im Speicher (<code>WebApplicationFactory&lt;Program&gt;</code>) und senden echte HTTP-Anfragen. Die Datenbank ist eine PostgreSQL-Instanz, die <strong>Testcontainers</strong> für jeden Testlauf als Wegwerf-Container startet. Der E-Mail-Versand ist durch einen <code>FakeEmailService</code> ersetzt.</p>
+<div class="code-block"><div class="code-label">Terminal</div><pre><code>cd backend
+dotnet test                                                    # alle Tests (Docker muss laufen)
+dotnet test --filter "FullyQualifiedName~AdressenODataTests"   # eine Testklasse</code></pre></div>
+<div class="code-block"><div class="code-label">Infrastructure/ApiFactory.cs (Ausschnitt)</div><pre><code>protected override void ConfigureWebHost(IWebHostBuilder builder)
+{
+    builder.UseEnvironment("Testing");
+
+    // appsettings.json enthält keine Geheimnisse mehr
+    builder.UseSetting("Jwt:Key", "nur-fuer-tests-0123456789-abcdefghijklmnopqrstuvwxyz");
+    builder.UseSetting("Seed:AdminPassword", "Seed-Passwort-Tests-1!");
+
+    builder.ConfigureTestServices(services =&gt;
+    {
+        // Datenbank: Container statt ConnectionStrings:DefaultConnection
+        services.RemoveAll&lt;DbContextOptions&lt;AdresseDbContext&gt;&gt;();
+        services.AddDbContext&lt;AdresseDbContext&gt;(options =&gt;
+            options.UseNpgsql(_database.GetConnectionString()));
+
+        // E-Mail: kein echter SMTP-Versand
+        services.RemoveAll&lt;IEmailService&gt;();
+        services.AddSingleton&lt;IEmailService&gt;(Emails);
+    });
+}</code></pre></div>
+<h2 id="kap8-2">8.2 Ein Test im Detail</h2>
+<p>Ein Test folgt dem Muster <strong>Arrange – Act – Assert</strong>: vorbereiten, ausführen, prüfen. Dieser Test stellt sicher, dass sich niemand ohne Anmeldung registrieren kann:</p>
+<div class="code-block"><div class="code-label">AuthSecurityTests.cs</div><pre><code>[Fact]
+public async Task Register_OhneToken_Liefert401_UndLegtKeinenBenutzerAn()
+{
+    using var client = Factory.CreateClient();
+
+    var response = await client.PostAsJsonAsync("/auth/register", NeuerBenutzer("anonym@example.com"));
+
+    Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    await Factory.WithDbContextAsync(async db =&gt;
+        Assert.False(await db.Users.AnyAsync(u =&gt; u.Email == "anonym@example.com")));
+}</code></pre></div>
+<table><thead><tr><th>Testklasse</th><th>Prüft</th></tr></thead><tbody><tr><td><code>AdressenODataTests</code></td><td>CRUD, Validierung, Audit-Felder, OData-Abfragen, Benachrichtigung</td></tr><tr><td><code>CitiesODataTests</code></td><td>CRUD und PLZ-Suche</td></tr><tr><td><code>AuthorizationTests</code></td><td>Endpunkte nur mit gültigem Token erreichbar</td></tr><tr><td><code>AuthSecurityTests</code></td><td>Registrierung, Login-Fehler, Audit-Felder nicht fälschbar</td></tr><tr><td><code>HardeningTests</code></td><td>Mitgeschickte Id, Fehlerdetails, <code>no-store</code>, Kontosperre</td></tr><tr><td><code>RolesAndRevocationTests</code></td><td>Rechte der Rollen, Rollenwechsel, Abmeldung, gelöschter Benutzer, Seitengrösse</td></tr><tr><td><code>MetadataTests</code></td><td><code>$metadata</code> und camelCase</td></tr></tbody></table>
+<div class="box box-info"><div class="box-title">Warum eine echte Datenbank?</div><p>Eine nachgebildete Datenbank verhält sich anders als PostgreSQL – etwa bei Zeitstempeln oder Gross- und Kleinschreibung. Mit Testcontainers laufen die Tests gegen dieselbe Datenbank wie im Betrieb.</p></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 8</h4><ul><li><code>dotnet test</code> im Ordner <code>backend</code> führt alle 69 Tests aus; Docker muss laufen.</li><li>Die API läuft im Speicher, die Datenbank in einem Wegwerf-Container.</li><li>Das Frontend hat noch keine Tests – eine gute Übung (Anhang C).</li></ul></div>
+</section>
+<section id="kap9">
+  <div class="chapter-num">Kapitel 9</div>
+  <h1 id="kap9h">9. Sicherheit im Projekt</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kennst die wichtigsten Schutzmassnahmen im Projekt und ihren Grund.</li><li>Du weisst, welche Risiken bewusst offen bleiben.</li></ul></div>
+<h2 id="kap9-1">9.1 Umgesetzte Massnahmen</h2>
+<table><thead><tr><th>Thema</th><th>Massnahme</th><th>Wo</th></tr></thead><tbody><tr><td>Zugriff</td><td>Alle Endpunkte ausser dem Login verlangen ein Token</td><td>Fallback-Policy in <code>Program.cs</code></td></tr><tr><td>Rollen</td><td>Benutzer anlegen und Einstellungen ändern nur als <code>Admin</code>; die Rolle kommt aus der Datenbank</td><td><code>AuthController</code>, <code>SettingsController</code>, <code>TokenUserValidator</code></td></tr><tr><td>Widerruf</td><td>Abmeldung und Passwort-Reset machen ausgestellte Tokens ungültig</td><td><code>Users.TokenVersion</code>, <code>TokenUserValidator</code></td></tr><tr><td>Token im Browser</td><td>Das Backend-JWT bleibt auf dem Server; der Proxy prüft Header und Herkunft</td><td><code>app/api/backend</code>, <code>lib/auth.ts</code></td></tr><tr><td>Geheimnisse</td><td>Passwörter und Schlüssel in <code>.env</code>, nicht im Code</td><td><code>.env</code>, <code>docker-compose.yml</code></td></tr><tr><td>Passwörter</td><td>Nur als Hash gespeichert; kein Standardpasswort</td><td><code>PasswordHasher</code>, <code>DbSeeder</code></td></tr><tr><td>Anmeldung</td><td>Gleiche Antwortzeit und Meldung; höchstens 10 Versuche pro Minute und IP; Sperre nach 5 Fehlversuchen pro Adresse</td><td><code>AuthController</code>, <code>MemoryLoginThrottle</code>, nginx</td></tr><tr><td>Transport</td><td>HTTPS mit modernen Verfahren, Sicherheits-Header</td><td>nginx</td></tr><tr><td>Skripte</td><td>Content-Security-Policy: nur eigene Quellen, Skripte nur mit Nonce</td><td><code>middleware.ts</code>, nginx</td></tr><tr><td>Erreichbarkeit</td><td>Backend und Datenbank nur an <code>127.0.0.1</code> gebunden</td><td><code>docker-compose.yml</code></td></tr><tr><td>Datenbank</td><td>Das Backend verbindet sich mit einer eigenen Rolle ohne Superuser-Rechte</td><td><code>db/init</code>, <code>docker-compose.yml</code></td></tr><tr><td>Eingaben</td><td>Validierung im Backend; parametrisierte Abfragen; maskierte OData-Literale; mitgeschickte Id und Änderungsangaben werden verworfen</td><td>Modelle, EF Core, <code>lib/api.ts</code>, <code>ODataCrudController</code></td></tr><tr><td>Listen</td><td>Höchstens 100 Zeilen pro Antwort</td><td><code>ODataCrudController</code></td></tr><tr><td>Antworten</td><td>Fehler ohne Stacktrace; <code>Cache-Control: no-store</code>; keine Server-Kennung</td><td><code>ODataErrorDetailFilter</code>, <code>Program.cs</code>, nginx</td></tr><tr><td>Weiterleitung</td><td>Nach dem Login nur innerhalb der App</td><td><code>LoginForm.tsx</code></td></tr><tr><td>Audit</td><td>Benutzername nur aus dem Token</td><td><code>AdresseDbContext</code></td></tr><tr><td>Container</td><td>Laufen nicht als <code>root</code>; Backend und Frontend ohne Capabilities und ohne Rechteausweitung</td><td>Dockerfiles, <code>docker-compose.yml</code></td></tr><tr><td>Abhängigkeiten</td><td>Aktuelle Versionen, Lockfile, <code>npm ci</code></td><td><code>package-lock.json</code></td></tr></tbody></table>
+<p>Befunde, Begründungen und Prüfergebnisse stehen im <code>documentation/Sicherheitsbericht.pdf</code>.</p>
+<h2 id="kap9-2">9.2 Offene Punkte</h2>
+<p>Die Adressverwaltung ist eine Demo-Anwendung. Einige Punkte sind deshalb bewusst einfach gehalten – manche eignen sich als Übungen (Anhang C):</p>
+<ul><li>Die Abmeldung widerruft alle Tokens eines Benutzers, auch die auf seinen anderen Geräten. Eine Abmeldung pro Gerät gibt es nicht.</li><li>Der Zähler der Kontosperre liegt im Arbeitsspeicher. Er geht bei einem Neustart verloren und lässt sich missbrauchen, um einen Benutzer für 15 Minuten auszusperren.</li><li>Rollen lassen sich nur beim Anlegen eines Benutzers vergeben. Ändern oder Löschen von Benutzern geht nur direkt in der Datenbank.</li><li>Die CSP erlaubt Inline-Styles (<code>style-src 'unsafe-inline'</code>).</li><li>Der Google-Login lässt sich konfigurieren, bleibt aber unbenutzbar: Das Backend kann für ein Google-Konto kein Token ausstellen, deshalb lehnt das Frontend die Anmeldung ab.</li><li><code>npm audit</code> meldet fünf Einträge in den Entwicklungswerkzeugen, für die es keine korrigierte Version gibt. Die ausgelieferten Abhängigkeiten sind ohne Befund.</li><li>Das Frontend hat keine Tests.</li></ul>
+<div class="box box-tip"><div class="box-title">Prüfen statt glauben</div><p>Abhängigkeiten lassen sich jederzeit prüfen: <code>dotnet list package --vulnerable --include-transitive</code> im Ordner <code>backend</code> und <code>npm audit --omit=dev</code> im Ordner <code>frontend</code>.</p></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 9</h4><ul><li>Die Daten schützt das Backend; nginx und das Frontend ergänzen den Schutz.</li><li>Geheimnisse stehen ausserhalb des Codes.</li><li>Offene Punkte sind dokumentiert und begründet.</li></ul></div>
+</section>
+<section id="kap10">
+  <div class="chapter-num">Kapitel 10</div>
+  <h1 id="kap10h">10. Clean Code im Projekt</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kennst die Prinzipien SRP und DRY und findest Beispiele dafür im Code.</li><li>Du verstehst die Kürzel wie <code>B-03</code> oder <code>F-07</code> in den Kommentaren.</li></ul></div>
+<h2 id="kap10-1">10.1 Prinzipien</h2>
+<table><thead><tr><th>Prinzip</th><th>Bedeutung</th><th>Beispiel im Projekt</th></tr></thead><tbody><tr><td><strong>SRP</strong> – Single Responsibility</td><td>Eine Klasse hat eine Aufgabe.</td><td><code>DbSeeder</code>, <code>JwtTokenService</code>, <code>EmailNotificationService</code></td></tr><tr><td><strong>DRY</strong> – Don't Repeat Yourself</td><td>Jedes Wissen steht an einer Stelle.</td><td><code>ODataCrudController&lt;T&gt;</code>, <code>AuditableEntity</code>, <code>apiRequest</code>, <code>CreateOf&lt;T&gt;</code></td></tr><tr><td><strong>Open/Closed</strong></td><td>Erweitern, ohne Bestehendes zu ändern.</td><td><code>OnCreatedAsync</code>, <code>INotificationService</code></td></tr><tr><td><strong>Sprechende Namen</strong></td><td>Der Name sagt, was etwas ist.</td><td><code>speichert</code> statt <code>laden</code> für «Speichern läuft»</td></tr><tr><td><strong>Keine Magic Strings</strong></td><td>Werte und Schlüssel haben einen Namen und Typ.</td><td><code>JwtOptions</code>, <code>PLZ_SUCHE_MIN_LAENGE</code></td></tr><tr><td><strong>Fehler behandeln</strong></td><td>Fehler werden gezeigt oder geloggt, nie verschluckt.</td><td><code>Fehlermeldung</code>, <code>try/catch</code> beim Mailversand</td></tr></tbody></table>
+<h2 id="kap10-2">10.2 Massnahmen-Übersicht</h2>
+<p>Kommentare im Code verweisen auf Befunde der Clean-Code-Analyse (<code>documentation/CleanCode_Analyse.pdf</code>). <code>B</code> steht für Backend, <code>F</code> für Frontend.</p>
+<table><thead><tr><th>Nr.</th><th>Massnahme</th></tr></thead><tbody><tr><td>B-01</td><td>Seed-Logik aus <code>Program.cs</code> in <code>DbSeeder</code> ausgelagert</td></tr><tr><td>B-02</td><td>DTOs in eigenem Ordner <code>Dtos/</code></td></tr><tr><td>B-03</td><td>Benachrichtigung in <code>INotificationService</code> ausgelagert</td></tr><tr><td>B-04</td><td>Konfigurationswerte abgesichert lesen</td></tr><tr><td>B-06</td><td>E-Mail-Vergleich unabhängig von der Kultur</td></tr><tr><td>B-07</td><td>DataAnnotations an den Modellen</td></tr><tr><td>B-08</td><td>Generische Basisklasse <code>ODataCrudController&lt;T&gt;</code></td></tr><tr><td>B-09</td><td>Typisierte Konfiguration (<code>JwtOptions</code>, <code>SmtpOptions</code>)</td></tr><tr><td>B-10</td><td>JWT-Erzeugung in <code>JwtTokenService</code></td></tr><tr><td>B-11</td><td>Erweiterungspunkt <code>OnCreatedAsync</code> statt kopierter <code>Post</code>-Methode</td></tr><tr><td>B-12</td><td>Doppelte EF-Konfiguration entfernt</td></tr><tr><td>B-13</td><td>DTO <code>SettingsResponse</code> statt anonymer Objekte</td></tr><tr><td>F-01</td><td><code>normalizeAuditFields</code> als gemeinsame Funktion</td></tr><tr><td>F-02</td><td>Controlled Inputs in allen Formularen</td></tr><tr><td>F-03</td><td><code>ConfirmDialog</code> und Fehler-State statt <code>confirm()</code>/<code>alert()</code></td></tr><tr><td>F-04</td><td>Typ-Erweiterung für die NextAuth-Session</td></tr><tr><td>F-07</td><td>Gemeinsame Aufruf-Hilfsfunktionen in <code>lib/api.ts</code></td></tr><tr><td>F-08</td><td>Generische Typen <code>CreateOf&lt;T&gt;</code> und <code>UpdateOf&lt;T&gt;</code></td></tr><tr><td>F-09</td><td>Gemeinsame Formular-Klassen, <code>Fehlermeldung</code>, <code>Ladeanzeige</code></td></tr></tbody></table>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 10</h4><ul><li>SRP und DRY sind im Projekt an vielen Stellen sichtbar.</li><li>Die Kürzel in den Kommentaren führen zur Begründung in der Clean-Code-Analyse.</li></ul></div>
+</section>
+<section id="kap11">
+  <div class="chapter-num">Kapitel 11</div>
+  <h1 id="kap11h">11. Docker Compose</h1>
+<div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kannst die <code>docker-compose.yml</code> lesen und erklären.</li><li>Du kennst die wichtigsten Befehle für den Alltag.</li></ul></div>
+<h2 id="kap11-1">11.1 docker-compose.yml</h2>
+<div class="code-block"><div class="code-label">docker-compose.yml</div><pre><code># Sicherheitsrelevante Werte (Passwörter, Schlüssel) stehen in der Datei .env
+# neben dieser Datei (nicht in Git, Vorlage: .env.example). Docker Compose liest
+# sie automatisch und setzt sie unten als ${VARIABLE} ein.
+
+services:
+
+  # ============================================================
+  # Service 1: PostgreSQL Datenbank
+  # ============================================================
+  db:
+    image: postgres:16-alpine
+    container_name: adressverwaltung-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: adressverwaltung
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+      # Passwort der Rolle "adressverwaltung_app", mit der sich das Backend verbindet
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD fehlt in .env}
+    # Nur lokal erreichbar, nicht aus dem Netzwerk
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Legt beim ersten Start die Rolle des Backends an (bestehende Datenbank:
+      # ./scripts/create_db_role.sh)
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================
+  # Service 2: ASP.NET Core Backend (OData API)
+  # ============================================================
+  backend:
+    build:
+      context: ./backend/AdressverwaltungApi
+      dockerfile: Dockerfile
+    container_name: adressverwaltung-backend
+    restart: unless-stopped
+    # Keine Rechteausweitung im Container, keine Linux-Capabilities
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Nur lokal erreichbar; von aussen läuft der Zugriff über nginx (HTTPS)
+    ports:
+      - "127.0.0.1:5000:8080"
+    environment:
+      # Eigene Rolle ohne Superuser-Rechte; "postgres" bleibt der Verwaltung vorbehalten
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=adressverwaltung;Username=adressverwaltung_app;Password=${APP_DB_PASSWORD}"
+      ASPNETCORE_ENVIRONMENT: Production
+      # JWT-Konfiguration
+      Jwt__Key: ${JWT_KEY:?JWT_KEY fehlt in .env}
+      Jwt__Issuer: AdressverwaltungApi
+      Jwt__Audience: AdressverwaltungFrontend
+      Jwt__ExpiresInHours: "8"
+      # SMTP-Einstellungen (optional – nur wenn E-Mail-Benachrichtigungen aktiviert)
+      SmtpSettings__Host: smtp.example.com
+      SmtpSettings__Port: "587"
+      SmtpSettings__Username: ${SMTP_USERNAME:-}
+      SmtpSettings__Password: ${SMTP_PASSWORD:-}
+      SmtpSettings__FromAddress: noreply@example.com
+      # Admin-Passwort für den ersten Start mit leerer Datenbank (leer = Zufallspasswort im Log)
+      Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ============================================================
+  # Service 3: Next.js Frontend
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: adressverwaltung-frontend
+    restart: unless-stopped
+    # Keine Rechteausweitung im Container, keine Linux-Capabilities
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Kein direkter Port-Export nötig – nginx leitet intern weiter
+    expose:
+      - "3000"
+    environment:
+      # Browser-seitige Requests laufen über nginx (HTTPS)
+      NEXT_PUBLIC_API_URL: https://localhost
+      # Server-seitige Requests (Docker-intern, kein nginx)
+      INTERNAL_API_URL: http://backend:8080
+      # NextAuth-Konfiguration – URL muss mit nginx übereinstimmen
+      NEXTAUTH_URL: https://localhost
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET fehlt in .env}
+      # Google OAuth (optional – leer lassen, um Google-Login zu deaktivieren)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      - backend
+
+  # ============================================================
+  # Service 4: nginx Reverse Proxy (HTTP → HTTPS)
+  # ============================================================
+  nginx:
+    image: nginx:alpine
+    container_name: adressverwaltung-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"    # HTTP  → wird auf HTTPS weitergeleitet
+      - "443:443"  # HTTPS → SSL-Terminierung
+    volumes:
+      # nginx-Konfiguration (schreibgeschützt eingebunden)
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # SSL-Zertifikate (schreibgeschützt eingebunden)
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres-data:</code></pre></div>
+<table><thead><tr><th>Stelle</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>${POSTGRES_PASSWORD:?…}</code></td><td>Wert aus <code>.env</code>; fehlt er, bricht Compose mit der Meldung ab.</td></tr><tr><td><code>${SMTP_USERNAME:-}</code></td><td>Wert aus <code>.env</code>; fehlt er, bleibt die Variable leer.</td></tr><tr><td><code>127.0.0.1:5000:8080</code></td><td>Der Port ist nur vom eigenen Rechner erreichbar.</td></tr><tr><td><code>expose: "3000"</code></td><td>Das Frontend ist nur im Docker-Netz erreichbar, also nur über nginx.</td></tr><tr><td><code>depends_on … service_healthy</code></td><td>Das Backend startet erst, wenn die Datenbank bereit ist.</td></tr><tr><td><code>volumes: postgres-data</code></td><td>Die Daten überleben einen Neustart der Container.</td></tr><tr><td><code>Host=db</code></td><td>Im Docker-Netz heissen die Dienste wie in der Compose-Datei.</td></tr><tr><td><code>Username=adressverwaltung_app</code></td><td>Das Backend arbeitet mit einer eigenen Rolle, nicht als Superuser.</td></tr><tr><td><code>./db/init:/docker-entrypoint-initdb.d</code></td><td>Skripte in diesem Ordner führt PostgreSQL beim ersten Start mit leerem Volume aus; hier entsteht die Rolle des Backends.</td></tr><tr><td><code>cap_drop: ALL</code>, <code>no-new-privileges</code></td><td>Der Container gibt alle Sonderrechte ab und kann keine neuen erlangen.</td></tr></tbody></table>
+<h2 id="kap11-2">11.2 Wichtige Befehle</h2>
+<div class="code-block"><div class="code-label">Terminal</div><pre><code>docker compose up --build -d         # bauen und starten
+docker compose ps                    # Status
+docker compose logs -f backend       # Logs verfolgen
+docker compose restart backend       # einen Dienst neu starten
+docker compose down                  # stoppen, Daten bleiben erhalten
+docker compose down -v               # stoppen und Datenbank löschen
+
+docker compose restart nginx                                                   # nach dem Neubau von Backend oder Frontend
+docker exec adressverwaltung-nginx nginx -s reload                             # nginx-Konfiguration neu laden
+docker exec -it adressverwaltung-db psql -U postgres -d adressverwaltung       # SQL-Konsole</code></pre></div>
+<div class="box box-danger"><div class="box-title">down -v löscht die Datenbank</div><p>Die Option <code>-v</code> entfernt das Volume mit allen Adressen, Städten und Benutzern. Danach beginnt der nächste Start mit einer leeren Datenbank und einem neuen Admin-Passwort.</p></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 11</h4><ul><li>Compose setzt die Werte aus <code>.env</code> ein und startet vier Dienste.</li><li>Nur nginx ist von aussen erreichbar.</li><li><code>down</code> behält die Daten, <code>down -v</code> löscht sie.</li></ul></div>
+</section>
+<section id="kap12">
+  <div class="chapter-num">Kapitel 12</div>
+  <h1 id="kap12h">12. Häufige Fehler und Lösungen</h1>
+<table><thead><tr><th>Symptom</th><th>Ursache</th><th>Lösung</th></tr></thead><tbody><tr><td><code>docker compose up</code> meldet «POSTGRES_PASSWORD fehlt in .env»</td><td><code>.env</code> fehlt oder ist unvollständig</td><td><code>cp .env.example .env</code> und die vier Pflichtwerte setzen</td></tr><tr><td>Backend startet nicht: «JWT-Schlüssel … zu kurz oder ein Platzhalter»</td><td><code>JWT_KEY</code> kürzer als 32 Zeichen</td><td>Wert mit <code>openssl rand -base64 48</code> erzeugen</td></tr><tr><td>Backend-Log: <code>password authentication failed for user "adressverwaltung_app"</code> oder <code>role "adressverwaltung_app" does not exist</code></td><td>Die Datenbank bestand schon, bevor es die Rolle gab, oder <code>APP_DB_PASSWORD</code> wurde geändert</td><td><code>./scripts/create_db_role.sh</code> ausführen, danach <code>docker compose restart backend</code></td></tr><tr><td>Hilfsskript oder Import: <code>password authentication failed for user "postgres"</code></td><td><code>POSTGRES_PASSWORD</code> wurde geändert, aber das Volume enthält noch das alte Passwort</td><td>Passwort in der Datenbank mit <code>ALTER USER postgres PASSWORD '…'</code> anpassen oder <code>docker compose down -v</code></td></tr><tr><td>Browser zeigt «nicht sicher»</td><td>Zertifikat ist selbstsigniert oder die mkcert-Zertifizierungsstelle fehlt</td><td><code>mkcert -install</code>, Zertifikat neu ausstellen, nginx neu laden, Browser neu starten</td></tr><tr><td>Frontend-Build: <code>"/app/public": not found</code></td><td>Verzeichnis <code>frontend/public</code> fehlt</td><td>Aktuellen Stand holen (<code>git pull</code>); das Verzeichnis enthält eine Datei <code>.gitkeep</code></td></tr><tr><td>Login schlägt fehl, Passwort unbekannt</td><td>Zufallspasswort beim ersten Start</td><td><code>docker compose logs backend | grep "Admin-Benutzer"</code> oder <code>./scripts/reset_password.sh</code></td></tr><tr><td>Antwort 429 beim Anmelden</td><td>Mehr als 10 Versuche pro Minute (nginx) oder fünf Fehlversuche für dieselbe E-Mail-Adresse (Backend)</td><td>Eine Minute beziehungsweise 15 Minuten warten; ein Neustart des Backends hebt die Kontosperre auf</td></tr><tr><td>Die Anwendung springt unerwartet zur Login-Seite</td><td>Das Backend hat mit 401 geantwortet: Token abgelaufen (8 Stunden), auf einem anderen Gerät abgemeldet, Passwort zurückgesetzt oder <code>JWT_KEY</code> geändert</td><td>Neu anmelden</td></tr><tr><td>«Fehler beim Speichern» im Formular</td><td>Validierung im Backend, oder die Rolle reicht nicht (403)</td><td>Netzwerk-Tab des Browsers und Backend-Log prüfen</td></tr><tr><td>Einstellungen lassen sich nicht ändern</td><td>Der Benutzer hat die Rolle <code>User</code></td><td>Als <code>Admin</code> anmelden</td></tr><tr><td>Aufruf von <code>/api/backend/…</code> liefert 403 «Aufruf nicht erlaubt.»</td><td>Der Header <code>x-adressverwaltung</code> fehlt, weil der Aufruf nicht über <code>apiFetch</code> läuft</td><td>Alle Aufrufe über <code>lib/api.ts</code> führen</td></tr><tr><td>Browser-Konsole: «Refused to load … Content Security Policy»</td><td>Eine Quelle von einer fremden Adresse</td><td>Quelle in <code>middleware.ts</code> und <code>nginx.conf</code> eintragen (Kapitel 7.2)</td></tr><tr><td>PLZ-Wertehilfe zeigt nichts</td><td>Städteverzeichnis nicht importiert</td><td>Import nach Anhang A ausführen</td></tr><tr><td>OData-Abfrage liefert 400</td><td>Eigenschaft in PascalCase geschrieben</td><td>camelCase verwenden: <code>ort</code>, <code>postalCode</code></td></tr><tr><td>Neues Feld im Modell fehlt in der Datenbank</td><td><code>EnsureCreated</code> ändert bestehende Datenbanken nicht</td><td>Spalte im <code>SchemaUpgrader</code> ergänzen oder <code>docker compose down -v</code> und neu starten</td></tr><tr><td>Keine Benachrichtigungs-E-Mail</td><td>Keine Adresse in den Einstellungen oder SMTP nicht konfiguriert</td><td>Adresse unter «Einstellungen» eintragen; <code>SMTP_*</code> in <code>.env</code> und <code>SmtpSettings__Host</code> in der Compose-Datei setzen; Backend-Log prüfen</td></tr><tr><td>502 Bad Gateway nach <code>docker compose up --build</code></td><td>nginx kennt noch die Adressen der alten Container</td><td><code>docker compose restart nginx</code></td></tr></tbody></table>
+</section>
+<section id="anhA">
+  <div class="chapter-num">Anhang A</div>
+  <h1 id="anhAh">Anhang A: PLZ-Import</h1>
+<p>Das Skript <code>scripts/import_cities.py</code> liest das amtliche Ortschaftenverzeichnis (<code>migration/AMTOVZ_CSV_LV95.csv</code>) und schreibt PLZ und Ortsnamen in die Tabelle <code>Cities</code>.</p>
+<table><thead><tr><th>CSV-Spalte</th><th>Zielspalte</th><th>Beispiel</th></tr></thead><tbody><tr><td><code>PLZ4</code></td><td><code>PostalCode</code></td><td>8001</td></tr><tr><td><code>Ortschaftsname</code></td><td><code>CityName</code></td><td>Zürich</td></tr></tbody></table>
+<ul><li>Bestehende Einträge bleiben erhalten; es wird nichts gelöscht.</li><li>Doppelte Kombinationen aus PLZ und Ort werden übersprungen. Das Skript kann deshalb mehrfach laufen.</li><li>Weil das Skript direkt in die Datenbank schreibt und nicht über die API, setzt es die Audit-Felder selbst (<code>CreateDate</code>, <code>CreatedBy</code>, <code>DateFrom</code>).</li></ul>
+<div class="code-block"><div class="code-label">Terminal</div><pre><code>pip install psycopg2-binary
+set -a; . ./.env; set +a      # stellt POSTGRES_PASSWORD bereit
+CSV_PATH=migration/AMTOVZ_CSV_LV95.csv python3 scripts/import_cities.py</code></pre></div>
+<table><thead><tr><th>Variable</th><th>Standard</th><th>Bedeutung</th></tr></thead><tbody><tr><td><code>DB_HOST</code>, <code>DB_PORT</code></td><td><code>localhost</code>, <code>5432</code></td><td>Datenbankserver</td></tr><tr><td><code>DB_NAME</code>, <code>DB_USER</code></td><td><code>adressverwaltung</code>, <code>postgres</code></td><td>Datenbank und Benutzer</td></tr><tr><td><code>DB_PASS</code></td><td>Wert von <code>POSTGRES_PASSWORD</code></td><td>Passwort</td></tr><tr><td><code>CSV_PATH</code></td><td><code>AMTOVZ_CSV_LV95.csv</code></td><td>Pfad zur CSV-Datei</td></tr><tr><td><code>CREATED_BY</code></td><td><code>import_script</code></td><td>Wert für <code>CreatedBy</code></td></tr></tbody></table>
+</section>
+<section id="anhB">
+  <div class="chapter-num">Anhang B</div>
+  <h1 id="anhBh">Anhang B: Hilfsskripte</h1>
+<p>Die Skripte arbeiten über <code>docker exec</code> direkt in der laufenden Datenbank, als Superuser <code>postgres</code>. Die beiden Benutzer-Skripte erzeugen den Passwort-Hash im selben Format wie das Backend.</p>
+<table><thead><tr><th>Skript</th><th>Aufruf</th><th>Zweck</th></tr></thead><tbody><tr><td><code>create_user.sh</code></td><td><code>./scripts/create_user.sh email "Name" passwort [User|Admin]</code> oder ohne Argumente mit Abfrage</td><td>Benutzer anlegen; ohne Angabe mit der Rolle <code>User</code></td></tr><tr><td><code>reset_password.sh</code></td><td><code>./scripts/reset_password.sh [passwort]</code></td><td>Passwort von <code>admin@example.com</code> neu setzen; widerruft dessen Tokens</td></tr><tr><td><code>create_db_role.sh</code></td><td><code>./scripts/create_db_role.sh</code></td><td>Rolle <code>adressverwaltung_app</code> in einer bestehenden Datenbank anlegen oder ihr Passwort neu setzen</td></tr></tbody></table>
+<div class="box box-info"><div class="box-title">Benutzer über die API anlegen</div><p>Ein Admin kann weitere Benutzer auch über <code>POST /auth/register</code> anlegen (mit <code>Authorization: Bearer …</code>). Das optionale Feld <code>role</code> im Body bestimmt die Rolle.</p></div>
+<div class="code-block"><div class="code-label">Token holen und API aufrufen</div><pre><code>curl -s -X POST http://localhost:5000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"&lt;passwort&gt;"}'
+# → { "id": "...", "name": "...", "email": "...", "role": "Admin", "token": "&lt;JWT&gt;" }
+
+curl -s http://localhost:5000/odata/Adressen -H "Authorization: Bearer &lt;JWT&gt;"</code></pre></div>
+</section>
+<section id="anhC">
+  <div class="chapter-num">Anhang C</div>
+  <h1 id="anhCh">Anhang C: Übungsaufgaben</h1>
+<p>Die Aufgaben bauen auf dem bestehenden Code auf. Jede lässt sich mit den Tests oder im Browser überprüfen.</p>
+<table><thead><tr><th>Nr.</th><th>Aufgabe</th><th>Hinweise</th><th>Stufe</th></tr></thead><tbody><tr><td>1</td><td>Füge der Adresse ein Feld <code>land</code> hinzu (Standard «CH») und zeige es in Liste und Formular an.</td><td>Modell, Typ in <code>types/adresse.ts</code>, <code>normalizeAdresse</code>, <code>AdresseForm</code>; Spalte im <code>SchemaUpgrader</code> ergänzen</td><td>leicht</td></tr><tr><td>2</td><td>Schreibe einen Test, der prüft, dass eine Adresse ohne <code>name</code> mit 400 abgelehnt wird.</td><td>Vorlage: <code>AdressenODataTests</code></td><td>leicht</td></tr><tr><td>3</td><td>Mache die Seitengrösse der Adressliste wählbar (10, 25 oder 50 Zeilen).</td><td><code>SEITENGROESSE</code> und <code>leseSeite</code> in <code>lib/api.ts</code></td><td>leicht</td></tr><tr><td>4</td><td>Ergänze ein Suchfeld über der Adressliste, das nach Name filtert.</td><td><code>$filter=contains(name,'…')</code>; Vorlage: <code>getCitiesSeite</code> mit <code>odataText</code></td><td>mittel</td></tr><tr><td>5</td><td>Lege die Seite der Adressliste in die URL (<code>?seite=2</code>), damit die Zurück-Taste des Browsers funktioniert.</td><td><code>useSearchParams</code> und <code>router.push</code>; Vorlage: Städteliste</td><td>mittel</td></tr><tr><td>6</td><td>Biete ein neues EntitySet <code>Notizen</code> an (Text, Bezug zu einer Adresse).</td><td>Die vier Schritte aus Kapitel 4.3</td><td>mittel</td></tr><tr><td>7</td><td>Baue eine Benutzerverwaltung für Admins: Benutzer auflisten, Rolle ändern, Benutzer löschen.</td><td>Neuer Controller mit <code>[Authorize(Roles = Roles.Admin)]</code>; Bereich in nginx und im Proxy freigeben; Tests nach <code>RolesAndRevocationTests</code></td><td>anspruchsvoll</td></tr><tr><td>8</td><td>Speichere den Zähler der Kontosperre in der Datenbank, damit er einen Neustart übersteht.</td><td>Neue Implementierung von <code>ILoginThrottle</code>; Tabelle oder Spalten über den <code>SchemaUpgrader</code></td><td>anspruchsvoll</td></tr><tr><td>9</td><td>Schreibe Tests für <code>lib/api.ts</code>.</td><td>Vitest oder Jest; <code>fetch</code> nachbilden</td><td>anspruchsvoll</td></tr><tr><td>10</td><td>Richte einen GitHub-Actions-Workflow ein, der bei jedem Push <code>dotnet test</code>, Lint und Build ausführt.</td><td><code>.github/workflows/ci.yml</code></td><td>anspruchsvoll</td></tr></tbody></table>
+</section>
+<section id="anhD">
+  <div class="chapter-num">Anhang D</div>
+  <h1 id="anhDh">Anhang D: Weitere Unterlagen und Links</h1>
+<h3>Unterlagen im Projekt</h3>
+<table><thead><tr><th>Datei in <code>documentation/</code></th><th>Inhalt</th></tr></thead><tbody><tr><td><code>Schulungsunterlage_Sequenzdiagramm.pdf</code></td><td>Login und Adresserfassung in 44 erklärten Schritten</td></tr><tr><td><code>Sicherheitsbericht.pdf</code></td><td>Sicherheitsprüfung: Befunde, Korrekturen, offene Punkte</td></tr><tr><td><code>CleanCode_Analyse.pdf</code></td><td>Clean-Code-Befunde B-01 bis B-13 und F-01 bis F-12</td></tr><tr><td><code>Aenderungsprotokoll_v2.4.0.pdf</code></td><td>Alle Änderungen von v2.3.0 zu v2.4.0</td></tr><tr><td><code>Aenderungsprotokoll_v2.3.0.pdf</code></td><td>Alle Änderungen von v2.2.0 zu v2.3.0</td></tr><tr><td><code>Systemarchitektur.svg</code>, <code>Sequenzdiagramm.svg</code></td><td>Diagramme (Quellen als <code>.puml</code>)</td></tr></tbody></table>
+<h3>Offizielle Dokumentationen</h3>
+<table><thead><tr><th>Thema</th><th>Adresse</th></tr></thead><tbody><tr><td>Next.js (App Router)</td><td>nextjs.org/docs</td></tr><tr><td>NextAuth.js</td><td>next-auth.js.org</td></tr><tr><td>ASP.NET Core</td><td>learn.microsoft.com/aspnet/core</td></tr><tr><td>OData für ASP.NET Core</td><td>learn.microsoft.com/odata/webapi-8/overview</td></tr><tr><td>Entity Framework Core</td><td>learn.microsoft.com/ef/core</td></tr><tr><td>PostgreSQL 16</td><td>postgresql.org/docs/16</td></tr><tr><td>Docker Compose</td><td>docs.docker.com/compose</td></tr><tr><td>nginx</td><td>nginx.org/en/docs</td></tr><tr><td>mkcert</td><td>github.com/FiloSottile/mkcert</td></tr><tr><td>Testcontainers für .NET</td><td>dotnet.testcontainers.org</td></tr><tr><td>JWT (RFC 7519, Debugger)</td><td>jwt.io</td></tr><tr><td>OWASP Top 10</td><td>owasp.org/www-project-top-ten</td></tr></tbody></table>
+</section>
+
+</body>
+</html>

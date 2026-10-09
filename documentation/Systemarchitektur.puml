@@ -1,11 +1,11 @@
 @startuml Systemarchitektur
 ' ============================================================
-' Systemarchitektur – Adressverwaltung v2.3.0
+' Systemarchitektur – Adressverwaltung v2.4.0
 ' SVG erzeugen:
 '   docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg /data/Systemarchitektur.puml
 ' ============================================================
 
-title Adressverwaltung v2.3.0 – Systemarchitektur
+title Adressverwaltung v2.4.0 – Systemarchitektur
 
 skinparam shadowing false
 skinparam defaultFontName sans-serif
@@ -55,20 +55,21 @@ rectangle "Docker Compose" as compose {
     component "Reverse Proxy\nRouting nach Pfad-Präfix" as proxy
   }
 
-  node "frontend  (adressverwaltung-frontend)\nNext.js 15 · Node 20 · :3000 (nur intern)" as frontend {
-    component "middleware.ts\nRoute-Schutz" as mw
+  node "frontend  (adressverwaltung-frontend)\nNext.js 15 · Node 22 · :3000 (nur intern)" as frontend {
+    component "middleware.ts\nRoute-Schutz · CSP mit Nonce" as mw
     component "App Router\nServer + Client Components" as pages
     component "NextAuth.js\n/api/auth/*\nSession-Cookie (JWT, 8 h)" as nextauth
-    component "lib/api.ts\napiFetch + Bearer-Token" as api
+    component "lib/api.ts\napiFetch" as api
+    component "Proxy /api/backend/*\nhängt den Bearer-Token an\n(CSRF-Schutz: Header + Origin)" as bproxy
   }
 
   node "backend  (adressverwaltung-backend)\nASP.NET Core 10 · :8080 (Host :5000)" as backend {
-    component "JWT-Bearer-\nAuthentifizierung" as jwt
-    component "AuthController\n/auth/login · /auth/register" as authc
+    component "JWT-Bearer-Authentifizierung\n+ TokenUserValidator\n(Rolle, Token-Version)" as jwt
+    component "AuthController\n/auth/login · /auth/register\n/auth/logout · Kontosperre" as authc
     component "OData-Controller\n/odata/Adressen · /odata/Cities\n(ODataCrudController<T>)" as odata
-    component "SettingsController\n/settings" as settingsc
+    component "SettingsController\n/settings (PUT nur Admin)" as settingsc
     component "EmailNotificationService\n→ EmailService (SMTP)" as notify
-    component "AdresseDbContext\nEF Core 8 · Audit-Felder\nEnsureCreated + DbSeeder" as dbctx
+    component "AdresseDbContext\nEF Core 10 · Audit-Felder\nEnsureCreated + SchemaUpgrader\n+ DbSeeder" as dbctx
   }
 
   database "db  (adressverwaltung-db)\nPostgreSQL 16 · :5432\nVolume: postgres-data" as db {
@@ -77,7 +78,7 @@ rectangle "Docker Compose" as compose {
 }
 
 rectangle "Hilfsskripte (Host)" as scripts {
-  component "create_user.sh\nreset_password.sh" as usersh
+  component "create_user.sh\nreset_password.sh\ncreate_db_role.sh" as usersh
   component "import_cities.py\n(PLZ-Verzeichnis CSV)" as importpy
 }
 
@@ -85,23 +86,26 @@ rectangle "Hilfsskripte (Host)" as scripts {
 user --> proxy : HTTPS :443\n(HTTP :80 → 301)
 
 ' ── nginx-Routing ────────────────────────────────────────────
-proxy --> mw : alle übrigen Pfade\n(Seiten, /api/auth/*)
-proxy --> jwt : /odata/*  ·  /settings
+proxy --> mw : alle übrigen Pfade\n(Seiten, /api/auth/*,\n/api/backend/*)
+proxy --> jwt : /odata/*  ·  /settings\n(nur direkte API-Clients)
 proxy --> authc : /auth/*
 
 ' ── Frontend intern ──────────────────────────────────────────
 mw --> pages : Session vorhanden,\nsonst → /login
 pages --> api
-api ..> nextauth : accessToken\naus Session lesen
+api --> bproxy : Client Components:\n/api/backend/* mit Session-Cookie
+bproxy ..> nextauth : Backend-JWT aus dem\nSession-Cookie lesen
 
 ' ── Frontend → Backend (Docker-intern, ohne nginx) ──────────
-nextauth --> authc : POST /auth/login\n(INTERNAL_API_URL)
+nextauth --> authc : POST /auth/login\nPOST /auth/logout\n(INTERNAL_API_URL)
 api --> jwt : Server Components:\nhttp://backend:8080\nAuthorization: Bearer
+bproxy --> jwt : http://backend:8080\nAuthorization: Bearer
 nextauth ..> google : OAuth-Login
 
 ' ── Backend intern ───────────────────────────────────────────
 jwt --> odata
 jwt --> settingsc
+jwt --> dbctx : Benutzer, Rolle und\nToken-Version prüfen
 odata --> notify : POST Adresse
 odata --> dbctx
 settingsc --> dbctx
@@ -110,18 +114,19 @@ notify --> dbctx : NotificationEmail\nlesen
 notify ..> smtp : E-Mail\n«Neue Adresse»
 
 ' ── Persistenz ───────────────────────────────────────────────
-dbctx --> tables : Npgsql
+dbctx --> tables : Npgsql\n(Rolle adressverwaltung_app)
 
 ' ── Skripte ──────────────────────────────────────────────────
-usersh ..> tables : docker exec psql
+usersh ..> tables : docker exec psql\n(Superuser postgres)
 importpy ..> tables : psycopg2\nlocalhost:5432
 
 legend right
   |= Linie |= Bedeutung |
   | durchgezogen | Request-Fluss zur Laufzeit |
   | gestrichelt | optional / asynchron / Wartung |
-  Client Components rufen /odata, /settings relativ auf
-  (über nginx); Server Components direkt backend:8080.
+  Client Components rufen die API über /api/backend auf
+  (nginx → Next.js → Backend); der Bearer-Token bleibt
+  auf dem Server. Server Components direkt backend:8080.
 endlegend
 
 @enduml
