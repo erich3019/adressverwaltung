@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.ModelBuilder;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,9 @@ using AdressverwaltungApi.Options;
 using AdressverwaltungApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Server-Kennung ("Server: Kestrel") nicht in Antworten preisgeben
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
 // === DATENBANK: Entity Framework Core mit PostgreSQL ===
 builder.Services.AddDbContext<AdresseDbContext>(options =>
@@ -52,6 +56,9 @@ if (Encoding.UTF8.GetByteCount(jwtOptions.Key) < JwtOptions.MinKeyLength
 builder.Services.Configure<JwtOptions>(jwtSection);
 builder.Services.AddSingleton<ITokenService, JwtTokenService>();
 
+// === ANMELDESCHUTZ: Sperre nach wiederholten Fehlversuchen pro E-Mail-Adresse ===
+builder.Services.AddSingleton<ILoginThrottle, MemoryLoginThrottle>();
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -61,6 +68,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience         = true,
             ValidateLifetime         = true,
             ValidateIssuerSigningKey = true,
+            // Nur das Verfahren akzeptieren, mit dem JwtTokenService signiert
+            ValidAlgorithms          = [SecurityAlgorithms.HmacSha256],
             ValidIssuer              = jwtOptions.Issuer,
             ValidAudience            = jwtOptions.Audience,
             IssuerSigningKey         = new SymmetricSecurityKey(
@@ -71,6 +80,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Jeder Endpunkt verlangt ein gültiges JWT, auch ohne eigenes [Authorize] – das gilt
+// damit ebenso für /odata und /odata/$metadata. Ausnahmen brauchen [AllowAnonymous].
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
 // === ODATA: EDM-Modell definieren ===
 var modelBuilder = new ODataConventionModelBuilder();
 modelBuilder.EnableLowerCamelCase(); // camelCase für alle Properties
@@ -78,7 +92,7 @@ modelBuilder.EntitySet<Adresse>("Adressen");
 modelBuilder.EntitySet<City>("Cities");
 
 // === CONTROLLERS + ODATA aktivieren ===
-builder.Services.AddControllers()
+builder.Services.AddControllers(options => options.Filters.Add<ODataErrorDetailFilter>())
     .AddJsonOptions(options =>
     {
         // camelCase für REST-Antworten (auth, settings)
@@ -137,6 +151,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Antworten enthalten Personendaten und Tokens: weder Browser noch Proxys sollen sie speichern
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    await next();
+});
 
 app.UseCors("AllowFrontend");
 app.UseRouting();

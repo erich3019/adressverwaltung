@@ -21,6 +21,9 @@ public class AuthorizationTests
     [InlineData("/odata/Adressen(1)")]
     [InlineData("/odata/Cities")]
     [InlineData("/odata/Cities(1)")]
+    [InlineData("/odata")]
+    [InlineData("/odata/$metadata")]
+    [InlineData("/settings")]
     public async Task Get_OhneToken_Liefert401(string url)
     {
         using var client = _factory.CreateClient();

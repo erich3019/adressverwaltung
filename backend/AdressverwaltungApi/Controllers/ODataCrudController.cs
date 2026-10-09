@@ -58,6 +58,12 @@ public abstract class ODataCrudController<TEntity> : ODataController
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
+        // Den Schlüssel vergibt die Datenbank. Ein mitgeschickter Wert wird verworfen,
+        // sonst liessen sich Ids vorbelegen, die später mit der Sequenz kollidieren.
+        var entry = _context.Entry(entity);
+        foreach (var name in KeyPropertyNames)
+            entry.Property(name).CurrentValue = entry.Property(name).Metadata.Sentinel;
+
         Entities.Add(entity);
         await _context.SaveChangesAsync();
         await OnCreatedAsync(entity);
@@ -77,6 +83,10 @@ public abstract class ODataCrudController<TEntity> : ODataController
 
         if (entity is null)
             return EntityNotFound(key);
+
+        // Der Schlüssel ist nicht änderbar (EF Core würde sonst mit einer Ausnahme abbrechen)
+        foreach (var name in KeyPropertyNames)
+            delta.UpdatableProperties.Remove(name);
 
         delta.Patch(entity);
 
@@ -107,6 +117,9 @@ public abstract class ODataCrudController<TEntity> : ODataController
     /// Unterklassen hängen hier Folgeaktionen an, statt Post zu kopieren.
     /// </summary>
     protected virtual Task OnCreatedAsync(TEntity entity) => Task.CompletedTask;
+
+    private IEnumerable<string> KeyPropertyNames
+        => _context.Model.FindEntityType(typeof(TEntity))!.FindPrimaryKey()!.Properties.Select(p => p.Name);
 
     private IActionResult EntityNotFound(int key)
         => NotFound($"{EntityDisplayName} mit Id {key} wurde nicht gefunden.");

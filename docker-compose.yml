@@ -35,6 +35,11 @@ services:
       dockerfile: Dockerfile
     container_name: adressverwaltung-backend
     restart: unless-stopped
+    # Keine Rechteausweitung im Container, keine Linux-Capabilities
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Nur lokal erreichbar; von aussen läuft der Zugriff über nginx (HTTPS)
     ports:
       - "127.0.0.1:5000:8080"
@@ -67,6 +72,11 @@ services:
       dockerfile: Dockerfile
     container_name: adressverwaltung-frontend
     restart: unless-stopped
+    # Keine Rechteausweitung im Container, keine Linux-Capabilities
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     # Kein direkter Port-Export nötig – nginx leitet intern weiter
     expose:
       - "3000"

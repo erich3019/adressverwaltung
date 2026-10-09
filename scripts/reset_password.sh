@@ -37,11 +37,12 @@ else
         echo "❌ Fehler: Passwörter stimmen nicht überein."
         exit 1
     fi
+fi
 
-    if [ ${#NEW_PASSWORD} -lt 8 ]; then
-        echo "❌ Fehler: Passwort muss mindestens 8 Zeichen lang sein."
-        exit 1
-    fi
+# Gilt auch für ein als Argument übergebenes Passwort
+if [ ${#NEW_PASSWORD} -lt 8 ]; then
+    echo "❌ Fehler: Passwort muss mindestens 8 Zeichen lang sein."
+    exit 1
 fi
 
 # ── Hash generieren (Python, PBKDF2-HMAC-SHA256, ASP.NET Core V3) ──

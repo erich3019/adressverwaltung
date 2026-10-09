@@ -83,16 +83,17 @@ Consequences:
 
 ### Authentication (two JWT layers)
 
-1. `AuthController` (`POST /auth/login`) verifies the password and issues a backend JWT (HS256, `Jwt:*` config, 8 h). `POST /auth/register` requires a valid JWT — every user has full access, so there is no anonymous self-registration.
+1. `AuthController` (`POST /auth/login`) verifies the password and issues a backend JWT (HS256, `Jwt:*` config, 8 h). `POST /auth/register` requires a valid JWT — every user has full access, so there is no anonymous self-registration. `ILoginThrottle` (`MemoryLoginThrottle`, in memory) blocks an e-mail address with 429 for 15 minutes after 5 failed logins, whether or not the account exists.
 2. NextAuth's Credentials provider (`frontend/lib/auth.ts`) calls `/auth/login` server-side and stores that backend JWT as `accessToken` inside its own encrypted session cookie; the `jwt`/`session` callbacks expose it as `session.accessToken` (typed in `types/next-auth.d.ts`).
 3. `apiFetch` in `lib/api.ts` attaches it as `Authorization: Bearer …`, using `getServerSession(authOptions)` on the server and `getSession()` in the browser. All backend calls should go through `apiFetch`.
-4. `frontend/middleware.ts` requires a session for every page except `/login` and `/api/auth`.
+4. `frontend/middleware.ts` requires a session that carries a backend `accessToken` for every page except `/login` and `/api/auth`.
 
-Session lifetime (NextAuth `maxAge`) and backend token lifetime (`Jwt:ExpiresInHours`) are both 8 h and should be changed together. Google sign-in is only registered when both Google env vars are set, and it yields no backend `accessToken`.
+Session lifetime (NextAuth `maxAge`) and backend token lifetime (`Jwt:ExpiresInHours`) are both 8 h and should be changed together. Google sign-in is only registered when both Google env vars are set, and it yields no backend `accessToken` — the `signIn` callback in `lib/auth.ts` therefore rejects it (`/login?error=AccessDenied`). It stays unusable until the backend can issue a token for a Google identity.
 
 ### Backend
 
-- **OData CRUD**: `ODataCrudController<TEntity>` implements `Get`/`Get(key)`/`Post`/`Patch`/`Delete` with `[Authorize]` and `[EnableQuery]`. A concrete controller only supplies `Entities` and `EntityDisplayName` (see `CitiesController`); `AdressenController` additionally overrides the `OnCreatedAsync` hook to trigger a notification — don't copy `Post`. Exposing a new entity over OData takes: model, `DbSet` + configuration in `AdresseDbContext`, `modelBuilder.EntitySet<T>("Name")` in `Program.cs`, and a controller whose name matches the entity set.
+- **Authorization**: `Program.cs` sets a fallback policy, so every endpoint (including `/odata` and `/odata/$metadata`) requires a JWT unless it is marked `[AllowAnonymous]` — only `POST /auth/login` is.
+- **OData CRUD**: `ODataCrudController<TEntity>` implements `Get`/`Get(key)`/`Post`/`Patch`/`Delete` with `[Authorize]` and `[EnableQuery]`. `Post` discards a client-supplied key and `Patch` ignores it. A concrete controller only supplies `Entities` and `EntityDisplayName` (see `CitiesController`); `AdressenController` additionally overrides the `OnCreatedAsync` hook to trigger a notification — don't copy `Post`. Exposing a new entity over OData takes: model, `DbSet` + configuration in `AdresseDbContext`, `modelBuilder.EntitySet<T>("Name")` in `Program.cs`, and a controller whose name matches the entity set.
 - **Plain REST**: `AuthController` and `SettingsController` are ordinary `[ApiController]`s with DTOs in `Dtos/`. `Settings` is treated as a single row. Tokens are issued by `ITokenService` (`JwtTokenService`).
 - **Configuration**: the `Jwt` and `SmtpSettings` sections are bound to `Options/JwtOptions.cs` and `Options/SmtpOptions.cs`; inject `IOptions<T>` instead of reading `IConfiguration` keys by string.
 - **Entity configuration**: required/length constraints live as DataAnnotations on the models; `OnModelCreating` only adds table names, indexes and the audit columns.
@@ -100,7 +101,8 @@ Session lifetime (NextAuth `maxAge`) and backend token lifetime (`Jwt:ExpiresInH
 - **Audit fields**: every entity (`Adresse`, `City`, `User`, `Settings`) derives from `AuditableEntity` (`CreateDate`, `CreatedBy`, `ChangeDate`, `ChangedBy`, `DateFrom`, `DateTo`). `AdresseDbContext.SaveChanges[Async]` fills them automatically — user from the JWT name claim, otherwise `"system"` (request headers are deliberately not trusted) — and defaults `DateFrom` to today. Don't set them in controllers. Timestamps are stored as `timestamp without time zone`, so `DateTime` values must have `Kind=Unspecified` (Npgsql rejects UTC kinds for that column type). Scripts that write to the database with raw SQL bypass this and must populate the audit columns themselves, as `create_user.sh` and `import_cities.py` do.
 - **Schema creation**: startup calls `db.Database.EnsureCreated()` followed by `DbSeeder.Seed`, not `Migrate()`. The files in `Migrations/` are not applied at runtime, and `EnsureCreated` does nothing once the database exists — a model change does not reach an existing database (e.g. the `postgres-data` volume) on its own.
 - **Notifications**: `AdressenController.OnCreatedAsync` → `INotificationService` (`EmailNotificationService`) → `IEmailService` (SMTP, `SmtpSettings:*`). The recipient is `Settings.NotificationEmail`; failures are logged and swallowed so they never fail the API request.
-- **OData limits**: `SetMaxTop(100)`; `Select`, `Filter`, `OrderBy`, `Count`, `Expand` are enabled.
+- **OData limits**: `SetMaxTop(100)`; `Select`, `Filter`, `OrderBy`, `Count`, `Expand` are enabled. `ODataErrorDetailFilter` strips exception type and stack trace from OData error responses.
+- **Response headers**: every backend response gets `Cache-Control: no-store`; the Kestrel `Server` header is off.
 
 ### Frontend
 
@@ -120,5 +122,5 @@ Comments such as `B-03`, `B-08`, `F-01`, `F-03` refer to findings in `documentat
 
 - Non-secret configuration for the Docker stack is inline in `docker-compose.yml`; security-relevant values come from the root `.env` through compose interpolation: `POSTGRES_PASSWORD` (also inserted into the backend connection string), `JWT_KEY` → `Jwt__Key`, `NEXTAUTH_SECRET`, `SEED_ADMIN_PASSWORD` → `Seed__AdminPassword`, `SMTP_USERNAME`/`SMTP_PASSWORD`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. The first three are required (`${VAR:?…}`), so compose refuses to start without them. A new secret goes into `.env`, `.env.example` and the compose file — never inline.
 - `nginx/ssl/*.pem`, `frontend/.env.local` and `.env` are git-ignored. A fresh clone has to create them before the stack starts: a `cert.pem`/`key.pem` pair in `nginx/ssl/` (nginx mounts that directory; `mkcert -cert-file nginx/ssl/cert.pem -key-file nginx/ssl/key.pem localhost 127.0.0.1 ::1`, a plain self-signed pair also works but shows as not secure) and `.env` from the tracked `.env.example`.
-- nginx rate-limits `/auth/` and `/api/auth/callback/credentials` (10 requests per minute per client IP) and sets the security headers; `documentation/Sicherheitsbericht.pdf` lists the security findings and what was done about them.
+- nginx rate-limits `/auth/` and `/api/auth/callback/credentials` (10 requests per minute per client IP) and sets the security headers, including a CSP with `default-src 'self'` — a resource loaded from another origin (font, script, image, API) needs a matching CSP entry in `nginx/nginx.conf`; `documentation/Sicherheitsbericht.pdf` lists the security findings and what was done about them.
 - `archive/*.zip` are tracked release bundles of earlier versions, not source.

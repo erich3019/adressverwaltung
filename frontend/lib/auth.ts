@@ -79,6 +79,12 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
+    // Nur Anmeldungen zulassen, für die das Backend ein Token ausgestellt hat.
+    // Google bestätigt lediglich, dass es das Konto gibt – ohne diese Prüfung
+    // erhielte jedes beliebige Google-Konto eine Session.
+    async signIn({ user }) {
+      return user.accessToken ? true : '/login?error=AccessDenied';
+    },
     // ID und Backend-JWT aus User-Objekt in den NextAuth-Token übernehmen.
     // Dieser Callback wird beim Login (user vorhanden) und bei jedem Request ausgeführt.
     async jwt({ token, user }) {

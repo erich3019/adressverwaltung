@@ -52,6 +52,10 @@ public class AdresseDbContext : DbContext
                     entry.Entity.CreateDate = now;
                     entry.Entity.CreatedBy  = currentUser;
 
+                    // Vom Client mitgeschickte Änderungsangaben verwerfen
+                    entry.Entity.ChangeDate = null;
+                    entry.Entity.ChangedBy  = null;
+
                     // DateFrom auf heute setzen, falls nicht explizit übergeben
                     if (entry.Entity.DateFrom == default)
                         entry.Entity.DateFrom = DateOnly.FromDateTime(now);

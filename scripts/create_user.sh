@@ -66,6 +66,10 @@ if ! echo "$NEW_EMAIL" | grep -qE '^[^@]+@[^@]+\.[^@]+$'; then
     exit 1
 fi
 
+# Wie das Backend (/auth/register) in Kleinbuchstaben speichern, damit dieselbe
+# Adresse nicht in zwei Schreibweisen angelegt werden kann
+NEW_EMAIL=$(printf '%s' "$NEW_EMAIL" | tr '[:upper:]' '[:lower:]')
+
 # ── Prüfen ob Container läuft ────────────────────────────────
 if ! docker ps --format '{{.Names}}' | grep -q "^${DB_CONTAINER}$"; then
     echo ""
@@ -101,7 +105,7 @@ echo "⏳ Prüfe ob E-Mail bereits vergeben ist..."
 # Werte als psql-Variablen übergeben (:'name' quotet sicher) statt sie ins SQL einzusetzen
 EMAIL_EXISTS=$(docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tA \
     -v ON_ERROR_STOP=1 -v email="$NEW_EMAIL" <<'SQL'
-SELECT COUNT(*) FROM "Users" WHERE "Email" = :'email';
+SELECT COUNT(*) FROM "Users" WHERE lower("Email") = :'email';
 SQL
 )
 

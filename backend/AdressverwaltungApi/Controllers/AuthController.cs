@@ -16,6 +16,7 @@ namespace AdressverwaltungApi.Controllers;
 /// - Das PasswordHash-Feld wird NIEMALS in Responses zurückgegeben
 /// - Fehlermeldungen sind bewusst generisch (kein Hinweis ob E-Mail oder Passwort falsch)
 /// - Bei erfolgreichem Login wird ein JWT Bearer-Token ausgestellt (ITokenService)
+/// - Wiederholte Fehlversuche sperren die E-Mail-Adresse vorübergehend (ILoginThrottle)
 /// - Registrierung ist nur für bereits angemeldete Benutzer möglich
 /// </summary>
 [Route("auth")]
@@ -34,15 +35,18 @@ public class AuthController : ControllerBase
     private readonly AdresseDbContext _context;
     private readonly IPasswordHasher<User> _hasher;
     private readonly ITokenService _tokenService;
+    private readonly ILoginThrottle _throttle;
 
     public AuthController(
         AdresseDbContext context,
         IPasswordHasher<User> hasher,
-        ITokenService tokenService)
+        ITokenService tokenService,
+        ILoginThrottle throttle)
     {
         _context      = context;
         _hasher       = hasher;
         _tokenService = tokenService;
+        _throttle     = throttle;
     }
 
     // POST /auth/register
@@ -76,12 +80,21 @@ public class AuthController : ControllerBase
 
     // POST /auth/login
     // Gibt { id, name, email, token } zurück – das Format, das NextAuth.js erwartet
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
+        }
+
+        // Nach zu vielen Fehlversuchen ist die Adresse vorübergehend gesperrt –
+        // auch für das richtige Passwort und auch für unbekannte Adressen.
+        if (_throttle.IsBlocked(req.Email))
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { message = "Zu viele Anmeldeversuche. Bitte später erneut versuchen." });
         }
 
         var user = await FindUserByEmailAsync(req.Email);
@@ -95,9 +108,13 @@ public class AuthController : ControllerBase
 
         if (user is null || result == PasswordVerificationResult.Failed)
         {
+            _throttle.RegisterFailure(req.Email);
+
             // Bewusst generische Fehlermeldung
             return Unauthorized(new { message = "Ungültige Anmeldedaten." });
         }
+
+        _throttle.Reset(req.Email);
 
         return Ok(new LoginResponse(
             Id:    user.Id.ToString(),

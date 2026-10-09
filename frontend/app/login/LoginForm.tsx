@@ -34,7 +34,10 @@ export function LoginForm({ googleEnabled }: LoginFormProps) {
   const [passwort, setPasswort] = useState('');
   const [zeigePw,  setZeigePw]  = useState(false);
   const [laden,    setLaden]    = useState(false);
-  const [fehler,   setFehler]   = useState<string | null>(null);
+  // ?error=… setzt NextAuth, wenn es eine Anmeldung ablehnt (z.B. Google-Konto ohne Zugriff)
+  const [fehler,   setFehler]   = useState<string | null>(
+    searchParams.get('error') ? 'Anmeldung nicht möglich: Für dieses Konto besteht kein Zugriff.' : null
+  );
 
   async function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
