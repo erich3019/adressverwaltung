@@ -195,7 +195,7 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
                 <li
                   key={city.id}
                   onMouseDown={() => waehleVorschlag(city)}
-                  className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between text-sm"
+                  className="px-3 py-2 hover:bg-akzent-50 cursor-pointer flex justify-between text-sm"
                 >
                   <span className="font-mono font-medium text-gray-800">{city.postalCode}</span>
                   <span className="text-gray-600 ml-3">{city.cityName}</span>

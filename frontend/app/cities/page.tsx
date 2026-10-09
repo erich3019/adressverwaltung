@@ -40,7 +40,7 @@ export default async function CitiesPage({ searchParams }: Props) {
         </div>
         <Link
           href="/cities/neu"
-          className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 font-semibold transition-colors"
+          className="bg-akzent-600 text-white px-5 py-2 rounded-lg hover:bg-akzent-700 font-semibold transition-colors"
         >
           + Neue Stadt
         </Link>
@@ -86,7 +86,7 @@ export default async function CitiesPage({ searchParams }: Props) {
           <p className="text-gray-400 text-lg mb-4">Noch keine Städte erfasst.</p>
           <Link
             href="/cities/neu"
-            className="inline-block bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 font-semibold transition-colors"
+            className="inline-block bg-akzent-600 text-white px-5 py-2 rounded-lg hover:bg-akzent-700 font-semibold transition-colors"
           >
             Erste Stadt anlegen
           </Link>
@@ -121,7 +121,7 @@ export default async function CitiesPage({ searchParams }: Props) {
                   <td className="px-6 py-3 text-right space-x-3 whitespace-nowrap">
                     <Link
                       href={`/cities/${city.id}/bearbeiten`}
-                      className="text-blue-600 hover:text-blue-800 font-medium"
+                      className="text-akzent-600 hover:text-akzent-800 font-medium"
                     >
                       Bearbeiten
                     </Link>

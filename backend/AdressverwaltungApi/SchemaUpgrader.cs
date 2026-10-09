@@ -29,5 +29,10 @@ public static class SchemaUpgrader
         db.Database.ExecuteSqlRaw("""
             ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "TokenVersion" integer NOT NULL DEFAULT 0;
             """);
+
+        // Akzentfarbe der Oberfläche
+        db.Database.ExecuteSqlRaw("""
+            ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "AccentColor" character varying(20) NOT NULL DEFAULT 'blue';
+            """);
     }
 }

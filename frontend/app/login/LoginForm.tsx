@@ -125,7 +125,7 @@ export function LoginForm({ googleEnabled }: LoginFormProps) {
         <button
           type="submit"
           disabled={laden}
-          className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-akzent-600 text-white py-2.5 rounded-lg hover:bg-akzent-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {laden ? 'Wird angemeldet…' : 'Anmelden'}
         </button>

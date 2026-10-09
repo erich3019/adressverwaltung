@@ -1,6 +1,121 @@
 @import 'tailwindcss';
 
 /*
+  Akzentfarbe der Oberfläche. Die Komponenten verwenden nur «akzent-…»
+  (bg-akzent-600, text-akzent-100 …). Standard ist Blau; die Einstellung
+  «Farbe» setzt data-farbe am <html>-Element (app/layout.tsx) und tauscht damit
+  die Palette. Helle Paletten sind um eine Stufe dunkler zugeordnet, damit
+  weisse Schrift auf den Schaltflächen lesbar bleibt.
+  Eine weitere Farbe braucht einen Block hier, einen Eintrag in lib/farben.ts
+  und einen in AccentColors.cs im Backend.
+*/
+@theme {
+  --color-akzent-50: var(--color-blue-50);
+  --color-akzent-100: var(--color-blue-100);
+  --color-akzent-200: var(--color-blue-200);
+  --color-akzent-300: var(--color-blue-300);
+  --color-akzent-400: var(--color-blue-400);
+  --color-akzent-500: var(--color-blue-500);
+  --color-akzent-600: var(--color-blue-600);
+  --color-akzent-700: var(--color-blue-700);
+  --color-akzent-800: var(--color-blue-800);
+  --color-akzent-900: var(--color-blue-900);
+}
+
+/* Auch Blau braucht einen Block: Die Farbwahl der Einstellungen zeigt jede Farbe
+   innerhalb einer Seite, die bereits eine andere Palette trägt. */
+[data-farbe='blue'] {
+  --color-akzent-50: var(--color-blue-50);
+  --color-akzent-100: var(--color-blue-100);
+  --color-akzent-200: var(--color-blue-200);
+  --color-akzent-300: var(--color-blue-300);
+  --color-akzent-400: var(--color-blue-400);
+  --color-akzent-500: var(--color-blue-500);
+  --color-akzent-600: var(--color-blue-600);
+  --color-akzent-700: var(--color-blue-700);
+  --color-akzent-800: var(--color-blue-800);
+  --color-akzent-900: var(--color-blue-900);
+}
+
+[data-farbe='green'] {
+  --color-akzent-50: var(--color-green-50);
+  --color-akzent-100: var(--color-green-100);
+  --color-akzent-200: var(--color-green-200);
+  --color-akzent-300: var(--color-green-300);
+  --color-akzent-400: var(--color-green-500);
+  --color-akzent-500: var(--color-green-600);
+  --color-akzent-600: var(--color-green-700);
+  --color-akzent-700: var(--color-green-800);
+  --color-akzent-800: var(--color-green-900);
+  --color-akzent-900: var(--color-green-950);
+}
+
+[data-farbe='teal'] {
+  --color-akzent-50: var(--color-teal-50);
+  --color-akzent-100: var(--color-teal-100);
+  --color-akzent-200: var(--color-teal-200);
+  --color-akzent-300: var(--color-teal-300);
+  --color-akzent-400: var(--color-teal-500);
+  --color-akzent-500: var(--color-teal-600);
+  --color-akzent-600: var(--color-teal-700);
+  --color-akzent-700: var(--color-teal-800);
+  --color-akzent-800: var(--color-teal-900);
+  --color-akzent-900: var(--color-teal-950);
+}
+
+[data-farbe='violet'] {
+  --color-akzent-50: var(--color-violet-50);
+  --color-akzent-100: var(--color-violet-100);
+  --color-akzent-200: var(--color-violet-200);
+  --color-akzent-300: var(--color-violet-300);
+  --color-akzent-400: var(--color-violet-400);
+  --color-akzent-500: var(--color-violet-500);
+  --color-akzent-600: var(--color-violet-600);
+  --color-akzent-700: var(--color-violet-700);
+  --color-akzent-800: var(--color-violet-800);
+  --color-akzent-900: var(--color-violet-900);
+}
+
+[data-farbe='red'] {
+  --color-akzent-50: var(--color-red-50);
+  --color-akzent-100: var(--color-red-100);
+  --color-akzent-200: var(--color-red-200);
+  --color-akzent-300: var(--color-red-300);
+  --color-akzent-400: var(--color-red-400);
+  --color-akzent-500: var(--color-red-500);
+  --color-akzent-600: var(--color-red-600);
+  --color-akzent-700: var(--color-red-700);
+  --color-akzent-800: var(--color-red-800);
+  --color-akzent-900: var(--color-red-900);
+}
+
+[data-farbe='orange'] {
+  --color-akzent-50: var(--color-orange-50);
+  --color-akzent-100: var(--color-orange-100);
+  --color-akzent-200: var(--color-orange-200);
+  --color-akzent-300: var(--color-orange-300);
+  --color-akzent-400: var(--color-orange-500);
+  --color-akzent-500: var(--color-orange-600);
+  --color-akzent-600: var(--color-orange-700);
+  --color-akzent-700: var(--color-orange-800);
+  --color-akzent-800: var(--color-orange-900);
+  --color-akzent-900: var(--color-orange-950);
+}
+
+[data-farbe='slate'] {
+  --color-akzent-50: var(--color-slate-50);
+  --color-akzent-100: var(--color-slate-100);
+  --color-akzent-200: var(--color-slate-200);
+  --color-akzent-300: var(--color-slate-300);
+  --color-akzent-400: var(--color-slate-400);
+  --color-akzent-500: var(--color-slate-500);
+  --color-akzent-600: var(--color-slate-600);
+  --color-akzent-700: var(--color-slate-700);
+  --color-akzent-800: var(--color-slate-800);
+  --color-akzent-900: var(--color-slate-900);
+}
+
+/*
   Zwei Standardwerte haben sich mit Tailwind CSS 4 geändert. Diese Regeln stellen
   das Verhalten von Version 3 wieder her, damit die Oberfläche gleich aussieht:
   - Rahmen ohne eigene Farbklasse sind hellgrau statt in der Textfarbe.

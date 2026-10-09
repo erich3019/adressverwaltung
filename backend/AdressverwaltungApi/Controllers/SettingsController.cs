@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,7 @@ namespace AdressverwaltungApi.Controllers;
 /// <summary>
 /// Controller für Anwendungseinstellungen.
 /// GET /settings   – aktuelle Einstellungen lesen
-/// PUT /settings   – Benachrichtigungs-E-Mail ändern (nur Rolle Admin)
+/// PUT /settings   – Benachrichtigungs-E-Mail und Akzentfarbe ändern (nur Rolle Admin)
 /// </summary>
 [Authorize]
 [Route("settings")]
@@ -30,7 +31,7 @@ public class SettingsController : ControllerBase
     {
         var settings = await _context.Settings.FirstOrDefaultAsync();
 
-        return Ok(new SettingsResponse(settings?.NotificationEmail ?? string.Empty));
+        return Ok(ToResponse(settings));
     }
 
     // PUT /settings – nur für Administratoren
@@ -43,6 +44,18 @@ public class SettingsController : ControllerBase
             return BadRequest(ModelState);
         }
 
+        // Leer ist erlaubt (keine Benachrichtigung); sonst muss es eine E-Mail-Adresse sein
+        var email = req.NotificationEmail?.Trim() ?? string.Empty;
+        if (email.Length > 0 && !new EmailAddressAttribute().IsValid(email))
+        {
+            return BadRequest(new { message = "Ungültige E-Mail-Adresse." });
+        }
+
+        if (req.AccentColor is not null && !AccentColors.IsValid(req.AccentColor))
+        {
+            return BadRequest(new { message = $"Unbekannte Farbe. Erlaubt sind: {string.Join(", ", AccentColors.All)}." });
+        }
+
         var settings = await _context.Settings.FirstOrDefaultAsync();
 
         if (settings is null)
@@ -52,9 +65,19 @@ public class SettingsController : ControllerBase
             _context.Settings.Add(settings);
         }
 
-        settings.NotificationEmail = req.NotificationEmail.Trim();
+        settings.NotificationEmail = email;
+        if (req.AccentColor is not null)
+        {
+            settings.AccentColor = req.AccentColor;
+        }
         await _context.SaveChangesAsync();
 
-        return Ok(new SettingsResponse(settings.NotificationEmail));
+        return Ok(ToResponse(settings));
     }
+
+    // Die Rolle stammt aus der Datenbank (TokenUserValidator), nicht aus dem Token
+    private SettingsResponse ToResponse(Settings? settings) => new(
+        settings?.NotificationEmail ?? string.Empty,
+        settings?.AccentColor ?? AccentColors.Default,
+        CanEdit: User.IsInRole(Roles.Admin));
 }

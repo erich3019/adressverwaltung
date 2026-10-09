@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import './globals.css';
 import Providers from './providers';
 import NavBar from '@/components/NavBar';
+import { getAkzentfarbe } from '@/lib/api';
 
 export const metadata: Metadata = {
   title: 'Adressverwaltung',
@@ -18,8 +19,11 @@ export default async function RootLayout({
   // Content-Security-Policy (middleware.ts) in seine Skripte einsetzen.
   await headers();
 
+  // Die in den Einstellungen gewählte Farbe; globals.css tauscht damit die Palette
+  const farbe = await getAkzentfarbe();
+
   return (
-    <html lang="de">
+    <html lang="de" data-farbe={farbe}>
       <body className="bg-gray-100 min-h-screen">
         {/*
           Providers kapselt den SessionProvider von NextAuth.

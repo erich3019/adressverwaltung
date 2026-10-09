@@ -4,6 +4,7 @@ import { serverAuthOptions } from './auth';
 import { API_HEADER } from './apiHeader';
 import { Adresse, AdresseCreate, AdresseUpdate } from '@/types/adresse';
 import { City, CityCreate, CityUpdate } from '@/types/city';
+import { Akzentfarbe, alsAkzentfarbe, STANDARDFARBE } from './farben';
 
 // Server Components (typeof window === 'undefined'): direkt zum Backend
 //   → Docker-intern: http://backend:8080, der Bearer-Token kommt aus der Session
@@ -280,20 +281,47 @@ export async function loescheCity(id: number): Promise<void> {
 
 export interface SettingsData {
   notificationEmail: string;
+  accentColor: Akzentfarbe;
+  // Ob der angemeldete Benutzer die Einstellungen ändern darf (Rolle Admin).
+  // Das Backend liest die Rolle bei jeder Anfrage aus der Datenbank.
+  canEdit: boolean;
+}
+
+/** Was PUT /settings entgegennimmt. */
+export type SettingsUpdate = Pick<SettingsData, 'notificationEmail' | 'accentColor'>;
+
+function normalizeSettings(raw: RawEntity): SettingsData {
+  return {
+    notificationEmail: String(raw['notificationEmail'] ?? ''),
+    accentColor:       alsAkzentfarbe(raw['accentColor']),
+    canEdit:           raw['canEdit'] === true,
+  };
 }
 
 // GET /settings – Einstellungen lesen
 export async function getSettings(): Promise<SettingsData> {
   const response = await apiRequest(`${BASE_URL}/settings`, 'Fehler beim Lesen der Einstellungen');
-  return response.json() as Promise<SettingsData>;
+  return normalizeSettings(await response.json() as RawEntity);
+}
+
+// Akzentfarbe für das Layout. Ohne Anmeldung (Login-Seite) oder bei einem Fehler
+// gilt die Standardfarbe, damit die Seite in jedem Fall erscheint.
+export async function getAkzentfarbe(): Promise<Akzentfarbe> {
+  try {
+    const response = await apiFetch(`${BASE_URL}/settings`, { cache: 'no-store' });
+    if (!response.ok) return STANDARDFARBE;
+    return normalizeSettings(await response.json() as RawEntity).accentColor;
+  } catch {
+    return STANDARDFARBE;
+  }
 }
 
 // PUT /settings – Einstellungen speichern
-export async function speichereSettings(data: SettingsData): Promise<SettingsData> {
+export async function speichereSettings(data: SettingsUpdate): Promise<SettingsData> {
   const response = await apiRequest(
     `${BASE_URL}/settings`,
     'Fehler beim Speichern der Einstellungen',
     jsonRequest('PUT', data)
   );
-  return response.json() as Promise<SettingsData>;
+  return normalizeSettings(await response.json() as RawEntity);
 }

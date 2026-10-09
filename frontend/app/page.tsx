@@ -88,7 +88,7 @@ export default function AdressenListePage() {
         </div>
         <Link
           href="/adressen/neu"
-          className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 font-medium transition-colors"
+          className="bg-akzent-600 text-white px-5 py-2 rounded-lg hover:bg-akzent-700 font-medium transition-colors"
         >
           + Neue Adresse
         </Link>
@@ -136,7 +136,7 @@ export default function AdressenListePage() {
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-blue-800 text-white">
+            <thead className="bg-akzent-800 text-white">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold">Vorname</th>
                 <th className="px-4 py-3 text-left font-semibold">Name</th>
@@ -151,7 +151,7 @@ export default function AdressenListePage() {
               {adressen.map((adresse, index) => (
                 <tr
                   key={adresse.id}
-                  className={`border-b last:border-b-0 hover:bg-blue-50 transition-colors ${
+                  className={`border-b last:border-b-0 hover:bg-akzent-50 transition-colors ${
                     index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                   }`}
                 >
@@ -165,7 +165,7 @@ export default function AdressenListePage() {
                     <div className="flex gap-3">
                       <Link
                         href={`/adressen/${adresse.id}/bearbeiten`}
-                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                        className="text-akzent-600 hover:text-akzent-800 hover:underline font-medium"
                       >
                         Bearbeiten
                       </Link>

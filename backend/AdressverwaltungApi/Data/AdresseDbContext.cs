@@ -152,6 +152,11 @@ public class AdresseDbContext : DbContext
             entity.Property(u => u.TokenVersion).HasDefaultValue(0);
         });
 
-        modelBuilder.Entity<Settings>().ToTable("Settings");
+        modelBuilder.Entity<Settings>(entity =>
+        {
+            entity.ToTable("Settings");
+
+            entity.Property(s => s.AccentColor).HasDefaultValue(AccentColors.Default);
+        });
     }
 }

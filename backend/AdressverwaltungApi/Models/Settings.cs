@@ -12,9 +12,14 @@ public class Settings : AuditableEntity
 
     /// <summary>
     /// E-Mail-Adresse, an die bei einer neuen Adresse eine Benachrichtigung gesendet wird.
+    /// Leer bedeutet: keine Benachrichtigung.
     /// </summary>
-    [Required]
+    [Required(AllowEmptyStrings = true)]
     [MaxLength(256)]
-    [EmailAddress]
     public string NotificationEmail { get; set; } = string.Empty;
+
+    /// <summary>Akzentfarbe der Oberfläche, siehe <see cref="AccentColors"/>.</summary>
+    [Required]
+    [MaxLength(20)]
+    public string AccentColor { get; set; } = AccentColors.Default;
 }

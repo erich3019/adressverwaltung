@@ -236,7 +236,7 @@
 
 <h3>Schritt 33: NotificationEmail</h3>
 <p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
-<p><b>Was passiert:</b> Die Einstellungen bestehen aus einer einzigen Zeile mit der Benachrichtigungs-E-Mail. Sie wird auf der Seite «Einstellungen» gepflegt.</p>
+<p><b>Was passiert:</b> Die Einstellungen bestehen aus einer einzigen Zeile mit der Benachrichtigungs-E-Mail und der Farbe der Oberfläche. Sie wird auf der Seite «Einstellungen» gepflegt.</p>
 <p><b>Im Code:</b> Modell <code>Models/Settings.cs</code>; gepflegt über <code>SettingsController</code> (<code>GET/PUT /settings</code>).</p>
 <p><b>Warum so:</b> Gibt es keine Zeile oder ist die Adresse leer, schreibt der Dienst nur einen Log-Eintrag und endet. Schritt 34 entfällt dann (Rahmen «opt» im Diagramm).</p>
 

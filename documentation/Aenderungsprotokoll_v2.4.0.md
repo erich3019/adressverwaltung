@@ -2,7 +2,7 @@
 
 **Datum:** 9. Oktober 2026\
 **Ausgangsstand:** v2.3.0 (Commit `8f976b6`)\
-**Endstand:** Commits `68d2789`, `dc6f6e4`, `594258d` und der Commit mit diesem Dokument\
+**Endstand:** Commits `68d2789`, `dc6f6e4`, `594258d`, `3484396` und der Commit mit der Fassung dieses Dokuments, die Abschnitt 4 enthält\
 **Versionsnummer:** 2.4.0 (vorher 2.3.0)
 
 ---
@@ -15,11 +15,12 @@ Version 2.4.0 fasst die Änderungen vom 9. Oktober 2026 zusammen. Die Abschnitte
 | --- | --- | --- | --- |
 | 1 | Zweite Sicherheitsprüfung | 11 Befunde (S-19 bis S-29), alle behoben | `68d2789`, `dc6f6e4` |
 | 2 | Offene Punkte | O-03 bis O-08 aus dem Sicherheitsbericht bearbeitet | `594258d` |
-| 3 | Dokumentation | Diagramme, Schulungsunterlage und Tutorial auf den Stand des Codes gebracht | mit diesem Dokument |
-| 4 | Aufräumen | Überholte Dokumente und Dateien gelöscht | mit diesem Dokument |
-| 5 | Version | Versionsnummer auf 2.4.0 gesetzt | mit diesem Dokument |
+| 3 | Einstellungen | Fehler beim Ändern der E-Mail-Adresse behoben; Farbe der Oberfläche wählbar | nach `3484396` |
+| 4 | Dokumentation | Diagramme, Schulungsunterlage und Tutorial auf den Stand des Codes gebracht | `3484396` |
+| 5 | Aufräumen | Überholte Dokumente und Dateien gelöscht | `3484396` |
+| 6 | Version | Versionsnummer auf 2.4.0 gesetzt | `3484396` |
 
-**Das Datenbankschema ändert sich:** Die Tabelle `Users` erhält die Spalten `Role` und `TokenVersion`. Das Backend ergänzt sie beim Start selbst; bestehende Daten bleiben erhalten.
+**Das Datenbankschema ändert sich:** Die Tabelle `Users` erhält die Spalten `Role` und `TokenVersion`, die Tabelle `Settings` die Spalte `AccentColor`. Das Backend ergänzt sie beim Start selbst; bestehende Daten bleiben erhalten.
 
 Für den Betrieb ändert sich einiges; Abschnitt 3 beschreibt unter «Nach dem Aktualisieren zu tun», was nötig ist.
 
@@ -175,24 +176,64 @@ Nicht geprüft: andere Browser als Chromium, die Bedienung von Hand und die Goog
 
 ---
 
-## 4. Dokumentation
+## 4. Einstellungen
+
+### Fehler: E-Mail-Adresse liess sich nicht mehr ändern
+
+Seit der Einführung der Rollen sperrte die Einstellungsseite das Formular, wenn die Session des Benutzers keine Rolle `Admin` enthielt. Die Rolle in der Session stammt aber vom Login. Wer schon vor der Aktualisierung angemeldet war, hatte eine Session ohne Rolle: Das Feld war gesperrt, obwohl der Benutzer in der Datenbank `Admin` ist und das Backend das Speichern erlaubt hätte. Dasselbe wäre nach jedem Rollenwechsel passiert.
+
+Jetzt meldet das Backend mit den Einstellungen, ob der Benutzer ändern darf (`canEdit`). Es liest die Rolle dafür bei jeder Anfrage aus der Datenbank. Eine erneute Anmeldung ist nicht nötig.
+
+Dabei behoben: Eine leere E-Mail-Adresse wurde mit Fehler 400 abgelehnt, obwohl die Seite «Leer lassen = keine E-Mail-Benachrichtigungen» verspricht. Leer ist jetzt erlaubt.
+
+### Neu: Farbe der Oberfläche
+
+Auf der Einstellungsseite lässt sich die Farbe von Kopfzeile, Schaltflächen und Links wählen: Blau (Standard), Grün, Türkis, Violett, Rot, Orange oder Grau. Die Farbe gilt für alle Benutzer; ändern darf sie nur die Rolle `Admin`. Die Login-Seite bleibt blau, weil die Einstellungen ohne Anmeldung nicht lesbar sind.
+
+| Datei | Änderung |
+| --- | --- |
+| `Models/Settings.cs`, neu `Models/AccentColors.cs` | Feld `AccentColor`; Liste der erlaubten Farben. Die E-Mail-Adresse darf leer sein |
+| `Dtos/SettingsDtos.cs` | Anfrage mit optionaler Farbe; Antwort mit `accentColor` und `canEdit` |
+| `Controllers/SettingsController.cs` | Prüft E-Mail-Adresse und Farbe selbst (400 bei ungültigen Werten); liefert `canEdit` |
+| `Data/AdresseDbContext.cs`, `SchemaUpgrader.cs` | Spalte `Settings.AccentColor` mit Standardwert `blue`; wird in einer bestehenden Datenbank ergänzt |
+| `frontend/app/globals.css` | Palette `akzent` aus CSS-Variablen; ein Block pro Farbe |
+| neu `frontend/lib/farben.ts`, `frontend/lib/api.ts` | Liste der Farben; `getAkzentfarbe`, Einstellungen mit Farbe und `canEdit` |
+| `frontend/app/layout.tsx` | Setzt die gewählte Farbe als `data-farbe` am `<html>`-Element |
+| `frontend/app/einstellungen/page.tsx` | Farbwahl; Sperre nach `canEdit` statt nach der Rolle in der Session |
+| Seiten und Komponenten mit Farbklassen | `blue-…` durch `akzent-…` ersetzt |
+| neu `AdressverwaltungApi.Tests/SettingsTests.cs` | 8 Tests: Standardwerte, `canEdit` je Rolle, Speichern von E-Mail und Farbe, leere E-Mail, ungültige Werte |
+
+Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose restart nginx`. Die neue Spalte entsteht beim Start des Backends.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `dotnet test` | 77 von 77 bestanden (8 neu) |
+| Frontend-Build mit Typprüfung und Lint im Docker-Image | erfolgreich |
+| Browser (Chromium, ferngesteuert) als `Admin`: E-Mail-Feld frei, E-Mail und Farbe speichern, leere E-Mail speichern | erfolgreich; Kopfzeile wechselt ohne Neuladen die Farbe, keine Fehler in der Konsole |
+| Browser als `User` | Formular gesperrt, gewählte Farbe sichtbar |
+
+Nicht geprüft: der Fall einer Session aus der Zeit vor den Rollen selbst (er liess sich nicht nachstellen; geprüft ist, dass die Seite die Rolle der Session nicht mehr verwendet), andere Browser als Chromium und der Kontrast jeder Farbe von Hand.
+
+---
+
+## 5. Dokumentation
 
 | Datei | Änderung |
 | --- | --- |
 | `documentation/Sequenzdiagramm.puml` und `.svg` | Proxy `/api/backend`, Kontosperre, Rolle und Token-Version, Abgleich mit der Datenbank, Abmeldung bei 401; 44 statt 38 Schritte |
 | `documentation/Systemarchitektur.puml` und `.svg` | Proxy, CSP mit Nonce, `TokenUserValidator`, `SchemaUpgrader`, Rolle `adressverwaltung_app`, `create_db_role.sh` |
 | `documentation/Schulungsunterlage_Sequenzdiagramm.html`, `.pdf` und beide PNG | Neu erzeugt; erläutert die 44 Schritte |
-| neu `documentation/Tutorial_WebApp_v2.4.html` und `.pdf` | Lehrmittel zum aktuellen Stand; ersetzt die Ausgaben 2.0 und 2.1. Alle Codebeispiele stimmen wörtlich mit den Quelldateien überein |
+| neu `documentation/Tutorial_WebApp_v2.4.html` und `.pdf` | Lehrmittel zum aktuellen Stand, einschliesslich Abschnitt 4; ersetzt die Ausgaben 2.0 und 2.1. Alle Codebeispiele stimmen wörtlich mit den Quelldateien überein |
 | `documentation/Sicherheitsbericht.html` und `.pdf` | Versionsangabe |
 | `documentation/Aenderungsprotokoll_v2.3.0.md` und `.pdf` | Nachträge vom 9. Oktober 2026 in dieses Dokument verschoben |
 | `README.md` | Schrittzahl, Weg der API-Aufrufe über den Proxy, Versionstabelle, Verweis auf das Tutorial |
 | `CLAUDE.md` | Version; Hinweis auf das Tutorial; überholte Angaben entfernt |
 
-Neu im Tutorial gegenüber der Ausgabe 2.1: Geheimnisse in `.env`, HTTPS mit nginx und mkcert, Tests, Rollen, Widerruf von Tokens, Kontosperre, Proxy für API-Aufrufe, Content-Security-Policy mit Nonce, Blättern in Listen, eigene Datenbankrolle, `SchemaUpgrader`. Vier Übungsaufgaben im Anhang C sind ersetzt, weil ihre Lösung inzwischen im Projekt steht.
+Neu im Tutorial gegenüber der Ausgabe 2.1: Geheimnisse in `.env`, HTTPS mit nginx und mkcert, Tests, Rollen, Widerruf von Tokens, Kontosperre, Proxy für API-Aufrufe, Content-Security-Policy mit Nonce, Blättern in Listen, eigene Datenbankrolle, `SchemaUpgrader`, Akzentfarbe. Vier Übungsaufgaben im Anhang C sind ersetzt, weil ihre Lösung inzwischen im Projekt steht.
 
 ---
 
-## 5. Aufgeräumt
+## 6. Aufgeräumt
 
 | Datei | Grund |
 | --- | --- |
@@ -207,7 +248,7 @@ Die Änderungsprotokolle der früheren Versionen und die Versionsbündel unter `
 
 ---
 
-## 6. Versionsnummer
+## 7. Versionsnummer
 
 Die Version 2.4.0 steht in `README.md`, `CLAUDE.md`, `frontend/package.json`, `frontend/package-lock.json`, in beiden Diagrammen, in der Schulungsunterlage, im Sicherheitsbericht und im Tutorial.
 

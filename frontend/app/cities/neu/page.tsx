@@ -18,7 +18,7 @@ export default function NeueStadtPage() {
   return (
     <main className="max-w-2xl mx-auto px-6 py-10">
       <div className="mb-6">
-        <Link href="/cities" className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+        <Link href="/cities" className="text-akzent-600 hover:text-akzent-800 text-sm font-medium">
           ← Zurück zur Übersicht
         </Link>
       </div>

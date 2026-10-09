@@ -132,7 +132,7 @@ Der Sicherheitsbericht mit allen Befunden und Korrekturen liegt unter `documenta
 
 - **Adressen** (`/`): Liste, Erfassen, Bearbeiten, Löschen
 - **Städte** (`/cities`): PLZ-Verzeichnis pflegen; dient als Wertehilfe im Adressformular (Vorschläge ab zwei Ziffern)
-- **Einstellungen** (`/einstellungen`): E-Mail-Adresse für Benachrichtigungen bei neuen Adressen
+- **Einstellungen** (`/einstellungen`): E-Mail-Adresse für Benachrichtigungen bei neuen Adressen und Farbe der Oberfläche (ändern nur als `Admin`)
 - **Login** (`/login`): E-Mail und Passwort, optional Google
 - **Audit-Felder**: Alle Datensätze führen `CreateDate`, `CreatedBy`, `ChangeDate`, `ChangedBy`, `DateFrom`, `DateTo`; das Backend setzt sie automatisch
 
@@ -255,7 +255,7 @@ adressverwaltung/
 
 | Version | Inhalt |
 |---------|--------|
-| 2.4.0 | Zweite Sicherheitsprüfung: Rollen, Token-Widerruf, Proxy für API-Aufrufe, CSP mit Nonce, Blättern, eigene Datenbankrolle |
+| 2.4.0 | Zweite Sicherheitsprüfung: Rollen, Token-Widerruf, Proxy für API-Aufrufe, CSP mit Nonce, Blättern, eigene Datenbankrolle, wählbare Farbe |
 | 2.3.0 | .NET 10, Next.js 15, Backend-Tests, Sicherheitskorrekturen, Clean-Code-Nachprüfung |
 | 2.2.0 | JWT-Authentifizierung im Backend, Bearer-Token aus der NextAuth-Session |
 | 2.1.0 | Umsetzung der Clean-Code-Analyse (14 Befunde) |
