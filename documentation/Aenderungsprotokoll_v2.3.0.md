@@ -3,7 +3,8 @@
 **Datum:** 4. Oktober 2026\
 **Ausgangsstand:** v2.2.0 (Commit `1b21258`)\
 **Endstand:** Commit `f09a2fc` auf `main`, 8 Commits, 69 geänderte Dateien\
-**Versionsnummer:** 2.3.0 (vorher 2.2.0)
+**Versionsnummer:** 2.3.0 (vorher 2.2.0)\
+**Nachtrag:** 9. Oktober 2026, zweite Sicherheitsprüfung (Abschnitt 11), Commit `68d2789`
 
 ---
 
@@ -217,7 +218,76 @@ Bei einem Einsatz mit echten Daten sind beide Punkte vor der Inbetriebnahme zu e
 Offen bleiben:
 
 * OData-Listen haben keine Seitengrösse; das verlangt Blättern im Frontend.
-* Keine Rollen, keine Kontosperre, kein Widerruf von Tokens.
-* `npm audit` meldet 7 Einträge in Entwicklungswerkzeugen (über `braces`); behebbar mit Tailwind CSS 4.
+* Keine Rollen, kein Widerruf von Tokens. Die Kontosperre ist seit dem Nachtrag vom 9. Oktober 2026 vorhanden (Abschnitt 11).
+* `npm audit` meldet 9 Einträge in Entwicklungswerkzeugen (am 4. Oktober waren es 7); behebbar mit Tailwind CSS 4.
+* Das Backend verbindet sich als Datenbank-Superuser `postgres` (neu aufgenommen am 9. Oktober 2026).
 
 Einzelheiten zu den Sicherheitspunkten stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 4.
+
+---
+
+## 11. Nachtrag vom 9. Oktober 2026: zweite Sicherheitsprüfung
+
+Eine zweite Prüfung ergab 11 weitere Befunde (S-19 bis S-29): 7 mittlere und 4 niedrige. Alle sind behoben (Commit `68d2789`, 19 Dateien, davon 4 neu). Die Versionsnummer bleibt 2.3.0, das Datenbankschema ist unverändert. Befunde und Begründungen stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 3.2.
+
+### Backend
+
+| Datei | Änderung |
+| --- | --- |
+| `Controllers/ODataCrudController.cs` | `POST` verwirft eine mitgeschickte `id`; `PATCH` ignoriert sie (vorher Fehler 500) |
+| `Data/AdresseDbContext.cs` | `ChangeDate` und `ChangedBy` werden beim Anlegen geleert und lassen sich nicht mehr vorbelegen |
+| neu `ODataErrorDetailFilter.cs` | OData-Fehlerantworten ohne Ausnahmetyp und Stacktrace |
+| neu `Services/ILoginThrottle.cs`, `Services/MemoryLoginThrottle.cs` | Kontosperre: nach 5 Fehlversuchen ist die E-Mail-Adresse 15 Minuten gesperrt |
+| `Controllers/AuthController.cs` | Login prüft und führt die Kontosperre (Antwort 429); `[AllowAnonymous]` auf dem Login |
+| `Program.cs` | Fallback-Policy: jeder Endpunkt verlangt ein Token, auch `/odata` und `/odata/$metadata`; nur HS256; `Cache-Control: no-store`; kein `Server`-Header |
+
+### Frontend
+
+| Datei | Änderung |
+| --- | --- |
+| `lib/auth.ts` | Anmeldungen ohne Backend-Token werden abgelehnt (betrifft die Google-Anmeldung) |
+| `middleware.ts` | Seiten nur mit einer Session, die ein Backend-Token enthält |
+| `app/login/LoginForm.tsx` | Hinweis, wenn NextAuth eine Anmeldung abgelehnt hat |
+| `next.config.mjs` | Kein `X-Powered-By` |
+| `Dockerfile` | Node.js 22 statt Node.js 20 (ohne Sicherheitsupdates seit 30. April 2026) |
+
+### Infrastruktur und Skripte
+
+| Datei | Änderung |
+| --- | --- |
+| `nginx/nginx.conf` | TLS 1.2 nur noch mit ECDHE und AES-GCM oder ChaCha20; CSP um `default-src 'self'` und Quellen für Skripte, Styles, Bilder und Verbindungen ergänzt |
+| `docker-compose.yml` | Backend und Frontend mit `no-new-privileges` und ohne Linux-Capabilities |
+| `scripts/reset_password.sh` | Mindestlänge 8 gilt auch für ein als Argument übergebenes Passwort |
+| `scripts/create_user.sh` | E-Mail-Adresse in Kleinbuchstaben; Prüfung auf bestehende Adresse ohne Rücksicht auf die Schreibweise |
+
+### Tests und Dokumentation
+
+| Datei | Änderung |
+| --- | --- |
+| neu `AdressverwaltungApi.Tests/HardeningTests.cs` | 6 Tests: Over-Posting, `PATCH` mit `id`, Fehlerdetails, `no-store`, Kontosperre und Zurücksetzen des Zählers |
+| `AdressverwaltungApi.Tests/AuthorizationTests.cs` | 3 weitere Fälle: `/odata`, `/odata/$metadata` und `/settings` ohne Token |
+| `documentation/Sicherheitsbericht.html` und `.pdf` | um die zweite Prüfung ergänzt (S-19 bis S-29, O-08) |
+| `CLAUDE.md` | an die Änderungen angepasst |
+
+### Nach dem Aktualisieren zu tun
+
+1. **Images neu bauen und nginx neu starten.** `docker compose up --build -d`, danach `docker compose restart nginx`. Bestehende Sitzungen bleiben gültig.
+2. **Kontosperre.** Nach 5 falschen Passwörtern ist eine E-Mail-Adresse 15 Minuten gesperrt. Ein Neustart des Backends hebt die Sperre auf.
+3. **Metadaten mit Token.** Werkzeuge wie Postman brauchen für `/odata/$metadata` jetzt den `Authorization`-Header.
+4. **Fremde Quellen.** Eine Schrift, ein Skript, ein Bild oder eine API von einem fremden Ursprung braucht einen Eintrag in der CSP in `nginx/nginx.conf`.
+5. **Google-Anmeldung.** Sie wird abgelehnt, bis das Backend für eine Google-Identität ein Token ausstellen kann.
+
+Auf dem Entwicklungsrechner ist Punkt 1 bereits erledigt.
+
+### Prüfung
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `dotnet test` | 60 von 60 bestanden (9 neu) |
+| `dotnet list package --vulnerable --include-transitive` | keine anfälligen Pakete |
+| `npm audit --omit=dev` | 0 Lücken |
+| Frontend-Build mit Node.js 22, Typprüfung und Lint im Docker-Image | erfolgreich |
+| Docker-Stack per `curl`: Anmeldung, Startseite, Städteliste, Einstellungen | erfolgreich |
+| Endpunkte ohne Token, Fehlerantwort ohne Stacktrace, Kontosperre, TLS-Verfahren, Header, Container-Einstellungen | wie beabsichtigt |
+
+Nicht im Browser geprüft: ob die neue CSP im Browser etwas blockiert, und der Hinweis des Login-Formulars bei einer abgelehnten Anmeldung. Die Google-Anmeldung liess sich nicht prüfen, weil sie nicht konfiguriert ist.
