@@ -222,7 +222,11 @@ Nach dem Speichern der Einstellungen wechselt die Seite zur Adressliste (`/`), w
 | --- | --- |
 | `frontend/app/einstellungen/page.tsx` | `router.push('/')` nach dem Speichern; Erfolgsmeldung entfernt |
 
-Geprüft mit Typprüfung und Lint des Frontends; im Browser nicht geprüft.
+| Prüfung | Ergebnis |
+| --- | --- |
+| Typprüfung und Lint des Frontends | erfolgreich |
+| Browser (Chromium, ferngesteuert) als `Admin`: Farbe ändern und speichern | Wechsel zur Adressliste, neue Farbe gilt sofort |
+| Browser: Speichern schlägt fehl (Antwort 500 nachgestellt) | Seite bleibt stehen, Fehlermeldung sichtbar |
 
 ---
 
