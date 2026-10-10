@@ -82,4 +82,38 @@ public class EmailNotificationService : INotificationService
             _logger.LogError(ex, "Fehler beim E-Mail-Versand für den neuen Benutzer {Id}.", user.Id);
         }
     }
+
+    // Wie bei einer neuen Adresse geht die Meldung an die Adresse aus den Einstellungen;
+    // ist dort keine hinterlegt, wird nichts gesendet.
+    public async Task NotifyUserDeletedAsync(User user, string? deletedBy)
+    {
+        try
+        {
+            var settings = await _context.Settings.FirstOrDefaultAsync();
+
+            if (settings is null || string.IsNullOrWhiteSpace(settings.NotificationEmail))
+            {
+                _logger.LogInformation(
+                    "Keine Benachrichtigungs-E-Mail konfiguriert. Benutzer {Id} gelöscht.", user.Id);
+                return;
+            }
+
+            var betreff = $"Benutzer gelöscht: {user.DisplayName}";
+            var inhalt  = $"""
+                Ein Benutzer wurde gelöscht:
+
+                Name:         {user.DisplayName}
+                E-Mail:       {user.Email}
+                Rolle:        {user.Role}
+                Gelöscht von: {(string.IsNullOrWhiteSpace(deletedBy) ? "unbekannt" : deletedBy)}
+                """;
+
+            await _emailService.SendAsync(settings.NotificationEmail, betreff, inhalt);
+        }
+        catch (Exception ex)
+        {
+            // Der Benutzer ist gelöscht; ein Fehler beim Versand ändert daran nichts
+            _logger.LogError(ex, "Fehler beim E-Mail-Versand für den gelöschten Benutzer {Id}.", user.Id);
+        }
+    }
 }

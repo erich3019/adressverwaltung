@@ -13,4 +13,10 @@ public interface INotificationService
 
     /// <summary>Teilt einem neu angelegten Benutzer mit, dass es seinen Zugang gibt.</summary>
     Task NotifyNewUserAsync(User user);
+
+    /// <summary>
+    /// Meldet der Benachrichtigungsadresse aus den Einstellungen, dass ein Benutzer
+    /// gelöscht wurde. deletedBy ist der Anzeigename dessen, der gelöscht hat.
+    /// </summary>
+    Task NotifyUserDeletedAsync(User user, string? deletedBy);
 }

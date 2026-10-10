@@ -64,8 +64,8 @@ export default function EinstellungenPage() {
           <section className="bg-white rounded-2xl shadow-sm p-8">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">E-Mail-Benachrichtigungen</h2>
             <p className="text-sm text-gray-500 mb-6">
-              Bei jeder neu erfassten Adresse wird eine Benachrichtigung an diese E-Mail-Adresse gesendet.
-              Leer lassen, um keine E-Mails zu senden.
+              Bei jeder neu erfassten Adresse und bei jedem gelöschten Benutzer wird eine Benachrichtigung
+              an diese E-Mail-Adresse gesendet. Leer lassen, um diese Benachrichtigungen auszuschalten.
             </p>
 
             <label htmlFor="benachrichtigung" className={labelClass}>

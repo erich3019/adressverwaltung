@@ -230,6 +230,62 @@ public class UsersTests : ODataTestBase
     }
 
     [Fact]
+    public async Task Delete_MeldetEsDerBenachrichtigungsadresse()
+    {
+        var email = NeueEmail();
+        var id    = (await ErstelleBenutzerAsync(email)).GetProperty("id").GetInt32();
+        await Client.PutAsJsonAsync("/settings", new { notificationEmail = "info@example.com" });
+        Factory.Emails.Reset();
+
+        await Client.DeleteAsync($"/users/{id}");
+
+        var mail = Assert.Single(Factory.Emails.Sent);
+        Assert.Equal("info@example.com", mail.To);
+        Assert.Contains("Neuer Benutzer", mail.Subject);
+        Assert.Contains(email, mail.Body);
+        Assert.Contains(Roles.User, mail.Body);
+        Assert.Contains(ApiFactory.TestUserName, mail.Body);
+    }
+
+    [Fact]
+    public async Task Delete_OhneBenachrichtigungsadresse_SendetNichts()
+    {
+        var id = (await ErstelleBenutzerAsync(NeueEmail())).GetProperty("id").GetInt32();
+        Factory.Emails.Reset();
+
+        var response = await Client.DeleteAsync($"/users/{id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(Factory.Emails.Sent);
+    }
+
+    [Fact]
+    public async Task Delete_LoeschtAuch_WennDerVersandFehlschlaegt()
+    {
+        var id = (await ErstelleBenutzerAsync(NeueEmail())).GetProperty("id").GetInt32();
+        await Client.PutAsJsonAsync("/settings", new { notificationEmail = "info@example.com" });
+        Factory.Emails.FailWith = new InvalidOperationException("SMTP nicht erreichbar");
+
+        var response = await Client.DeleteAsync($"/users/{id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Client.GetAsync($"/users/{id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_DesEigenenBenutzers_SendetNichts()
+    {
+        await Client.PutAsJsonAsync("/settings", new { notificationEmail = "info@example.com" });
+        var liste  = await GetJsonAsync("/users");
+        var eigene = liste.EnumerateArray().Single(b => b.GetProperty("isSelf").GetBoolean()).GetProperty("id").GetInt32();
+
+        var response = await Client.DeleteAsync($"/users/{eigene}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(Factory.Emails.Sent);
+    }
+
+    [Fact]
     public async Task UnbekannterBenutzer_Liefert404()
     {
         const int id = int.MaxValue;

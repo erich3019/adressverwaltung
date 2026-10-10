@@ -2,7 +2,7 @@
 
 **Datum:** 10. Oktober 2026\
 **Ausgangsstand:** v2.4.0 (Commit `8f234fe`)\
-**Endstand:** Commits `b1d6d09`, `6e20e3c`, `3491199`, `9332d24`, `61c60ac`, `ea60944` und der Commit mit der E-Mail an neue Benutzer\
+**Endstand:** Commits `b1d6d09`, `6e20e3c`, `3491199`, `9332d24`, `61c60ac`, `ea60944`, `4c8d167` und der Commit mit der E-Mail bei gelöschtem Benutzer\
 **Versionsnummer:** 2.5.0 (vorher 2.4.0)
 
 ---
@@ -13,7 +13,7 @@ Version 2.5.0 fasst die Änderungen vom 10. Oktober 2026 zusammen. Die Abschnitt
 
 | \# | Paket | Inhalt | Commit |
 | --- | --- | --- | --- |
-| 1 | Benutzerverwaltung | Neue Seite «Benutzer» für die Rolle `Admin`; neue Benutzer erhalten eine E-Mail | `61c60ac`, Commit mit der Fassung dieses Dokuments, die die E-Mail beschreibt |
+| 1 | Benutzerverwaltung | Neue Seite «Benutzer» für die Rolle `Admin`; neue Benutzer erhalten eine E-Mail; ein gelöschter Benutzer wird der Benachrichtigungsadresse gemeldet | `61c60ac`, `4c8d167`, Commit mit der Fassung dieses Dokuments, die diese Meldung beschreibt |
 | 2 | Anmeldesperre | Nach 3 Fehlversuchen für 5 Minuten (bisher 5 Fehlversuche, 15 Minuten); Meldung im Login-Formular | `61c60ac` |
 | 3 | Einstellungen | Nach dem Speichern wechselt die Seite zur Adressliste | `b1d6d09`, `6e20e3c`, `9332d24` |
 | 4 | E-Mail-Versand | SMTP-Server und Absender eingetragen, Versand geprüft | `3491199` |
@@ -33,7 +33,7 @@ In der Navigation steht neben «Einstellungen» der neue Punkt «Benutzer». Ein
 2. einen Benutzer anlegen (E-Mail-Adresse, Anzeigename, Rolle, Passwort mit mindestens 8 Zeichen) – der neue Benutzer erhält eine E-Mail an seine Adresse,
 3. Anzeigename, Rolle und Passwort ändern – ein neues Passwort meldet den Benutzer überall ab,
 4. eine Anmeldesperre aufheben,
-5. einen Benutzer löschen – seine Sitzung endet mit dem nächsten Aufruf.
+5. einen Benutzer löschen – seine Sitzung endet mit dem nächsten Aufruf, und die Benachrichtigungsadresse aus den Einstellungen erhält eine E-Mail.
 
 Die E-Mail-Adresse lässt sich nicht ändern. Sich selbst kann ein Admin weder löschen noch die Rolle entziehen; so bleibt immer ein Admin übrig. Wer nicht `Admin` ist, sieht auf der Seite nur einen Hinweis. Das entscheidet das Backend (Antwort 403), nicht die Rolle in der Session.
 
@@ -42,6 +42,10 @@ Die E-Mail-Adresse lässt sich nicht ändern. Sich selbst kann ein Admin weder l
 Wer neu angelegt wird, erhält eine E-Mail an die eigene Adresse: Anrede mit dem Anzeigenamen, die E-Mail-Adresse für die Anmeldung und die Rolle. Das Passwort steht nicht darin; es ist auf anderem Weg weiterzugeben. Das gilt für die Seite «Benutzer» (`POST /users`) und für `POST /auth/register`, nicht für `scripts/create_user.sh`. Schlägt der Versand fehl, ist der Benutzer trotzdem angelegt; der Fehler steht im Log des Backends.
 
 Eine Mail kommt nur an, wenn die E-Mail-Adresse stimmt. Sie lässt sich nachträglich nicht ändern: Bei einem Tippfehler den Benutzer löschen und neu anlegen.
+
+### Neu: E-Mail bei gelöschtem Benutzer
+
+Wird ein Benutzer gelöscht, geht eine E-Mail an die Benachrichtigungsadresse aus den Einstellungen – dieselbe Adresse, die auch neue Adressen gemeldet bekommt. Sie nennt Name, E-Mail-Adresse und Rolle des gelöschten Benutzers und wer ihn gelöscht hat. Ist in den Einstellungen keine Adresse hinterlegt, wird nichts gesendet. Schlägt der Versand fehl, ist der Benutzer trotzdem gelöscht; der Fehler steht im Log des Backends. Die Einstellungsseite nennt die neue Benachrichtigung in ihrem Hinweistext.
 
 ### Geändert: Anmeldesperre
 
@@ -55,7 +59,7 @@ Unverändert: Gesperrt wird die E-Mail-Adresse, auch wenn es dazu keinen Benutze
 | --- | --- |
 | neu `Controllers/UsersController.cs`, `Dtos/UserDtos.cs` | `/users` nur für `Admin`: lesen, anlegen (409 bei vorhandener E-Mail-Adresse), ändern, löschen, `POST /users/{id}/unlock`. Antworten mit `lockedUntil` und `isSelf`, ohne Passwort-Hash |
 | `Services/ILoginThrottle.cs`, `Services/MemoryLoginThrottle.cs` | 3 Fehlversuche, 5 Minuten Sperre ab dem dritten; neu `BlockedUntil` für die Anzeige |
-| `Services/INotificationService.cs`, `Services/EmailNotificationService.cs` | `NotifyNewUserAsync`: E-Mail an den neuen Benutzer, ohne Passwort |
+| `Services/INotificationService.cs`, `Services/EmailNotificationService.cs` | `NotifyNewUserAsync`: E-Mail an den neuen Benutzer, ohne Passwort. `NotifyUserDeletedAsync`: Meldung an die Adresse aus den Einstellungen |
 | `Controllers/AuthController.cs` | `POST /auth/register` sendet die E-Mail ebenfalls; Kommentare |
 | `Models/Roles.cs` | Kommentar |
 
@@ -75,7 +79,7 @@ Unverändert: Gesperrt wird die E-Mail-Adresse, auch wenn es dazu keinen Benutze
 | Datei | Änderung |
 | --- | --- |
 | `nginx/nginx.conf` | `location /users` zum Backend |
-| neu `AdressverwaltungApi.Tests/UsersTests.cs` | 22 Tests: Rechte, Anlegen, E-Mail an neue Benutzer, Ändern, Passwortwechsel, Löschen, Sperre und Entsperren |
+| neu `AdressverwaltungApi.Tests/UsersTests.cs` | 26 Tests: Rechte, Anlegen, E-Mail an neue Benutzer, Ändern, Passwortwechsel, Löschen, E-Mail bei gelöschtem Benutzer, Sperre und Entsperren |
 | `documentation/Tutorial_WebApp_v2.5.html` und `.pdf` | Abschnitt «Benutzerverwaltung», Anmeldesperre, geänderte Codebeispiele (auch die SMTP-Angaben aus `docker-compose.yml`) |
 | `documentation/Sequenzdiagramm.puml`, `Systemarchitektur.puml`, je mit `.svg` | Sperre 3 / 5 Minuten; `UsersController` |
 | `documentation/Schulungsunterlage_Sequenzdiagramm.html`, `.pdf`, PNG zum Login | Sperre 3 / 5 Minuten |
@@ -90,7 +94,7 @@ Unverändert: Gesperrt wird die E-Mail-Adresse, auch wenn es dazu keinen Benutze
 
 | Prüfung | Ergebnis |
 | --- | --- |
-| `dotnet test` | 99 von 99 bestanden (22 neu) |
+| `dotnet test` | 103 von 103 bestanden (26 neu) |
 | Typprüfung und Lint des Frontends | erfolgreich |
 | Browser (Chromium, ferngesteuert) als `Admin`: Benutzer anlegen, doppelte E-Mail-Adresse, ändern, löschen | erfolgreich; Meldung des Backends bei doppelter Adresse sichtbar |
 | Browser: drei Fehlversuche, danach richtiges Passwort | Meldung zur Sperre; Liste zeigt «Gesperrt bis …»; nach «Entsperren» gelingt die Anmeldung |

@@ -16,7 +16,7 @@ namespace AdressverwaltungApi.Controllers;
 /// GET    /users/{id}         – ein Benutzer
 /// POST   /users              – Benutzer anlegen; der neue Benutzer erhält eine E-Mail
 /// PUT    /users/{id}         – Anzeigename, Rolle und optional Passwort ändern
-/// DELETE /users/{id}         – Benutzer löschen
+/// DELETE /users/{id}         – Benutzer löschen; meldet es der Adresse aus den Einstellungen
 /// POST   /users/{id}/unlock  – Anmeldesperre aufheben
 /// Der Passwort-Hash verlässt das Backend nie. Sich selbst kann ein Administrator
 /// weder löschen noch die Rolle Admin entziehen – so bleibt immer einer übrig.
@@ -163,6 +163,7 @@ public class UsersController : ControllerBase
         _context.Users.Remove(user);
         await _context.SaveChangesAsync();
         _throttle.Reset(user.Email);
+        await _notificationService.NotifyUserDeletedAsync(user, User.Identity?.Name);
 
         return NoContent();
     }
