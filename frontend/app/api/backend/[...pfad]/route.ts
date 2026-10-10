@@ -13,7 +13,7 @@ const INTERNAL_API = process.env.INTERNAL_API_URL
   ?? 'http://localhost:5000';
 
 // Nur diese Bereiche des Backends sind über den Proxy erreichbar (nicht /auth)
-const ERLAUBTE_BEREICHE = ['odata', 'settings'];
+const ERLAUBTE_BEREICHE = ['odata', 'settings', 'users'];
 
 function fehler(status: number, message: string) {
   return NextResponse.json({ message }, { status, headers: { 'Cache-Control': 'no-store' } });

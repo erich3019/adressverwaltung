@@ -1,6 +1,7 @@
 import type { NextAuthOptions, Session } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
+import { ANMELDUNG_GESPERRT } from './anmeldung';
 
 // Für server-seitige Aufrufe (Docker: interner Service-Name)
 const INTERNAL_API = process.env.INTERNAL_API_URL
@@ -36,6 +37,10 @@ export const authOptions: NextAuthOptions = {
             }),
           });
 
+          // 429: Die Adresse ist nach zu vielen Fehlversuchen gesperrt. Ein Fehler aus
+          // authorize() erreicht das Login-Formular als result.error.
+          if (response.status === 429) throw new Error(ANMELDUNG_GESPERRT);
+
           if (!response.ok) return null;
 
           // Backend gibt { id, name, email, role, token } zurück (LoginResponse DTO)
@@ -54,7 +59,9 @@ export const authOptions: NextAuthOptions = {
             role:        user.role,
             accessToken: user.token,   // wird in jwt-Callback weitergegeben
           };
-        } catch {
+        } catch (err) {
+          if (err instanceof Error && err.message === ANMELDUNG_GESPERRT) throw err;
+
           // Netzwerk- oder Parse-Fehler → Login verweigern
           return null;
         }

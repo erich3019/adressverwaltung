@@ -4,6 +4,7 @@ import { serverAuthOptions } from './auth';
 import { API_HEADER } from './apiHeader';
 import { Adresse, AdresseCreate, AdresseUpdate } from '@/types/adresse';
 import { City, CityCreate, CityUpdate } from '@/types/city';
+import { Benutzer, BenutzerCreate, BenutzerUpdate, alsRolle } from '@/types/benutzer';
 import { Akzentfarbe, alsAkzentfarbe, STANDARDFARBE } from './farben';
 
 // Server Components (typeof window === 'undefined'): direkt zum Backend
@@ -56,12 +57,38 @@ async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> 
 
 type RawEntity = Record<string, unknown>;
 
-// Führt den Aufruf aus und wirft einen Fehler, wenn das Backend keinen Erfolg meldet.
+// Fehler eines API-Aufrufs mit dem HTTP-Status und – falls das Backend eine mitgibt –
+// der Meldung aus der Antwort ({ message: "…" }), die sich dem Benutzer zeigen lässt.
+export class ApiFehler extends Error {
+  constructor(
+    text: string,
+    public readonly status: number,
+    public readonly meldung: string | null
+  ) {
+    super(text);
+    this.name = 'ApiFehler';
+  }
+}
+
+async function leseMeldung(response: Response): Promise<string | null> {
+  try {
+    const data = await response.json() as { message?: unknown };
+    return typeof data.message === 'string' ? data.message : null;
+  } catch {
+    return null;
+  }
+}
+
+// Führt den Aufruf aus und wirft einen ApiFehler, wenn das Backend keinen Erfolg meldet.
 async function apiRequest(url: string, fehlertext: string, init: RequestInit = {}): Promise<Response> {
   const response = await apiFetch(url, { cache: 'no-store', ...init });
 
   if (!response.ok) {
-    throw new Error(`${fehlertext}: ${response.statusText}`);
+    throw new ApiFehler(
+      `${fehlertext}: ${response.statusText}`,
+      response.status,
+      await leseMeldung(response)
+    );
   }
 
   return response;
@@ -324,4 +351,54 @@ export async function speichereSettings(data: SettingsUpdate): Promise<SettingsD
     jsonRequest('PUT', data)
   );
   return normalizeSettings(await response.json() as RawEntity);
+}
+
+// ============================================================
+// BENUTZER (nur Rolle Admin; andere erhalten 403)
+// ============================================================
+
+const USERS_URL = `${BASE_URL}/users`;
+
+function normalizeBenutzer(raw: RawEntity): Benutzer {
+  return {
+    id:          Number(raw['id']),
+    email:       String(raw['email']       ?? ''),
+    displayName: String(raw['displayName'] ?? ''),
+    role:        alsRolle(raw['role']),
+    lockedUntil: (raw['lockedUntil'] ?? null) as string | null,
+    isSelf:      raw['isSelf'] === true,
+  };
+}
+
+// GET /users – Alle Benutzer
+export async function getBenutzerListe(): Promise<Benutzer[]> {
+  const response = await apiRequest(USERS_URL, 'Fehler beim Abrufen der Benutzer');
+  return (await response.json() as RawEntity[]).map(normalizeBenutzer);
+}
+
+// GET /users/id – Einzelnen Benutzer abrufen
+export async function getBenutzer(id: number): Promise<Benutzer> {
+  const response = await apiRequest(`${USERS_URL}/${id}`, `Benutzer ${id} nicht gefunden`);
+  return normalizeBenutzer(await response.json() as RawEntity);
+}
+
+// POST /users – Neuen Benutzer anlegen
+export async function erstelleBenutzer(benutzer: BenutzerCreate): Promise<Benutzer> {
+  const response = await apiRequest(USERS_URL, 'Fehler beim Erstellen', jsonRequest('POST', benutzer));
+  return normalizeBenutzer(await response.json() as RawEntity);
+}
+
+// PUT /users/id – Anzeigename, Rolle und optional Passwort ändern
+export async function aktualisiereBenutzer(id: number, aenderungen: BenutzerUpdate): Promise<void> {
+  await apiRequest(`${USERS_URL}/${id}`, 'Fehler beim Aktualisieren', jsonRequest('PUT', aenderungen));
+}
+
+// DELETE /users/id – Benutzer löschen
+export async function loescheBenutzer(id: number): Promise<void> {
+  await apiRequest(`${USERS_URL}/${id}`, 'Fehler beim Löschen', { method: 'DELETE' });
+}
+
+// POST /users/id/unlock – Anmeldesperre nach Fehlversuchen aufheben
+export async function entsperreBenutzer(id: number): Promise<void> {
+  await apiRequest(`${USERS_URL}/${id}/unlock`, 'Fehler beim Entsperren', { method: 'POST' });
 }

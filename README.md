@@ -19,7 +19,7 @@ nginx verteilt die Anfragen nach Pfad-Präfix:
 
 | Pfad | Ziel |
 |------|------|
-| `/odata/*`, `/auth/*`, `/settings` | Backend (`backend:8080`) |
+| `/odata/*`, `/auth/*`, `/settings`, `/users` | Backend (`backend:8080`) |
 | alle übrigen Pfade | Frontend (`frontend:3000`) |
 
 ### Ablauf: Login und neue Adresse erfassen
@@ -98,7 +98,7 @@ Beim ersten Start mit leerer `Users`-Tabelle wird ein Admin-Benutzer angelegt (`
 ./scripts/reset_password.sh
 ```
 
-Weitere Benutzer lassen sich mit `./scripts/create_user.sh` anlegen. Das vierte Argument ist die Rolle: `User` (Standard) pflegt Adressen und Städte, `Admin` darf zusätzlich Benutzer anlegen und die Einstellungen ändern.
+Weitere Benutzer legt ein `Admin` in der Anwendung auf der Seite «Benutzer» an oder mit `./scripts/create_user.sh`. Das vierte Argument des Skripts ist die Rolle: `User` (Standard) pflegt Adressen und Städte, `Admin` darf zusätzlich Benutzer verwalten und die Einstellungen ändern.
 
 ## Konfiguration
 
@@ -133,7 +133,8 @@ Der Sicherheitsbericht mit allen Befunden und Korrekturen liegt unter `documenta
 - **Adressen** (`/`): Liste, Erfassen, Bearbeiten, Löschen
 - **Städte** (`/cities`): PLZ-Verzeichnis pflegen; dient als Wertehilfe im Adressformular (Vorschläge ab zwei Ziffern)
 - **Einstellungen** (`/einstellungen`): E-Mail-Adresse für Benachrichtigungen bei neuen Adressen und Farbe der Oberfläche (ändern nur als `Admin`)
-- **Login** (`/login`): E-Mail und Passwort, optional Google
+- **Benutzer** (`/benutzer`): Benutzer anlegen, Name, Rolle und Passwort ändern, Anmeldesperre aufheben, löschen (nur als `Admin`)
+- **Login** (`/login`): E-Mail und Passwort, optional Google. Nach 3 fehlerhaften Anmeldungen ist eine E-Mail-Adresse für 5 Minuten gesperrt
 - **Audit-Felder**: Alle Datensätze führen `CreateDate`, `CreatedBy`, `ChangeDate`, `ChangedBy`, `DateFrom`, `DateTo`; das Backend setzt sie automatisch
 
 ### PLZ-Verzeichnis importieren
@@ -176,6 +177,9 @@ curl -s http://localhost:5000/odata/Adressen -H "Authorization: Bearer <JWT>"
 | GET/POST/PATCH/DELETE | `/odata/Cities` | Städte, gleiche Operationen wie Adressen |
 | GET | `/odata/Cities?$filter=startswith(postalCode,'80')&$top=10` | PLZ-Suche |
 | GET / PUT | `/settings` | Einstellungen lesen / speichern |
+| GET / POST | `/users` | Benutzer auflisten / anlegen (nur Rolle Admin) |
+| GET / PUT / DELETE | `/users/{id}` | Benutzer lesen / ändern (Name, Rolle, optional Passwort) / löschen (nur Rolle Admin) |
+| POST | `/users/{id}/unlock` | Anmeldesperre eines Benutzers aufheben (nur Rolle Admin) |
 
 Property-Namen sind in Payloads und OData-Abfragen camelCase (`ort`, `postalCode`). `$top` ist auf 100 begrenzt.
 
@@ -238,7 +242,7 @@ adressverwaltung/
 │   ├── DbSeeder.cs       Admin-Benutzer beim ersten Start
 │   └── Program.cs
 ├── frontend/
-│   ├── app/              Seiten: / (Adressliste), /adressen/…, /cities, /einstellungen, /login
+│   ├── app/              Seiten: / (Adressliste), /adressen/…, /cities, /einstellungen, /benutzer, /login
 │   ├── components/       AdresseForm, CityForm, ConfirmDialog, NavBar, Fehlermeldung, Ladeanzeige
 │   ├── lib/              api.ts (apiFetch), auth.ts (NextAuth)
 │   ├── types/
@@ -255,7 +259,7 @@ adressverwaltung/
 
 | Version | Inhalt |
 |---------|--------|
-| 2.4.0 | Zweite Sicherheitsprüfung: Rollen, Token-Widerruf, Proxy für API-Aufrufe, CSP mit Nonce, Blättern, eigene Datenbankrolle, wählbare Farbe |
+| 2.4.0 | Zweite Sicherheitsprüfung: Rollen, Token-Widerruf, Proxy für API-Aufrufe, CSP mit Nonce, Blättern, eigene Datenbankrolle, wählbare Farbe, Benutzerverwaltung, Anmeldesperre nach 3 Fehlversuchen für 5 Minuten |
 | 2.3.0 | .NET 10, Next.js 15, Backend-Tests, Sicherheitskorrekturen, Clean-Code-Nachprüfung |
 | 2.2.0 | JWT-Authentifizierung im Backend, Bearer-Token aus der NextAuth-Session |
 | 2.1.0 | Umsetzung der Clean-Code-Analyse (14 Befunde) |

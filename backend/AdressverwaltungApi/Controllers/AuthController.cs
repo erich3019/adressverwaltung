@@ -17,7 +17,7 @@ namespace AdressverwaltungApi.Controllers;
 /// - Das PasswordHash-Feld wird NIEMALS in Responses zurückgegeben
 /// - Fehlermeldungen sind bewusst generisch (kein Hinweis ob E-Mail oder Passwort falsch)
 /// - Bei erfolgreichem Login wird ein JWT Bearer-Token ausgestellt (ITokenService)
-/// - Wiederholte Fehlversuche sperren die E-Mail-Adresse vorübergehend (ILoginThrottle)
+/// - Drei Fehlversuche sperren die E-Mail-Adresse für fünf Minuten (ILoginThrottle)
 /// - Registrierung ist nur für Administratoren möglich
 /// - Die Abmeldung widerruft die ausgestellten Tokens des Benutzers
 /// </summary>

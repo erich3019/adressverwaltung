@@ -2,7 +2,7 @@ namespace AdressverwaltungApi.Models;
 
 /// <summary>
 /// Rollen eines Benutzers. "User" pflegt Adressen und Städte; "Admin" darf zusätzlich
-/// Benutzer anlegen und die Einstellungen ändern.
+/// Benutzer verwalten und die Einstellungen ändern.
 /// </summary>
 public static class Roles
 {

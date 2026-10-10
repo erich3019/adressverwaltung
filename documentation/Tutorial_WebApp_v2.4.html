@@ -365,7 +365,7 @@
 <div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du weisst, was die Adressverwaltung kann und wofür sie als Lernprojekt dient.</li><li>Du kennst die eingesetzten Technologien und ihre Aufgaben.</li><li>Du kannst erklären, welchen Weg eine Anfrage vom Browser bis in die Datenbank nimmt.</li></ul></div>
 <h2 id="kap1-1">1.1 Was wird gebaut?</h2>
 <p>Die <strong>Adressverwaltung</strong> ist eine vollständige Webapplikation mit CRUD-Funktionen (Create, Read, Update, Delete). Angemeldete Benutzer erfassen, bearbeiten und löschen Personenadressen. Dazu kommen ein Städteverzeichnis mit allen Schweizer Postleitzahlen, eine PLZ-Wertehilfe im Adressformular, eine Einstellungsseite mit wählbarer Farbe der Oberfläche und eine E-Mail-Benachrichtigung bei neuen Adressen.</p>
-<p>Es gibt zwei Rollen: <code>User</code> pflegt Adressen und Städte, <code>Admin</code> darf zusätzlich Benutzer anlegen und die Einstellungen ändern.</p>
+<p>Es gibt zwei Rollen: <code>User</code> pflegt Adressen und Städte, <code>Admin</code> darf zusätzlich Benutzer verwalten und die Einstellungen ändern.</p>
 <p>Eine Adresse besteht aus sechs Fachfeldern:</p>
 <table><thead><tr><th>Feld</th><th>Typ</th><th>Beschreibung</th><th>Beispiel</th></tr></thead><tbody><tr><td><code>vorname</code></td><td>string, max. 100</td><td>Vorname der Person</td><td>Anna</td></tr><tr><td><code>name</code></td><td>string, max. 100</td><td>Nachname der Person</td><td>Meier</td></tr><tr><td><code>strasse</code></td><td>string, max. 200</td><td>Strassenname</td><td>Bahnhofstrasse</td></tr><tr><td><code>strassennummer</code></td><td>string, max. 20</td><td>Hausnummer, auch mit Zusatz</td><td>12a</td></tr><tr><td><code>plz</code></td><td>string, max. 10</td><td>Postleitzahl</td><td>8001</td></tr><tr><td><code>ort</code></td><td>string, max. 100</td><td>Ortsname</td><td>Zürich</td></tr></tbody></table>
 <p>Jeder Datensatz trägt zusätzlich <strong>Audit-Felder</strong>: wann und von wem er erstellt und zuletzt geändert wurde, sowie einen Gültigkeitszeitraum (<code>dateFrom</code>, <code>dateTo</code>). Diese Felder setzt das Backend selbst; das Frontend sendet sie nie.</p>
@@ -387,7 +387,7 @@
   <div class="arch-arrow">&harr;</div>
   <div class="arch-box"><strong>PostgreSQL</strong><span class="port">:5432 Datenbank</span></div>
 </div>
-<table><thead><tr><th>Pfad</th><th>Ziel</th><th>Inhalt</th></tr></thead><tbody><tr><td><code>/odata/*</code></td><td>Backend</td><td>OData-API für Adressen und Städte</td></tr><tr><td><code>/auth/*</code></td><td>Backend</td><td>Login, Registrierung und Abmeldung</td></tr><tr><td><code>/settings</code></td><td>Backend</td><td>Einstellungen lesen und speichern</td></tr><tr><td>alles andere</td><td>Next.js</td><td>Seiten, <code>/api/auth/*</code> (NextAuth) und <code>/api/backend/*</code> (Proxy zum Backend)</td></tr></tbody></table>
+<table><thead><tr><th>Pfad</th><th>Ziel</th><th>Inhalt</th></tr></thead><tbody><tr><td><code>/odata/*</code></td><td>Backend</td><td>OData-API für Adressen und Städte</td></tr><tr><td><code>/auth/*</code></td><td>Backend</td><td>Login, Registrierung und Abmeldung</td></tr><tr><td><code>/settings</code></td><td>Backend</td><td>Einstellungen lesen und speichern</td></tr><tr><td><code>/users</code></td><td>Backend</td><td>Benutzerverwaltung</td></tr><tr><td>alles andere</td><td>Next.js</td><td>Seiten, <code>/api/auth/*</code> (NextAuth) und <code>/api/backend/*</code> (Proxy zum Backend)</td></tr></tbody></table>
 <p>Der Browser ruft die API nie direkt auf. Seine Aufrufe gehen an <code>/api/backend/…</code>, also an Next.js. Dieser Proxy hängt das Token an und reicht die Anfrage an das Backend weiter (Kapitel 5.6). Die Pfade <code>/odata</code>, <code>/auth</code> und <code>/settings</code> sind für Werkzeuge wie curl oder Postman da, die ihr eigenes Token mitschicken.</p>
 <p>Das vollständige Diagramm liegt in <code>documentation/Systemarchitektur.svg</code>:</p>
 <p><img src="Systemarchitektur.svg" style="width:100%"></p>
@@ -866,10 +866,11 @@ using (var scope = app.Services.CreateScope())
 │   ├── AdressenController.cs      ← Adressen + Benachrichtigung
 │   ├── CitiesController.cs        ← Städte
 │   ├── AuthController.cs          ← Login, Registrierung, Abmeldung
-│   └── SettingsController.cs      ← Einstellungen
+│   ├── SettingsController.cs      ← Einstellungen
+│   └── UsersController.cs         ← Benutzerverwaltung
 ├── Data/
 │   └── AdresseDbContext.cs        ← EF Core DbContext + Audit-Felder
-├── Dtos/                          ← Request- und Response-Typen (Auth, Settings)
+├── Dtos/                          ← Request- und Response-Typen (Auth, Settings, Users)
 ├── Models/                        ← Adresse, City, User, Roles, Settings, AccentColors, AuditableEntity
 ├── Options/                       ← JwtOptions, SmtpOptions (typisierte Konfiguration)
 ├── Services/
@@ -1150,33 +1151,61 @@ public async Task&lt;IActionResult&gt; Login([FromBody] LoginRequest req)
     return _context.Users.FirstOrDefaultAsync(u =&gt; u.Email.ToUpper() == normalized);
 }</code></pre></div>
 <div class="box box-danger"><div class="box-title">Was ist ein Timing-Angriff?</div><p>Ein Angreifer misst die Antwortzeit. Antwortet die API bei unbekannter E-Mail schneller als bei falschem Passwort, verrät sie, welche Adressen registriert sind. Deshalb wird das Passwort immer geprüft – bei unbekannter E-Mail gegen einen festen, einmal berechneten Ersatz-Hash (<code>DummyHash</code>). Auch die Fehlermeldung ist in beiden Fällen dieselbe.</p></div>
-<p>Vor der Passwortprüfung fragt der Controller den <code>ILoginThrottle</code>. Nach fünf Fehlversuchen ist eine E-Mail-Adresse 15 Minuten gesperrt, und das Backend antwortet mit 429 – auch auf das richtige Passwort. Gezählt wird pro Adresse, unabhängig davon, ob es dazu ein Konto gibt. Die Sperre verrät also nicht, welche Konten existieren.</p>
+<p>Vor der Passwortprüfung fragt der Controller den <code>ILoginThrottle</code>. Nach drei Fehlversuchen ist eine E-Mail-Adresse fünf Minuten gesperrt, und das Backend antwortet mit 429 – auch auf das richtige Passwort. Die fünf Minuten zählen ab dem dritten Fehlversuch. Gezählt wird pro Adresse, unabhängig davon, ob es dazu ein Konto gibt. Die Sperre verrät also nicht, welche Konten existieren. Das Login-Formular zeigt bei 429 eine eigene Meldung, und ein Admin kann die Sperre in der Benutzerverwaltung vorzeitig aufheben.</p>
 <div class="code-block"><div class="code-label">Services/MemoryLoginThrottle.cs</div><pre><code>public sealed class MemoryLoginThrottle : ILoginThrottle, IDisposable
 {
-    public const int MaxFailures = 5;
-    public static readonly TimeSpan Window = TimeSpan.FromMinutes(15);
+    public const int MaxFailures = 3;
+    public static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(5);
+
+    // Fehlversuche zählen zusammen, solange sie innerhalb dieses Fensters liegen
+    public static readonly TimeSpan Window = LockDuration;
 
     // Obergrenze, damit sich der Speicher nicht mit erfundenen Adressen füllen lässt
     private const int MaxTrackedEmails = 10_000;
 
     private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = MaxTrackedEmails });
 
-    private sealed class Counter { public int Failures; }
+    private sealed class Counter
+    {
+        public int Failures;
+        public DateTime? BlockedUntil;
+    }
 
-    public bool IsBlocked(string email)
-        =&gt; _cache.TryGetValue(Key(email), out Counter? counter)
-           &amp;&amp; Volatile.Read(ref counter!.Failures) &gt;= MaxFailures;
+    public bool IsBlocked(string email) =&gt; BlockedUntil(email) is not null;
+
+    public DateTime? BlockedUntil(string email)
+    {
+        if (!_cache.TryGetValue(Key(email), out Counter? counter)) return null;
+
+        lock (counter!)
+        {
+            return counter.BlockedUntil &gt; DateTime.UtcNow ? counter.BlockedUntil : null;
+        }
+    }
 
     public void RegisterFailure(string email)
     {
-        var counter = _cache.GetOrCreate(Key(email), entry =&gt;
+        var key     = Key(email);
+        var counter = _cache.GetOrCreate(key, entry =&gt;
         {
             entry.AbsoluteExpirationRelativeToNow = Window;
             entry.Size = 1;
             return new Counter();
         });
 
-        Interlocked.Increment(ref counter!.Failures);
+        lock (counter!)
+        {
+            counter.Failures++;
+            if (counter.Failures != MaxFailures) return;
+
+            // Die Sperre beginnt jetzt: Eintrag mit neuer Ablaufzeit ablegen
+            counter.BlockedUntil = DateTime.UtcNow.Add(LockDuration);
+            _cache.Set(key, counter, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = LockDuration,
+                Size = 1,
+            });
+        }
     }
 
     public void Reset(string email) =&gt; _cache.Remove(Key(email));
@@ -1222,6 +1251,53 @@ public async Task&lt;IActionResult&gt; Register([FromBody] RegisterRequest req)
 
     return Ok(new { message = RegisterMessage });
 }</code></pre></div>
+<h3>Benutzerverwaltung</h3>
+<p>Für die Seite «Benutzer» gibt es einen eigenen Controller unter <code>/users</code>. Er ist als Ganzes der Rolle <code>Admin</code> vorbehalten (<code>[Authorize(Roles = Roles.Admin)]</code> an der Klasse) und gibt den Passwort-Hash nie heraus.</p>
+<table><thead><tr><th>Endpunkt</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>GET /users</code>, <code>GET /users/{id}</code></td><td>Benutzer lesen, je mit dem Ende einer Anmeldesperre (<code>lockedUntil</code>) und dem Kennzeichen <code>isSelf</code></td></tr><tr><td><code>POST /users</code></td><td>Benutzer anlegen; 409, wenn es die E-Mail-Adresse schon gibt</td></tr><tr><td><code>PUT /users/{id}</code></td><td>Anzeigename, Rolle und optional Passwort ändern</td></tr><tr><td><code>POST /users/{id}/unlock</code></td><td>Anmeldesperre aufheben</td></tr><tr><td><code>DELETE /users/{id}</code></td><td>Benutzer löschen; sein Token gilt danach nicht mehr</td></tr></tbody></table>
+<div class="code-block"><div class="code-label">Controllers/UsersController.cs – Ändern</div><pre><code>// PUT /users/{id}
+[HttpPut("{id:int}")]
+public async Task&lt;IActionResult&gt; UpdateUser(int id, [FromBody] UserUpdateRequest req)
+{
+    if (!ModelState.IsValid)
+    {
+        return BadRequest(ModelState);
+    }
+
+    var role = req.Role.Trim();
+    if (!Roles.IsValid(role))
+    {
+        return BadRequest(new { message = UnknownRoleMessage });
+    }
+
+    var user = await _context.Users.FirstOrDefaultAsync(u =&gt; u.Id == id);
+    if (user is null)
+    {
+        return NotFound();
+    }
+
+    if (id == CurrentUserId &amp;&amp; role != Roles.Admin)
+    {
+        return BadRequest(new { message = "Die eigene Rolle Admin lässt sich nicht entziehen." });
+    }
+
+    user.DisplayName = req.DisplayName.Trim();
+    user.Role        = role;
+
+    if (!string.IsNullOrEmpty(req.Password))
+    {
+        user.PasswordHash = _hasher.HashPassword(user, req.Password);
+
+        // Neues Passwort: bisherige Tokens widerrufen und eine Sperre aufheben
+        user.TokenVersion++;
+        _throttle.Reset(user.Email);
+    }
+
+    await _context.SaveChangesAsync();
+
+    return Ok(ToResponse(user));
+}</code></pre></div>
+<div class="box box-warn"><div class="box-title">Es bleibt immer ein Admin übrig</div><p>Sich selbst kann ein Admin weder löschen noch die Rolle entziehen. Wer die Benutzerverwaltung aufruft, ist also nach jeder Änderung weiterhin Admin – ohne dass der Controller die Admins zählen muss.</p></div>
+<p>Das Frontend erreicht <code>/users</code> wie alle Aufrufe des Browsers über den Proxy <code>/api/backend</code>; der Bereich <code>users</code> steht dafür in <code>ERLAUBTE_BEREICHE</code>. Die Seite heisst <code>/benutzer</code>, weil nginx <code>/users</code> an das Backend leitet. Ob jemand die Seite benutzen darf, entscheidet das Backend: Antwortet es mit 403, zeigt die Seite einen Hinweis statt der Liste.</p>
 <p>Die Abmeldung erhöht die Token-Version des Benutzers. Alle Tokens, die er bis dahin erhalten hat, sind danach ungültig (Kapitel 5.5):</p>
 <div class="code-block"><div class="code-label">Controllers/AuthController.cs – Abmeldung</div><pre><code>// POST /auth/logout
 // Widerruft alle Tokens des angemeldeten Benutzers (auch die anderer Geräte):
@@ -1399,7 +1475,7 @@ builder.Services.AddAuthorizationBuilder()
 <h2 id="kap5-5">5.5 Endpunkte schützen</h2>
 <p>Die Fallback-Policy in <code>Program.cs</code> verlangt für jeden Endpunkt ein gültiges Token – auch für <code>/odata/$metadata</code> und für Controller ohne eigenes <code>[Authorize]</code>. Die einzige Ausnahme trägt <code>[AllowAnonymous]</code>: <code>POST /auth/login</code>.</p>
 <p>Zwei Endpunkte verlangen zusätzlich die Rolle <code>Admin</code>. Sie tragen <code>[Authorize(Roles = Roles.Admin)]</code>:</p>
-<table><thead><tr><th>Endpunkt</th><th>Ohne Token</th><th>Als <code>User</code></th><th>Als <code>Admin</code></th></tr></thead><tbody><tr><td><code>POST /auth/register</code></td><td>401</td><td>403</td><td>Benutzer wird angelegt</td></tr><tr><td><code>PUT /settings</code></td><td>401</td><td>403</td><td>Einstellungen werden gespeichert</td></tr><tr><td>alle übrigen ausser Login</td><td>401</td><td>erlaubt</td><td>erlaubt</td></tr></tbody></table>
+<table><thead><tr><th>Endpunkt</th><th>Ohne Token</th><th>Als <code>User</code></th><th>Als <code>Admin</code></th></tr></thead><tbody><tr><td><code>POST /auth/register</code></td><td>401</td><td>403</td><td>Benutzer wird angelegt</td></tr><tr><td><code>PUT /settings</code></td><td>401</td><td>403</td><td>Einstellungen werden gespeichert</td></tr><tr><td><code>/users</code> (alle Methoden)</td><td>401</td><td>403</td><td>Benutzer lesen, anlegen, ändern, entsperren, löschen</td></tr><tr><td>alle übrigen ausser Login</td><td>401</td><td>erlaubt</td><td>erlaubt</td></tr></tbody></table>
 <p>Eine gültige Signatur allein genügt nicht. Nach der Signaturprüfung gleicht <code>TokenUserValidator</code> das Token mit der Datenbank ab:</p>
 <div class="code-block"><div class="code-label">TokenUserValidator.cs</div><pre><code>public static class TokenUserValidator
 {
@@ -1481,6 +1557,10 @@ declare module 'next-auth/jwt' {
       }),
     });
 
+    // 429: Die Adresse ist nach zu vielen Fehlversuchen gesperrt. Ein Fehler aus
+    // authorize() erreicht das Login-Formular als result.error.
+    if (response.status === 429) throw new Error(ANMELDUNG_GESPERRT);
+
     if (!response.ok) return null;
 
     // Backend gibt { id, name, email, role, token } zurück (LoginResponse DTO)
@@ -1499,7 +1579,9 @@ declare module 'next-auth/jwt' {
       role:        user.role,
       accessToken: user.token,   // wird in jwt-Callback weitergegeben
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof Error &amp;&amp; err.message === ANMELDUNG_GESPERRT) throw err;
+
     // Netzwerk- oder Parse-Fehler → Login verweigern
     return null;
   }
@@ -1568,7 +1650,7 @@ export const serverAuthOptions: NextAuthOptions = {
 },</code></pre></div>
 <p>Client Components laufen im Browser und haben kein Token. Sie rufen deshalb nicht das Backend auf, sondern den Proxy <code>/api/backend</code> der eigenen Anwendung. Er liest das Token aus dem Cookie und reicht die Anfrage weiter:</p>
 <div class="code-block"><div class="code-label">app/api/backend/[...pfad]/route.ts (Ausschnitt)</div><pre><code>// Nur diese Bereiche des Backends sind über den Proxy erreichbar (nicht /auth)
-const ERLAUBTE_BEREICHE = ['odata', 'settings'];
+const ERLAUBTE_BEREICHE = ['odata', 'settings', 'users'];
 
 function fehler(status: number, message: string) {
   return NextResponse.json({ message }, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -1667,11 +1749,12 @@ async function apiFetch(url: string, init: RequestInit = {}): Promise&lt;Respons
 │   ├── adressen/[id]/bearbeiten/     ← Adresse bearbeiten
 │   ├── cities/                       ← Städteliste, erfassen, bearbeiten
 │   ├── einstellungen/page.tsx        ← Einstellungen
+│   ├── benutzer/                     ← Benutzerliste, anlegen, bearbeiten
 │   ├── login/                        ← Login-Seite und -Formular
 │   ├── api/auth/[...nextauth]/       ← NextAuth-Endpunkte
 │   └── api/backend/[...pfad]/        ← Proxy zum Backend (hängt das Token an)
 ├── components/
-│   ├── AdresseForm.tsx, CityForm.tsx ← Formulare
+│   ├── AdresseForm.tsx, CityForm.tsx, BenutzerForm.tsx ← Formulare
 │   ├── ConfirmDialog.tsx             ← Bestätigungsdialog
 │   ├── Fehlermeldung.tsx, Ladeanzeige.tsx
 │   ├── NavBar.tsx
@@ -1680,9 +1763,10 @@ async function apiFetch(url: string, init: RequestInit = {}): Promise&lt;Respons
 ├── lib/
 │   ├── api.ts                        ← Alle Backend-Aufrufe
 │   ├── apiHeader.ts                  ← Name des Headers für den Proxy
+│   ├── anmeldung.ts                  ← Fehlercode und Dauer der Anmeldesperre
 │   ├── farben.ts                     ← Wählbare Akzentfarben
 │   └── auth.ts                       ← NextAuth-Konfiguration
-├── types/                            ← Adresse, City, Audit-Felder, NextAuth-Erweiterung
+├── types/                            ← Adresse, City, Benutzer, Audit-Felder, NextAuth-Erweiterung
 └── middleware.ts                     ← Seitenschutz und Content-Security-Policy</code></pre></div>
 <p>Fachliche Namen sind deutsch (<code>getAdressenSeite</code>, <code>erstelleAdresse</code>, <code>fehler</code>), technische englisch.</p>
 <h2 id="kap6-2">6.2 Middleware – Seiten schützen</h2>
@@ -1805,12 +1889,38 @@ useEffect(() =&gt; {
 <p>Jeder Aufruf besteht aus denselben Schritten: senden, Status prüfen, bei Fehler abbrechen. Hilfsfunktionen übernehmen das (DRY); <code>leseSeite</code> ergänzt das Blättern:</p>
 <div class="code-block"><div class="code-label">lib/api.ts – Hilfsfunktionen</div><pre><code>type RawEntity = Record&lt;string, unknown&gt;;
 
-// Führt den Aufruf aus und wirft einen Fehler, wenn das Backend keinen Erfolg meldet.
+// Fehler eines API-Aufrufs mit dem HTTP-Status und – falls das Backend eine mitgibt –
+// der Meldung aus der Antwort ({ message: "…" }), die sich dem Benutzer zeigen lässt.
+export class ApiFehler extends Error {
+  constructor(
+    text: string,
+    public readonly status: number,
+    public readonly meldung: string | null
+  ) {
+    super(text);
+    this.name = 'ApiFehler';
+  }
+}
+
+async function leseMeldung(response: Response): Promise&lt;string | null&gt; {
+  try {
+    const data = await response.json() as { message?: unknown };
+    return typeof data.message === 'string' ? data.message : null;
+  } catch {
+    return null;
+  }
+}
+
+// Führt den Aufruf aus und wirft einen ApiFehler, wenn das Backend keinen Erfolg meldet.
 async function apiRequest(url: string, fehlertext: string, init: RequestInit = {}): Promise&lt;Response&gt; {
   const response = await apiFetch(url, { cache: 'no-store', ...init });
 
   if (!response.ok) {
-    throw new Error(`${fehlertext}: ${response.statusText}`);
+    throw new ApiFehler(
+      `${fehlertext}: ${response.statusText}`,
+      response.status,
+      await leseMeldung(response)
+    );
   }
 
   return response;
@@ -2150,7 +2260,7 @@ map $upstream_http_content_security_policy $csp_ohne_nonce {
 <div class="box box-warn"><div class="box-title">Fremde Quelle? Zwei Stellen anpassen</div><p>Lädt die Anwendung etwas von einer anderen Adresse, etwa eine Schrift oder ein Bild, braucht es einen passenden Eintrag in <code>middleware.ts</code> und in <code>nginx.conf</code>. Sonst blockiert der Browser die Quelle.</p></div>
 <p>Für TLS 1.2 lässt nginx nur Verfahren mit Forward Secrecy (ECDHE) und AEAD zu; TLS 1.3 ist ohnehin so gebaut. Das Backend ergänzt jede seiner Antworten um <code>Cache-Control: no-store</code>, weil sie Personendaten enthalten.</p>
 <h2 id="kap7-3">7.3 Ratenbegrenzung</h2>
-<p>Ohne Begrenzung könnte ein Angreifer beliebig viele Passwörter durchprobieren. nginx lässt pro Client-IP höchstens 10 Anfragen pro Minute an die Anmeldung von NextAuth und an <code>/auth/</code> zu und antwortet danach mit 429. Zusätzlich sperrt das Backend eine E-Mail-Adresse nach fünf Fehlversuchen (Kapitel 4.4).</p>
+<p>Ohne Begrenzung könnte ein Angreifer beliebig viele Passwörter durchprobieren. nginx lässt pro Client-IP höchstens 10 Anfragen pro Minute an die Anmeldung von NextAuth und an <code>/auth/</code> zu und antwortet danach mit 429. Zusätzlich sperrt das Backend eine E-Mail-Adresse nach drei Fehlversuchen für fünf Minuten (Kapitel 4.4).</p>
 <div class="code-block"><div class="code-label">nginx/nginx.conf – Zone</div><pre><code># nginx-Version nicht in Antworten und Fehlerseiten preisgeben
 server_tokens off;
 
@@ -2218,11 +2328,11 @@ public async Task Register_OhneToken_Liefert401_UndLegtKeinenBenutzerAn()
   <h1 id="kap9h">9. Sicherheit im Projekt</h1>
 <div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kennst die wichtigsten Schutzmassnahmen im Projekt und ihren Grund.</li><li>Du weisst, welche Risiken bewusst offen bleiben.</li></ul></div>
 <h2 id="kap9-1">9.1 Umgesetzte Massnahmen</h2>
-<table><thead><tr><th>Thema</th><th>Massnahme</th><th>Wo</th></tr></thead><tbody><tr><td>Zugriff</td><td>Alle Endpunkte ausser dem Login verlangen ein Token</td><td>Fallback-Policy in <code>Program.cs</code></td></tr><tr><td>Rollen</td><td>Benutzer anlegen und Einstellungen ändern nur als <code>Admin</code>; die Rolle kommt aus der Datenbank</td><td><code>AuthController</code>, <code>SettingsController</code>, <code>TokenUserValidator</code></td></tr><tr><td>Widerruf</td><td>Abmeldung und Passwort-Reset machen ausgestellte Tokens ungültig</td><td><code>Users.TokenVersion</code>, <code>TokenUserValidator</code></td></tr><tr><td>Token im Browser</td><td>Das Backend-JWT bleibt auf dem Server; der Proxy prüft Header und Herkunft</td><td><code>app/api/backend</code>, <code>lib/auth.ts</code></td></tr><tr><td>Geheimnisse</td><td>Passwörter und Schlüssel in <code>.env</code>, nicht im Code</td><td><code>.env</code>, <code>docker-compose.yml</code></td></tr><tr><td>Passwörter</td><td>Nur als Hash gespeichert; kein Standardpasswort</td><td><code>PasswordHasher</code>, <code>DbSeeder</code></td></tr><tr><td>Anmeldung</td><td>Gleiche Antwortzeit und Meldung; höchstens 10 Versuche pro Minute und IP; Sperre nach 5 Fehlversuchen pro Adresse</td><td><code>AuthController</code>, <code>MemoryLoginThrottle</code>, nginx</td></tr><tr><td>Transport</td><td>HTTPS mit modernen Verfahren, Sicherheits-Header</td><td>nginx</td></tr><tr><td>Skripte</td><td>Content-Security-Policy: nur eigene Quellen, Skripte nur mit Nonce</td><td><code>middleware.ts</code>, nginx</td></tr><tr><td>Erreichbarkeit</td><td>Backend und Datenbank nur an <code>127.0.0.1</code> gebunden</td><td><code>docker-compose.yml</code></td></tr><tr><td>Datenbank</td><td>Das Backend verbindet sich mit einer eigenen Rolle ohne Superuser-Rechte</td><td><code>db/init</code>, <code>docker-compose.yml</code></td></tr><tr><td>Eingaben</td><td>Validierung im Backend; parametrisierte Abfragen; maskierte OData-Literale; mitgeschickte Id und Änderungsangaben werden verworfen</td><td>Modelle, EF Core, <code>lib/api.ts</code>, <code>ODataCrudController</code></td></tr><tr><td>Listen</td><td>Höchstens 100 Zeilen pro Antwort</td><td><code>ODataCrudController</code></td></tr><tr><td>Antworten</td><td>Fehler ohne Stacktrace; <code>Cache-Control: no-store</code>; keine Server-Kennung</td><td><code>ODataErrorDetailFilter</code>, <code>Program.cs</code>, nginx</td></tr><tr><td>Weiterleitung</td><td>Nach dem Login nur innerhalb der App</td><td><code>LoginForm.tsx</code></td></tr><tr><td>Audit</td><td>Benutzername nur aus dem Token</td><td><code>AdresseDbContext</code></td></tr><tr><td>Container</td><td>Laufen nicht als <code>root</code>; Backend und Frontend ohne Capabilities und ohne Rechteausweitung</td><td>Dockerfiles, <code>docker-compose.yml</code></td></tr><tr><td>Abhängigkeiten</td><td>Aktuelle Versionen, Lockfile, <code>npm ci</code></td><td><code>package-lock.json</code></td></tr></tbody></table>
+<table><thead><tr><th>Thema</th><th>Massnahme</th><th>Wo</th></tr></thead><tbody><tr><td>Zugriff</td><td>Alle Endpunkte ausser dem Login verlangen ein Token</td><td>Fallback-Policy in <code>Program.cs</code></td></tr><tr><td>Rollen</td><td>Benutzer verwalten und Einstellungen ändern nur als <code>Admin</code>; die Rolle kommt aus der Datenbank</td><td><code>AuthController</code>, <code>UsersController</code>, <code>SettingsController</code>, <code>TokenUserValidator</code></td></tr><tr><td>Widerruf</td><td>Abmeldung und Passwort-Reset machen ausgestellte Tokens ungültig</td><td><code>Users.TokenVersion</code>, <code>TokenUserValidator</code></td></tr><tr><td>Token im Browser</td><td>Das Backend-JWT bleibt auf dem Server; der Proxy prüft Header und Herkunft</td><td><code>app/api/backend</code>, <code>lib/auth.ts</code></td></tr><tr><td>Geheimnisse</td><td>Passwörter und Schlüssel in <code>.env</code>, nicht im Code</td><td><code>.env</code>, <code>docker-compose.yml</code></td></tr><tr><td>Passwörter</td><td>Nur als Hash gespeichert; kein Standardpasswort</td><td><code>PasswordHasher</code>, <code>DbSeeder</code></td></tr><tr><td>Anmeldung</td><td>Gleiche Antwortzeit und Meldung; höchstens 10 Versuche pro Minute und IP; Sperre für 5 Minuten nach 3 Fehlversuchen pro Adresse</td><td><code>AuthController</code>, <code>MemoryLoginThrottle</code>, nginx</td></tr><tr><td>Transport</td><td>HTTPS mit modernen Verfahren, Sicherheits-Header</td><td>nginx</td></tr><tr><td>Skripte</td><td>Content-Security-Policy: nur eigene Quellen, Skripte nur mit Nonce</td><td><code>middleware.ts</code>, nginx</td></tr><tr><td>Erreichbarkeit</td><td>Backend und Datenbank nur an <code>127.0.0.1</code> gebunden</td><td><code>docker-compose.yml</code></td></tr><tr><td>Datenbank</td><td>Das Backend verbindet sich mit einer eigenen Rolle ohne Superuser-Rechte</td><td><code>db/init</code>, <code>docker-compose.yml</code></td></tr><tr><td>Eingaben</td><td>Validierung im Backend; parametrisierte Abfragen; maskierte OData-Literale; mitgeschickte Id und Änderungsangaben werden verworfen</td><td>Modelle, EF Core, <code>lib/api.ts</code>, <code>ODataCrudController</code></td></tr><tr><td>Listen</td><td>Höchstens 100 Zeilen pro Antwort</td><td><code>ODataCrudController</code></td></tr><tr><td>Antworten</td><td>Fehler ohne Stacktrace; <code>Cache-Control: no-store</code>; keine Server-Kennung</td><td><code>ODataErrorDetailFilter</code>, <code>Program.cs</code>, nginx</td></tr><tr><td>Weiterleitung</td><td>Nach dem Login nur innerhalb der App</td><td><code>LoginForm.tsx</code></td></tr><tr><td>Audit</td><td>Benutzername nur aus dem Token</td><td><code>AdresseDbContext</code></td></tr><tr><td>Container</td><td>Laufen nicht als <code>root</code>; Backend und Frontend ohne Capabilities und ohne Rechteausweitung</td><td>Dockerfiles, <code>docker-compose.yml</code></td></tr><tr><td>Abhängigkeiten</td><td>Aktuelle Versionen, Lockfile, <code>npm ci</code></td><td><code>package-lock.json</code></td></tr></tbody></table>
 <p>Befunde, Begründungen und Prüfergebnisse stehen im <code>documentation/Sicherheitsbericht.pdf</code>.</p>
 <h2 id="kap9-2">9.2 Offene Punkte</h2>
 <p>Die Adressverwaltung ist eine Demo-Anwendung. Einige Punkte sind deshalb bewusst einfach gehalten – manche eignen sich als Übungen (Anhang C):</p>
-<ul><li>Die Abmeldung widerruft alle Tokens eines Benutzers, auch die auf seinen anderen Geräten. Eine Abmeldung pro Gerät gibt es nicht.</li><li>Der Zähler der Kontosperre liegt im Arbeitsspeicher. Er geht bei einem Neustart verloren und lässt sich missbrauchen, um einen Benutzer für 15 Minuten auszusperren.</li><li>Rollen lassen sich nur beim Anlegen eines Benutzers vergeben. Ändern oder Löschen von Benutzern geht nur direkt in der Datenbank.</li><li>Die CSP erlaubt Inline-Styles (<code>style-src 'unsafe-inline'</code>).</li><li>Der Google-Login lässt sich konfigurieren, bleibt aber unbenutzbar: Das Backend kann für ein Google-Konto kein Token ausstellen, deshalb lehnt das Frontend die Anmeldung ab.</li><li><code>npm audit</code> meldet fünf Einträge in den Entwicklungswerkzeugen, für die es keine korrigierte Version gibt. Die ausgelieferten Abhängigkeiten sind ohne Befund.</li><li>Das Frontend hat keine Tests.</li></ul>
+<ul><li>Die Abmeldung widerruft alle Tokens eines Benutzers, auch die auf seinen anderen Geräten. Eine Abmeldung pro Gerät gibt es nicht.</li><li>Der Zähler der Kontosperre liegt im Arbeitsspeicher. Er geht bei einem Neustart verloren und lässt sich missbrauchen, um einen Benutzer für 5 Minuten auszusperren – schon mit drei falschen Passwörtern.</li><li>Die E-Mail-Adresse eines Benutzers lässt sich nicht ändern; dafür legt man einen neuen Benutzer an.</li><li>Die CSP erlaubt Inline-Styles (<code>style-src 'unsafe-inline'</code>).</li><li>Der Google-Login lässt sich konfigurieren, bleibt aber unbenutzbar: Das Backend kann für ein Google-Konto kein Token ausstellen, deshalb lehnt das Frontend die Anmeldung ab.</li><li><code>npm audit</code> meldet fünf Einträge in den Entwicklungswerkzeugen, für die es keine korrigierte Version gibt. Die ausgelieferten Abhängigkeiten sind ohne Befund.</li><li>Das Frontend hat keine Tests.</li></ul>
 <div class="box box-tip"><div class="box-title">Prüfen statt glauben</div><p>Abhängigkeiten lassen sich jederzeit prüfen: <code>dotnet list package --vulnerable --include-transitive</code> im Ordner <code>backend</code> und <code>npm audit --omit=dev</code> im Ordner <code>frontend</code>.</p></div>
 <div class="chapter-summary"><h4>Zusammenfassung Kapitel 9</h4><ul><li>Die Daten schützt das Backend; nginx und das Frontend ergänzen den Schutz.</li><li>Geheimnisse stehen ausserhalb des Codes.</li><li>Offene Punkte sind dokumentiert und begründet.</li></ul></div>
 </section>
@@ -2302,11 +2412,11 @@ services:
       Jwt__Audience: AdressverwaltungFrontend
       Jwt__ExpiresInHours: "8"
       # SMTP-Einstellungen (optional – nur wenn E-Mail-Benachrichtigungen aktiviert)
-      SmtpSettings__Host: smtp.example.com
+      SmtpSettings__Host: asmtp.mail.hostpoint.ch
       SmtpSettings__Port: "587"
       SmtpSettings__Username: ${SMTP_USERNAME:-}
       SmtpSettings__Password: ${SMTP_PASSWORD:-}
-      SmtpSettings__FromAddress: noreply@example.com
+      SmtpSettings__FromAddress: erich.jost@orain.ch
       # Admin-Passwort für den ersten Start mit leerer Datenbank (leer = Zufallspasswort im Log)
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
     depends_on:
@@ -2383,7 +2493,7 @@ docker exec -it adressverwaltung-db psql -U postgres -d adressverwaltung       #
 <section id="kap12">
   <div class="chapter-num">Kapitel 12</div>
   <h1 id="kap12h">12. Häufige Fehler und Lösungen</h1>
-<table><thead><tr><th>Symptom</th><th>Ursache</th><th>Lösung</th></tr></thead><tbody><tr><td><code>docker compose up</code> meldet «POSTGRES_PASSWORD fehlt in .env»</td><td><code>.env</code> fehlt oder ist unvollständig</td><td><code>cp .env.example .env</code> und die vier Pflichtwerte setzen</td></tr><tr><td>Backend startet nicht: «JWT-Schlüssel … zu kurz oder ein Platzhalter»</td><td><code>JWT_KEY</code> kürzer als 32 Zeichen</td><td>Wert mit <code>openssl rand -base64 48</code> erzeugen</td></tr><tr><td>Backend-Log: <code>password authentication failed for user "adressverwaltung_app"</code> oder <code>role "adressverwaltung_app" does not exist</code></td><td>Die Datenbank bestand schon, bevor es die Rolle gab, oder <code>APP_DB_PASSWORD</code> wurde geändert</td><td><code>./scripts/create_db_role.sh</code> ausführen, danach <code>docker compose restart backend</code></td></tr><tr><td>Hilfsskript oder Import: <code>password authentication failed for user "postgres"</code></td><td><code>POSTGRES_PASSWORD</code> wurde geändert, aber das Volume enthält noch das alte Passwort</td><td>Passwort in der Datenbank mit <code>ALTER USER postgres PASSWORD '…'</code> anpassen oder <code>docker compose down -v</code></td></tr><tr><td>Browser zeigt «nicht sicher»</td><td>Zertifikat ist selbstsigniert oder die mkcert-Zertifizierungsstelle fehlt</td><td><code>mkcert -install</code>, Zertifikat neu ausstellen, nginx neu laden, Browser neu starten</td></tr><tr><td>Frontend-Build: <code>"/app/public": not found</code></td><td>Verzeichnis <code>frontend/public</code> fehlt</td><td>Aktuellen Stand holen (<code>git pull</code>); das Verzeichnis enthält eine Datei <code>.gitkeep</code></td></tr><tr><td>Login schlägt fehl, Passwort unbekannt</td><td>Zufallspasswort beim ersten Start</td><td><code>docker compose logs backend | grep "Admin-Benutzer"</code> oder <code>./scripts/reset_password.sh</code></td></tr><tr><td>Antwort 429 beim Anmelden</td><td>Mehr als 10 Versuche pro Minute (nginx) oder fünf Fehlversuche für dieselbe E-Mail-Adresse (Backend)</td><td>Eine Minute beziehungsweise 15 Minuten warten; ein Neustart des Backends hebt die Kontosperre auf</td></tr><tr><td>Die Anwendung springt unerwartet zur Login-Seite</td><td>Das Backend hat mit 401 geantwortet: Token abgelaufen (8 Stunden), auf einem anderen Gerät abgemeldet, Passwort zurückgesetzt oder <code>JWT_KEY</code> geändert</td><td>Neu anmelden</td></tr><tr><td>«Fehler beim Speichern» im Formular</td><td>Validierung im Backend, oder die Rolle reicht nicht (403)</td><td>Netzwerk-Tab des Browsers und Backend-Log prüfen</td></tr><tr><td>Einstellungen lassen sich nicht ändern</td><td>Der Benutzer hat die Rolle <code>User</code></td><td>Als <code>Admin</code> anmelden</td></tr><tr><td>Die Login-Seite ist blau, obwohl eine andere Farbe gewählt ist</td><td>Ohne Anmeldung sind die Einstellungen nicht lesbar</td><td>Kein Fehler; nach dem Login gilt die gewählte Farbe</td></tr><tr><td>Aufruf von <code>/api/backend/…</code> liefert 403 «Aufruf nicht erlaubt.»</td><td>Der Header <code>x-adressverwaltung</code> fehlt, weil der Aufruf nicht über <code>apiFetch</code> läuft</td><td>Alle Aufrufe über <code>lib/api.ts</code> führen</td></tr><tr><td>Browser-Konsole: «Refused to load … Content Security Policy»</td><td>Eine Quelle von einer fremden Adresse</td><td>Quelle in <code>middleware.ts</code> und <code>nginx.conf</code> eintragen (Kapitel 7.2)</td></tr><tr><td>PLZ-Wertehilfe zeigt nichts</td><td>Städteverzeichnis nicht importiert</td><td>Import nach Anhang A ausführen</td></tr><tr><td>OData-Abfrage liefert 400</td><td>Eigenschaft in PascalCase geschrieben</td><td>camelCase verwenden: <code>ort</code>, <code>postalCode</code></td></tr><tr><td>Neues Feld im Modell fehlt in der Datenbank</td><td><code>EnsureCreated</code> ändert bestehende Datenbanken nicht</td><td>Spalte im <code>SchemaUpgrader</code> ergänzen oder <code>docker compose down -v</code> und neu starten</td></tr><tr><td>Keine Benachrichtigungs-E-Mail</td><td>Keine Adresse in den Einstellungen oder SMTP nicht konfiguriert</td><td>Adresse unter «Einstellungen» eintragen; <code>SMTP_*</code> in <code>.env</code> und <code>SmtpSettings__Host</code> in der Compose-Datei setzen; Backend-Log prüfen</td></tr><tr><td>502 Bad Gateway nach <code>docker compose up --build</code></td><td>nginx kennt noch die Adressen der alten Container</td><td><code>docker compose restart nginx</code></td></tr></tbody></table>
+<table><thead><tr><th>Symptom</th><th>Ursache</th><th>Lösung</th></tr></thead><tbody><tr><td><code>docker compose up</code> meldet «POSTGRES_PASSWORD fehlt in .env»</td><td><code>.env</code> fehlt oder ist unvollständig</td><td><code>cp .env.example .env</code> und die vier Pflichtwerte setzen</td></tr><tr><td>Backend startet nicht: «JWT-Schlüssel … zu kurz oder ein Platzhalter»</td><td><code>JWT_KEY</code> kürzer als 32 Zeichen</td><td>Wert mit <code>openssl rand -base64 48</code> erzeugen</td></tr><tr><td>Backend-Log: <code>password authentication failed for user "adressverwaltung_app"</code> oder <code>role "adressverwaltung_app" does not exist</code></td><td>Die Datenbank bestand schon, bevor es die Rolle gab, oder <code>APP_DB_PASSWORD</code> wurde geändert</td><td><code>./scripts/create_db_role.sh</code> ausführen, danach <code>docker compose restart backend</code></td></tr><tr><td>Hilfsskript oder Import: <code>password authentication failed for user "postgres"</code></td><td><code>POSTGRES_PASSWORD</code> wurde geändert, aber das Volume enthält noch das alte Passwort</td><td>Passwort in der Datenbank mit <code>ALTER USER postgres PASSWORD '…'</code> anpassen oder <code>docker compose down -v</code></td></tr><tr><td>Browser zeigt «nicht sicher»</td><td>Zertifikat ist selbstsigniert oder die mkcert-Zertifizierungsstelle fehlt</td><td><code>mkcert -install</code>, Zertifikat neu ausstellen, nginx neu laden, Browser neu starten</td></tr><tr><td>Frontend-Build: <code>"/app/public": not found</code></td><td>Verzeichnis <code>frontend/public</code> fehlt</td><td>Aktuellen Stand holen (<code>git pull</code>); das Verzeichnis enthält eine Datei <code>.gitkeep</code></td></tr><tr><td>Login schlägt fehl, Passwort unbekannt</td><td>Zufallspasswort beim ersten Start</td><td><code>docker compose logs backend | grep "Admin-Benutzer"</code> oder <code>./scripts/reset_password.sh</code></td></tr><tr><td>Antwort 429 beim Anmelden</td><td>Mehr als 10 Versuche pro Minute (nginx) oder drei Fehlversuche für dieselbe E-Mail-Adresse (Backend)</td><td>Eine Minute beziehungsweise 5 Minuten warten; ein Admin hebt die Sperre in der Benutzerverwaltung auf, ein Neustart des Backends ebenfalls</td></tr><tr><td>Die Anwendung springt unerwartet zur Login-Seite</td><td>Das Backend hat mit 401 geantwortet: Token abgelaufen (8 Stunden), auf einem anderen Gerät abgemeldet, Passwort zurückgesetzt oder <code>JWT_KEY</code> geändert</td><td>Neu anmelden</td></tr><tr><td>«Fehler beim Speichern» im Formular</td><td>Validierung im Backend, oder die Rolle reicht nicht (403)</td><td>Netzwerk-Tab des Browsers und Backend-Log prüfen</td></tr><tr><td>Einstellungen lassen sich nicht ändern</td><td>Der Benutzer hat die Rolle <code>User</code></td><td>Als <code>Admin</code> anmelden</td></tr><tr><td>Die Login-Seite ist blau, obwohl eine andere Farbe gewählt ist</td><td>Ohne Anmeldung sind die Einstellungen nicht lesbar</td><td>Kein Fehler; nach dem Login gilt die gewählte Farbe</td></tr><tr><td>Aufruf von <code>/api/backend/…</code> liefert 403 «Aufruf nicht erlaubt.»</td><td>Der Header <code>x-adressverwaltung</code> fehlt, weil der Aufruf nicht über <code>apiFetch</code> läuft</td><td>Alle Aufrufe über <code>lib/api.ts</code> führen</td></tr><tr><td>Browser-Konsole: «Refused to load … Content Security Policy»</td><td>Eine Quelle von einer fremden Adresse</td><td>Quelle in <code>middleware.ts</code> und <code>nginx.conf</code> eintragen (Kapitel 7.2)</td></tr><tr><td>PLZ-Wertehilfe zeigt nichts</td><td>Städteverzeichnis nicht importiert</td><td>Import nach Anhang A ausführen</td></tr><tr><td>OData-Abfrage liefert 400</td><td>Eigenschaft in PascalCase geschrieben</td><td>camelCase verwenden: <code>ort</code>, <code>postalCode</code></td></tr><tr><td>Neues Feld im Modell fehlt in der Datenbank</td><td><code>EnsureCreated</code> ändert bestehende Datenbanken nicht</td><td>Spalte im <code>SchemaUpgrader</code> ergänzen oder <code>docker compose down -v</code> und neu starten</td></tr><tr><td>Keine Benachrichtigungs-E-Mail</td><td>Keine Adresse in den Einstellungen oder SMTP nicht konfiguriert</td><td>Adresse unter «Einstellungen» eintragen; <code>SMTP_*</code> in <code>.env</code> und <code>SmtpSettings__Host</code> in der Compose-Datei setzen; Backend-Log prüfen</td></tr><tr><td>502 Bad Gateway nach <code>docker compose up --build</code></td><td>nginx kennt noch die Adressen der alten Container</td><td><code>docker compose restart nginx</code></td></tr></tbody></table>
 </section>
 <section id="anhA">
   <div class="chapter-num">Anhang A</div>
@@ -2401,7 +2511,7 @@ CSV_PATH=migration/AMTOVZ_CSV_LV95.csv python3 scripts/import_cities.py</code></
   <h1 id="anhBh">Anhang B: Hilfsskripte</h1>
 <p>Die Skripte arbeiten über <code>docker exec</code> direkt in der laufenden Datenbank, als Superuser <code>postgres</code>. Die beiden Benutzer-Skripte erzeugen den Passwort-Hash im selben Format wie das Backend.</p>
 <table><thead><tr><th>Skript</th><th>Aufruf</th><th>Zweck</th></tr></thead><tbody><tr><td><code>create_user.sh</code></td><td><code>./scripts/create_user.sh email "Name" passwort [User|Admin]</code> oder ohne Argumente mit Abfrage</td><td>Benutzer anlegen; ohne Angabe mit der Rolle <code>User</code></td></tr><tr><td><code>reset_password.sh</code></td><td><code>./scripts/reset_password.sh [passwort]</code></td><td>Passwort von <code>admin@example.com</code> neu setzen; widerruft dessen Tokens</td></tr><tr><td><code>create_db_role.sh</code></td><td><code>./scripts/create_db_role.sh</code></td><td>Rolle <code>adressverwaltung_app</code> in einer bestehenden Datenbank anlegen oder ihr Passwort neu setzen</td></tr></tbody></table>
-<div class="box box-info"><div class="box-title">Benutzer über die API anlegen</div><p>Ein Admin kann weitere Benutzer auch über <code>POST /auth/register</code> anlegen (mit <code>Authorization: Bearer …</code>). Das optionale Feld <code>role</code> im Body bestimmt die Rolle.</p></div>
+<div class="box box-info"><div class="box-title">Benutzer in der Anwendung verwalten</div><p>Ein Admin legt Benutzer auf der Seite «Benutzer» an, ändert Name, Rolle und Passwort, hebt eine Anmeldesperre auf und löscht Benutzer. Über die API geht dasselbe mit <code>/users</code>; <code>POST /auth/register</code> bleibt für das Anlegen bestehen (mit <code>Authorization: Bearer …</code>, optionales Feld <code>role</code>).</p></div>
 <div class="code-block"><div class="code-label">Token holen und API aufrufen</div><pre><code>curl -s -X POST http://localhost:5000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"&lt;passwort&gt;"}'

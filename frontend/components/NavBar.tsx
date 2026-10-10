@@ -41,6 +41,9 @@ export default function NavBar() {
           <Link href="/einstellungen" className={linkClass(pathname.startsWith('/einstellungen'))}>
             Einstellungen
           </Link>
+          <Link href="/benutzer" className={linkClass(pathname.startsWith('/benutzer'))}>
+            Benutzer
+          </Link>
 
           {/* Trennstrich */}
           <div className="w-px h-5 bg-akzent-600 mx-1" />

@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Fehlermeldung from '@/components/Fehlermeldung';
 import { inputClass, labelClass } from '@/components/formStyles';
+import { ANMELDUNG_GESPERRT, SPERRE_MINUTEN } from '@/lib/anmeldung';
 
 // ──────────────────────────────────────────────────────────────
 // LoginForm: Client-Komponente (useSearchParams → Suspense nötig).
@@ -53,7 +54,11 @@ export function LoginForm({ googleEnabled }: LoginFormProps) {
 
     setLaden(false);
 
-    if (result?.error) {
+    if (result?.error === ANMELDUNG_GESPERRT) {
+      setFehler(
+        `Zu viele Fehlversuche. Die Anmeldung mit dieser E-Mail-Adresse ist für ${SPERRE_MINUTEN} Minuten gesperrt.`
+      );
+    } else if (result?.error) {
       setFehler('Ungültige E-Mail-Adresse oder falsches Passwort.');
     } else {
       router.push(callbackUrl);

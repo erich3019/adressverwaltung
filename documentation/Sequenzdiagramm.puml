@@ -53,8 +53,8 @@ next -> api : POST /auth/login\n(direkt über INTERNAL_API_URL, ohne nginx)
 activate api
 api -> api : Kontosperre prüfen\n(ILoginThrottle)
 note right of api
-  Nach 5 Fehlversuchen ist die E-Mail-Adresse
-  15 Minuten gesperrt: sofort 429,
+  Nach 3 Fehlversuchen ist die E-Mail-Adresse
+  5 Minuten gesperrt: sofort 429,
   weiter wie ab Schritt 17
 end note
 api -> db : SELECT Users WHERE Email

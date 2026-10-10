@@ -68,6 +68,7 @@ rectangle "Docker Compose" as compose {
     component "AuthController\n/auth/login · /auth/register\n/auth/logout · Kontosperre" as authc
     component "OData-Controller\n/odata/Adressen · /odata/Cities\n(ODataCrudController<T>)" as odata
     component "SettingsController\n/settings (PUT nur Admin)" as settingsc
+    component "UsersController\n/users (nur Admin)\nBenutzerverwaltung" as usersc
     component "EmailNotificationService\n→ EmailService (SMTP)" as notify
     component "AdresseDbContext\nEF Core 10 · Audit-Felder\nEnsureCreated + SchemaUpgrader\n+ DbSeeder" as dbctx
   }
@@ -87,7 +88,7 @@ user --> proxy : HTTPS :443\n(HTTP :80 → 301)
 
 ' ── nginx-Routing ────────────────────────────────────────────
 proxy --> mw : alle übrigen Pfade\n(Seiten, /api/auth/*,\n/api/backend/*)
-proxy --> jwt : /odata/*  ·  /settings\n(nur direkte API-Clients)
+proxy --> jwt : /odata/*  ·  /settings  ·  /users\n(nur direkte API-Clients)
 proxy --> authc : /auth/*
 
 ' ── Frontend intern ──────────────────────────────────────────
@@ -105,10 +106,13 @@ nextauth ..> google : OAuth-Login
 ' ── Backend intern ───────────────────────────────────────────
 jwt --> odata
 jwt --> settingsc
+jwt --> usersc
 jwt --> dbctx : Benutzer, Rolle und\nToken-Version prüfen
 odata --> notify : POST Adresse
 odata --> dbctx
 settingsc --> dbctx
+usersc --> dbctx
+usersc ..> authc : Kontosperre\nlesen, aufheben
 authc --> dbctx : Benutzer prüfen,\nJWT ausstellen
 notify --> dbctx : NotificationEmail\nlesen
 notify ..> smtp : E-Mail\n«Neue Adresse»
