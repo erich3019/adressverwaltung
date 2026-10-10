@@ -15,7 +15,7 @@ Version 2.4.0 fasst die Änderungen vom 9. Oktober 2026 zusammen. Die Abschnitte
 | --- | --- | --- | --- |
 | 1 | Zweite Sicherheitsprüfung | 11 Befunde (S-19 bis S-29), alle behoben | `68d2789`, `dc6f6e4` |
 | 2 | Offene Punkte | O-03 bis O-08 aus dem Sicherheitsbericht bearbeitet | `594258d` |
-| 3 | Einstellungen | Fehler beim Ändern der E-Mail-Adresse behoben; Farbe der Oberfläche wählbar | nach `3484396` |
+| 3 | Einstellungen | Fehler beim Ändern der E-Mail-Adresse behoben; Farbe der Oberfläche wählbar | `8f234fe`, `b1d6d09` |
 | 4 | Dokumentation | Diagramme, Schulungsunterlage und Tutorial auf den Stand des Codes gebracht | `3484396` |
 | 5 | Aufräumen | Überholte Dokumente und Dateien gelöscht | `3484396` |
 | 6 | Version | Versionsnummer auf 2.4.0 gesetzt | `3484396` |
@@ -205,14 +205,6 @@ Auf der Einstellungsseite lässt sich die Farbe von Kopfzeile, Schaltflächen un
 
 Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose restart nginx`. Die neue Spalte entsteht beim Start des Backends.
 
-### Nachtrag vom 10. Oktober 2026: Nach dem Speichern zur Adressliste
-
-Nach dem Speichern der Einstellungen wechselt die Seite zur Adressliste (`/`), wie es die Formulare für Adressen und Städte nach dem Speichern auch tun. Die Meldung «Einstellungen wurden gespeichert» entfällt damit. Schlägt das Speichern fehl, bleibt die Seite stehen und zeigt den Fehler.
-
-| Datei | Änderung |
-| --- | --- |
-| `frontend/app/einstellungen/page.tsx` | `router.push('/')` nach dem Speichern; Erfolgsmeldung entfernt |
-
 | Prüfung | Ergebnis |
 | --- | --- |
 | `dotnet test` | 77 von 77 bestanden (8 neu) |
@@ -221,6 +213,16 @@ Nach dem Speichern der Einstellungen wechselt die Seite zur Adressliste (`/`), w
 | Browser als `User` | Formular gesperrt, gewählte Farbe sichtbar |
 
 Nicht geprüft: der Fall einer Session aus der Zeit vor den Rollen selbst (er liess sich nicht nachstellen; geprüft ist, dass die Seite die Rolle der Session nicht mehr verwendet), andere Browser als Chromium und der Kontrast jeder Farbe von Hand.
+
+### Nachtrag vom 10. Oktober 2026: Nach dem Speichern zur Adressliste
+
+Nach dem Speichern der Einstellungen wechselt die Seite zur Adressliste (`/`), wie es die Formulare für Adressen und Städte nach dem Speichern auch tun. Die Meldung «Einstellungen wurden gespeichert» entfällt damit. Schlägt das Speichern fehl, bleibt die Seite stehen und zeigt den Fehler.
+
+| Datei | Änderung |
+| --- | --- |
+| `frontend/app/einstellungen/page.tsx` | `router.push('/')` nach dem Speichern; Erfolgsmeldung entfernt |
+
+Geprüft mit Typprüfung und Lint des Frontends; im Browser nicht geprüft.
 
 ---
 
