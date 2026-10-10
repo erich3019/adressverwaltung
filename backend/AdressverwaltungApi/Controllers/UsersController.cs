@@ -17,7 +17,7 @@ namespace AdressverwaltungApi.Controllers;
 /// POST   /users              – Benutzer anlegen; der neue Benutzer erhält eine E-Mail
 /// PUT    /users/{id}         – Anzeigename, Rolle und optional Passwort ändern
 /// DELETE /users/{id}         – Benutzer löschen; meldet es der Adresse aus den Einstellungen
-/// POST   /users/{id}/unlock  – Anmeldesperre aufheben
+/// POST   /users/{id}/unlock  – Anmeldesperre aufheben (Sperrkennzeichen löschen)
 /// Der Passwort-Hash verlässt das Backend nie. Sich selbst kann ein Administrator
 /// weder löschen noch die Rolle Admin entziehen – so bleibt immer einer übrig.
 /// </summary>
@@ -136,6 +136,7 @@ public class UsersController : ControllerBase
 
             // Neues Passwort: bisherige Tokens widerrufen und eine Sperre aufheben
             user.TokenVersion++;
+            user.LockedUntil = null;
             _throttle.Reset(user.Email);
         }
 
@@ -172,12 +173,18 @@ public class UsersController : ControllerBase
     [HttpPost("{id:int}/unlock")]
     public async Task<IActionResult> UnlockUser(int id)
     {
-        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (user is null)
         {
             return NotFound();
         }
 
+        // Sperrkennzeichen löschen und den Fehlerzähler im Arbeitsspeicher zurücksetzen
+        if (user.LockedUntil is not null)
+        {
+            user.LockedUntil = null;
+            await _context.SaveChangesAsync();
+        }
         _throttle.Reset(user.Email);
 
         return Ok(ToResponse(user));
@@ -193,6 +200,9 @@ public class UsersController : ControllerBase
         user.Email,
         user.DisplayName,
         user.Role,
-        LockedUntil: _throttle.BlockedUntil(user.Email),
+        // Als UTC kennzeichnen, damit der Zeitpunkt im JSON mit "Z" erscheint
+        LockedUntil: user.IsLocked(DateTime.UtcNow)
+            ? DateTime.SpecifyKind(user.LockedUntil!.Value, DateTimeKind.Utc)
+            : null,
         IsSelf:      user.Id == CurrentUserId);
 }

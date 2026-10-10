@@ -116,4 +116,39 @@ public class EmailNotificationService : INotificationService
             _logger.LogError(ex, "Fehler beim E-Mail-Versand für den gelöschten Benutzer {Id}.", user.Id);
         }
     }
+
+    public async Task NotifyUserLockedAsync(User user)
+    {
+        try
+        {
+            var settings = await _context.Settings.FirstOrDefaultAsync();
+
+            if (settings is null || string.IsNullOrWhiteSpace(settings.NotificationEmail))
+            {
+                _logger.LogInformation(
+                    "Keine Benachrichtigungs-E-Mail konfiguriert. Benutzer {Id} gesperrt.", user.Id);
+                return;
+            }
+
+            var minuten = (int)MemoryLoginThrottle.LockDuration.TotalMinutes;
+            var betreff = $"Benutzer gesperrt: {user.DisplayName}";
+            var inhalt  = $"""
+                Ein Benutzer wurde nach {MemoryLoginThrottle.MaxFailures} fehlerhaften Anmeldungen gesperrt:
+
+                Name:   {user.DisplayName}
+                E-Mail: {user.Email}
+                Rolle:  {user.Role}
+
+                Die Sperre endet nach {minuten} Minuten von selbst. Ein Administrator kann sie
+                in der Benutzerverwaltung vorher aufheben.
+                """;
+
+            await _emailService.SendAsync(settings.NotificationEmail, betreff, inhalt);
+        }
+        catch (Exception ex)
+        {
+            // Die Sperre gilt; ein Fehler beim Versand ändert daran nichts
+            _logger.LogError(ex, "Fehler beim E-Mail-Versand für den gesperrten Benutzer {Id}.", user.Id);
+        }
+    }
 }

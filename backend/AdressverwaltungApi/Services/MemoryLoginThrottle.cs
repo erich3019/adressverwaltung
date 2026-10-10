@@ -8,7 +8,8 @@ namespace AdressverwaltungApi.Services;
 /// letzten dieser Fehlversuche.
 /// Gezählt wird pro Adresse, unabhängig davon, ob es dazu einen Benutzer gibt –
 /// die Sperre verrät also nicht, welche Konten existieren.
-/// Zähler und Sperren gehen bei einem Neustart verloren; für eine einzelne Instanz genügt das.
+/// Zähler und Sperren gehen bei einem Neustart verloren. Für bestehende Benutzer hält
+/// AuthController die Sperre zusätzlich als Sperrkennzeichen in der Datenbank fest.
 /// </summary>
 public sealed class MemoryLoginThrottle : ILoginThrottle, IDisposable
 {
@@ -29,19 +30,17 @@ public sealed class MemoryLoginThrottle : ILoginThrottle, IDisposable
         public DateTime? BlockedUntil;
     }
 
-    public bool IsBlocked(string email) => BlockedUntil(email) is not null;
-
-    public DateTime? BlockedUntil(string email)
+    public bool IsBlocked(string email)
     {
-        if (!_cache.TryGetValue(Key(email), out Counter? counter)) return null;
+        if (!_cache.TryGetValue(Key(email), out Counter? counter)) return false;
 
         lock (counter!)
         {
-            return counter.BlockedUntil > DateTime.UtcNow ? counter.BlockedUntil : null;
+            return counter.BlockedUntil > DateTime.UtcNow;
         }
     }
 
-    public void RegisterFailure(string email)
+    public DateTime? RegisterFailure(string email)
     {
         var key     = Key(email);
         var counter = _cache.GetOrCreate(key, entry =>
@@ -54,7 +53,7 @@ public sealed class MemoryLoginThrottle : ILoginThrottle, IDisposable
         lock (counter!)
         {
             counter.Failures++;
-            if (counter.Failures != MaxFailures) return;
+            if (counter.Failures != MaxFailures) return null;
 
             // Die Sperre beginnt jetzt: Eintrag mit neuer Ablaufzeit ablegen
             counter.BlockedUntil = DateTime.UtcNow.Add(LockDuration);
@@ -63,6 +62,8 @@ public sealed class MemoryLoginThrottle : ILoginThrottle, IDisposable
                 AbsoluteExpirationRelativeToNow = LockDuration,
                 Size = 1,
             });
+
+            return counter.BlockedUntil;
         }
     }
 

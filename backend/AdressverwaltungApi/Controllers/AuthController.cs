@@ -17,7 +17,8 @@ namespace AdressverwaltungApi.Controllers;
 /// - Das PasswordHash-Feld wird NIEMALS in Responses zurückgegeben
 /// - Fehlermeldungen sind bewusst generisch (kein Hinweis ob E-Mail oder Passwort falsch)
 /// - Bei erfolgreichem Login wird ein JWT Bearer-Token ausgestellt (ITokenService)
-/// - Drei Fehlversuche sperren die E-Mail-Adresse für fünf Minuten (ILoginThrottle)
+/// - Drei Fehlversuche sperren die E-Mail-Adresse für fünf Minuten (ILoginThrottle);
+///   beim Benutzer wird das Sperrkennzeichen gesetzt und die Sperre per E-Mail gemeldet
 /// - Registrierung ist nur für Administratoren möglich
 /// - Die Abmeldung widerruft die ausgestellten Tokens des Benutzers
 /// </summary>
@@ -106,11 +107,17 @@ public class AuthController : ControllerBase
         // auch für das richtige Passwort und auch für unbekannte Adressen.
         if (_throttle.IsBlocked(req.Email))
         {
-            return StatusCode(StatusCodes.Status429TooManyRequests,
-                new { message = "Zu viele Anmeldeversuche. Bitte später erneut versuchen." });
+            return TooManyRequests();
         }
 
         var user = await FindUserByEmailAsync(req.Email);
+
+        // Das Sperrkennzeichen des Benutzers gilt auch nach einem Neustart des Backends,
+        // bei dem der Zähler im Arbeitsspeicher verloren geht.
+        if (user is not null && user.IsLocked(DateTime.UtcNow))
+        {
+            return TooManyRequests();
+        }
 
         // Passwort prüfen – bei ungültigem Benutzer trotzdem "prüfen"
         // (verhindert Timing-Angriffe durch gleiche Ausführungszeit)
@@ -121,13 +128,27 @@ public class AuthController : ControllerBase
 
         if (user is null || result == PasswordVerificationResult.Failed)
         {
-            _throttle.RegisterFailure(req.Email);
+            var lockedUntil = _throttle.RegisterFailure(req.Email);
+
+            // Dieser Fehlversuch hat die Sperre ausgelöst: beim Benutzer vermerken und melden.
+            // Für eine unbekannte Adresse gibt es keinen Benutzer und deshalb keine E-Mail.
+            if (lockedUntil is not null && user is not null)
+            {
+                await LockUserAsync(user, lockedUntil.Value);
+            }
 
             // Bewusst generische Fehlermeldung
             return Unauthorized(new { message = "Ungültige Anmeldedaten." });
         }
 
         _throttle.Reset(req.Email);
+
+        // Abgelaufenes Sperrkennzeichen aufräumen
+        if (user.LockedUntil is not null)
+        {
+            user.LockedUntil = null;
+            await _context.SaveChangesAsync();
+        }
 
         return Ok(new LoginResponse(
             Id:    user.Id.ToString(),
@@ -154,6 +175,23 @@ public class AuthController : ControllerBase
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.TokenVersion, u => u.TokenVersion + 1));
 
         return NoContent();
+    }
+
+    private ObjectResult TooManyRequests() => StatusCode(
+        StatusCodes.Status429TooManyRequests,
+        new { message = "Zu viele Anmeldeversuche. Bitte später erneut versuchen." });
+
+    /// <summary>
+    /// Setzt das Sperrkennzeichen des Benutzers und meldet die Sperre der
+    /// Benachrichtigungsadresse aus den Einstellungen.
+    /// </summary>
+    private async Task LockUserAsync(User user, DateTime lockedUntilUtc)
+    {
+        // Die Spalte ist "timestamp without time zone": Npgsql verlangt Kind=Unspecified
+        user.LockedUntil = DateTime.SpecifyKind(lockedUntilUtc, DateTimeKind.Unspecified);
+        await _context.SaveChangesAsync();
+
+        await _notificationService.NotifyUserLockedAsync(user);
     }
 
     /// <summary>

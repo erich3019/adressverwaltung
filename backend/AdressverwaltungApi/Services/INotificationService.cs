@@ -19,4 +19,10 @@ public interface INotificationService
     /// gelöscht wurde. deletedBy ist der Anzeigename dessen, der gelöscht hat.
     /// </summary>
     Task NotifyUserDeletedAsync(User user, string? deletedBy);
+
+    /// <summary>
+    /// Meldet der Benachrichtigungsadresse aus den Einstellungen, dass ein Benutzer
+    /// nach zu vielen Fehlversuchen gesperrt wurde.
+    /// </summary>
+    Task NotifyUserLockedAsync(User user);
 }

@@ -1,6 +1,6 @@
 # Adressverwaltung – Tutorial WebApp v2.5.0
 
-Adressverwaltungs-WebApp mit Login, CRUD für Adressen und Städte (PLZ-Verzeichnis), PLZ-Wertehilfe, Benutzerverwaltung und E-Mail-Benachrichtigung bei neuen Adressen, an neue Benutzer und bei gelöschten Benutzern.
+Adressverwaltungs-WebApp mit Login, CRUD für Adressen und Städte (PLZ-Verzeichnis), PLZ-Wertehilfe, Benutzerverwaltung und E-Mail-Benachrichtigung bei neuen Adressen, an neue Benutzer und bei gelöschten oder gesperrten Benutzern.
 
 ## Tech-Stack
 
@@ -132,9 +132,9 @@ Der Sicherheitsbericht mit allen Befunden und Korrekturen liegt unter `documenta
 
 - **Adressen** (`/`): Liste, Erfassen, Bearbeiten, Löschen
 - **Städte** (`/cities`): PLZ-Verzeichnis pflegen; dient als Wertehilfe im Adressformular (Vorschläge ab zwei Ziffern)
-- **Einstellungen** (`/einstellungen`): E-Mail-Adresse für Benachrichtigungen bei neuen Adressen und gelöschten Benutzern und Farbe der Oberfläche (ändern nur als `Admin`)
+- **Einstellungen** (`/einstellungen`): E-Mail-Adresse für Benachrichtigungen bei neuen Adressen, gelöschten Benutzern und gesperrten Benutzern sowie Farbe der Oberfläche (ändern nur als `Admin`)
 - **Benutzer** (`/benutzer`): Benutzer anlegen, Name, Rolle und Passwort ändern, Anmeldesperre aufheben, löschen (nur als `Admin`). Ein neuer Benutzer erhält eine E-Mail an seine Adresse – ohne Passwort
-- **Login** (`/login`): E-Mail und Passwort, optional Google. Nach 3 fehlerhaften Anmeldungen ist eine E-Mail-Adresse für 5 Minuten gesperrt
+- **Login** (`/login`): E-Mail und Passwort, optional Google. Nach 3 fehlerhaften Anmeldungen ist eine E-Mail-Adresse für 5 Minuten gesperrt; beim Benutzer wird ein Sperrkennzeichen gesetzt, das ein `Admin` vorzeitig löschen kann, und die Sperre wird per E-Mail gemeldet
 - **Audit-Felder**: Alle Datensätze führen `CreateDate`, `CreatedBy`, `ChangeDate`, `ChangedBy`, `DateFrom`, `DateTo`; das Backend setzt sie automatisch
 
 ### PLZ-Verzeichnis importieren
@@ -179,7 +179,7 @@ curl -s http://localhost:5000/odata/Adressen -H "Authorization: Bearer <JWT>"
 | GET / PUT | `/settings` | Einstellungen lesen / speichern |
 | GET / POST | `/users` | Benutzer auflisten / anlegen (nur Rolle Admin; der neue Benutzer erhält eine E-Mail) |
 | GET / PUT / DELETE | `/users/{id}` | Benutzer lesen / ändern (Name, Rolle, optional Passwort) / löschen (nur Rolle Admin; Löschen löst eine Benachrichtigung aus) |
-| POST | `/users/{id}/unlock` | Anmeldesperre eines Benutzers aufheben (nur Rolle Admin) |
+| POST | `/users/{id}/unlock` | Anmeldesperre eines Benutzers aufheben: Sperrkennzeichen löschen (nur Rolle Admin) |
 
 Property-Namen sind in Payloads und OData-Abfragen camelCase (`ort`, `postalCode`). `$top` ist auf 100 begrenzt.
 
@@ -259,7 +259,7 @@ adressverwaltung/
 
 | Version | Inhalt |
 |---------|--------|
-| 2.5.0 | Benutzerverwaltung mit E-Mail an neue Benutzer und Meldung bei gelöschten Benutzern, Anmeldesperre nach 3 Fehlversuchen für 5 Minuten, Wechsel zur Adressliste nach dem Speichern der Einstellungen |
+| 2.5.0 | Benutzerverwaltung mit E-Mail an neue Benutzer und Meldung bei gelöschten und gesperrten Benutzern, Anmeldesperre nach 3 Fehlversuchen für 5 Minuten mit Sperrkennzeichen am Benutzer, Wechsel zur Adressliste nach dem Speichern der Einstellungen |
 | 2.4.0 | Zweite Sicherheitsprüfung: Rollen, Token-Widerruf, Proxy für API-Aufrufe, CSP mit Nonce, Blättern, eigene Datenbankrolle, wählbare Farbe |
 | 2.3.0 | .NET 10, Next.js 15, Backend-Tests, Sicherheitskorrekturen, Clean-Code-Nachprüfung |
 | 2.2.0 | JWT-Authentifizierung im Backend, Bearer-Token aus der NextAuth-Session |

@@ -114,9 +114,10 @@ settingsc --> dbctx
 usersc --> dbctx
 usersc ..> authc : Kontosperre\nlesen, aufheben
 usersc --> notify : POST, DELETE\nBenutzer
+authc --> notify : Sperre nach\nFehlversuchen
 authc --> dbctx : Benutzer prüfen,\nJWT ausstellen
 notify --> dbctx : NotificationEmail\nlesen
-notify ..> smtp : E-Mail\n«Neue Adresse»
+notify ..> smtp : E-Mail-\nBenachrichtigungen
 
 ' ── Persistenz ───────────────────────────────────────────────
 dbctx --> tables : Npgsql\n(Rolle adressverwaltung_app)

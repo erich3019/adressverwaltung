@@ -125,7 +125,7 @@
 <p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
 <p><b>Was passiert:</b> Ist die E-Mail unbekannt oder das Passwort falsch, erhöht das Backend den Fehlerzähler für diese E-Mail-Adresse. Erreicht er 5, greift beim nächsten Versuch die Sperre aus Schritt 5.</p>
 <p><b>Im Code:</b> <code>Controllers/AuthController.cs</code>: <code>_throttle.RegisterFailure(req.Email)</code>.</p>
-<p><b>Warum so:</b> Zähler und Sperre laufen nach 5 Minuten von selbst ab; ein Admin kann die Sperre in der Benutzerverwaltung vorzeitig aufheben. Beides liegt im Arbeitsspeicher und geht bei einem Neustart des Backends verloren. Für eine einzelne Instanz genügt das.</p>
+<p><b>Warum so:</b> Zähler und Sperre laufen nach 5 Minuten von selbst ab. Der Zähler liegt im Arbeitsspeicher und geht bei einem Neustart des Backends verloren. Gibt es zur Adresse einen Benutzer, setzt das Backend bei der Sperre zusätzlich dessen Sperrkennzeichen in der Datenbank (<code>Users.LockedUntil</code>) und meldet die Sperre per E-Mail der Adresse aus den Einstellungen. Ein Admin kann das Kennzeichen in der Benutzerverwaltung vorzeitig löschen.</p>
 
 <h3>Schritt 16: 401 «Ungültige Anmeldedaten.»</h3>
 <p class="dir"><b>Beteiligte:</b> Backend → Next.js</p>

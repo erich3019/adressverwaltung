@@ -150,6 +150,9 @@ public class AdresseDbContext : DbContext
             // (create_user.sh) gültige Zeilen anlegen
             entity.Property(u => u.Role).HasDefaultValue(Roles.User);
             entity.Property(u => u.TokenVersion).HasDefaultValue(0);
+
+            // Sperrkennzeichen: wie die Audit-Zeitstempel ohne Zeitzone gespeichert (UTC)
+            entity.Property(u => u.LockedUntil).HasColumnType("timestamp without time zone");
         });
 
         modelBuilder.Entity<Settings>(entity =>

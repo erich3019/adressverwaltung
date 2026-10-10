@@ -23,7 +23,7 @@ public record UserUpdateRequest(
 
 /// <summary>
 /// Ein Benutzer in den Antworten von /users – ohne Passwort-Hash.
-/// LockedUntil: Ende der Anmeldesperre (UTC) oder null. IsSelf: der angemeldete Benutzer selbst.
+/// LockedUntil: Sperrkennzeichen des Benutzers – Ende der Anmeldesperre (UTC) oder null. IsSelf: der angemeldete Benutzer selbst.
 /// </summary>
 public record UserResponse(
     int Id,

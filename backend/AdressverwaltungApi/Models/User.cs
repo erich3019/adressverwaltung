@@ -38,4 +38,14 @@ public class User : AuditableEntity
     /// mit diesem Wert übereinstimmt – so lassen sich ausgestellte Tokens widerrufen.
     /// </summary>
     public int TokenVersion { get; set; }
+
+    /// <summary>
+    /// Sperrkennzeichen: Ende der Anmeldesperre nach zu vielen Fehlversuchen (UTC),
+    /// sonst null. Ein Zeitpunkt in der Vergangenheit bedeutet «nicht mehr gesperrt».
+    /// Ein Administrator kann das Kennzeichen vorzeitig löschen.
+    /// </summary>
+    public DateTime? LockedUntil { get; set; }
+
+    /// <summary>true, solange die Anmeldesperre läuft.</summary>
+    public bool IsLocked(DateTime utcNow) => LockedUntil > utcNow;
 }

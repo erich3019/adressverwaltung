@@ -159,7 +159,7 @@
 
   <tr><td nowrap valign="top">S-22</td><td valign="top">Mittel</td>
     <td valign="top">Keine Kontosperre (bisher Teil von O-06): Die Begrenzung in nginx (S-07) gilt pro Client-IP. Verteilt über viele Adressen liess sich ein Passwort weiterhin unbegrenzt raten.</td>
-    <td valign="top">Nach 3 Fehlversuchen ist die E-Mail-Adresse 5 Minuten gesperrt (Antwort 429; bis zum 10. Oktober 2026 nach 5 Fehlversuchen für 15 Minuten), auch für das richtige Passwort. Gezählt wird ebenso für unbekannte Adressen, die Sperre verrät also nicht, welche Konten es gibt. Eine erfolgreiche Anmeldung setzt den Zähler zurück. Durch zwei Tests abgedeckt.</td>
+    <td valign="top">Nach 3 Fehlversuchen ist die E-Mail-Adresse 5 Minuten gesperrt (Antwort 429; bis zum 10. Oktober 2026 nach 5 Fehlversuchen für 15 Minuten), auch für das richtige Passwort. Gezählt wird ebenso für unbekannte Adressen, die Sperre verrät also nicht, welche Konten es gibt. Eine erfolgreiche Anmeldung setzt den Zähler zurück. Seit dem 10. Oktober 2026 setzt die Sperre beim betroffenen Benutzer zusätzlich ein Sperrkennzeichen in der Datenbank (gilt auch nach einem Neustart) und meldet sich per E-Mail bei der Adresse aus den Einstellungen. Durch Tests abgedeckt.</td>
     <td valign="top">Behoben</td></tr>
 
   <tr><td nowrap valign="top">S-23</td><td valign="top">Mittel</td>
@@ -257,7 +257,7 @@
     <td valign="top">Geringes Risiko: Styles führen keinen Code aus. Eine Nonce auch für Styles wäre möglich, sobald keine Komponente mehr Inline-Styles braucht.</td></tr>
 
   <tr><td nowrap valign="top">O-10</td>
-    <td valign="top">Die Abmeldung widerruft alle Tokens des Benutzers, auch die auf anderen Geräten. Der Sperrzähler der Kontosperre (S-22) liegt im Arbeitsspeicher und lässt sich missbrauchen, um einen Benutzer für 5 Minuten auszusperren; seit dem 10. Oktober 2026 genügen dafür drei falsche Passwörter. Ein Admin kann die Sperre in der Benutzerverwaltung aufheben.</td>
+    <td valign="top">Die Abmeldung widerruft alle Tokens des Benutzers, auch die auf anderen Geräten. Der Sperrzähler der Kontosperre (S-22) liegt im Arbeitsspeicher und lässt sich missbrauchen, um einen Benutzer für 5 Minuten auszusperren; seit dem 10. Oktober 2026 genügen dafür drei falsche Passwörter. Ein Admin kann die Sperre in der Benutzerverwaltung aufheben. Jede Sperre eines bestehenden Benutzers löst eine E-Mail an die Benachrichtigungsadresse aus; wer Sperren mutwillig auslöst, erzeugt damit auch E-Mails (höchstens eine pro Benutzer in 5 Minuten).</td>
     <td valign="top">Bewusst einfach gehalten. Für eine Abmeldung pro Gerät bräuchte es eine Liste einzelner Tokens.</td></tr>
 
   <tr><td nowrap valign="top">O-11</td>
@@ -343,7 +343,7 @@
 <p>Seit der zweiten Prüfung gilt zusätzlich:</p>
 <ul>
   <li>Images neu bauen (<code>docker compose up --build -d</code>) und nginx neu starten, damit die geänderte Konfiguration gilt. Bestehende Sitzungen bleiben gültig.</li>
-  <li>Nach 3 falschen Passwörtern ist eine E-Mail-Adresse 5 Minuten gesperrt. Ein Admin hebt die Sperre in der Benutzerverwaltung auf, ein Neustart des Backends ebenfalls.</li>
+  <li>Nach 3 falschen Passwörtern ist eine E-Mail-Adresse 5 Minuten gesperrt. Ein Admin hebt die Sperre in der Benutzerverwaltung auf. Ein Neustart des Backends hebt sie nur für Adressen ohne Benutzer auf.</li>
   <li><code>/odata/$metadata</code> verlangt jetzt ein Token. Werkzeuge wie Postman brauchen dafür den <code>Authorization</code>-Header.</li>
   <li>Eine Datei von einem fremden Ursprung (Schrift, Skript, Bild, API) braucht einen passenden Eintrag in der CSP in <code>nginx/nginx.conf</code>, sonst blockiert der Browser sie.</li>
   <li>Die Google-Anmeldung wird abgelehnt, bis das Backend für eine Google-Identität ein Token ausstellen kann.</li>

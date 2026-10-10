@@ -2,7 +2,7 @@
 
 **Datum:** 10. Oktober 2026\
 **Ausgangsstand:** v2.4.0 (Commit `8f234fe`)\
-**Endstand:** Commits `b1d6d09`, `6e20e3c`, `3491199`, `9332d24`, `61c60ac`, `ea60944`, `4c8d167` und der Commit mit der E-Mail bei gelöschtem Benutzer\
+**Endstand:** Commits `b1d6d09`, `6e20e3c`, `3491199`, `9332d24`, `61c60ac`, `ea60944`, `4c8d167`, `c2c0eb2` und der Commit mit dem Sperrkennzeichen\
 **Versionsnummer:** 2.5.0 (vorher 2.4.0)
 
 ---
@@ -13,13 +13,13 @@ Version 2.5.0 fasst die Änderungen vom 10. Oktober 2026 zusammen. Die Abschnitt
 
 | \# | Paket | Inhalt | Commit |
 | --- | --- | --- | --- |
-| 1 | Benutzerverwaltung | Neue Seite «Benutzer» für die Rolle `Admin`; neue Benutzer erhalten eine E-Mail; ein gelöschter Benutzer wird der Benachrichtigungsadresse gemeldet | `61c60ac`, `4c8d167`, Commit mit der Fassung dieses Dokuments, die diese Meldung beschreibt |
-| 2 | Anmeldesperre | Nach 3 Fehlversuchen für 5 Minuten (bisher 5 Fehlversuche, 15 Minuten); Meldung im Login-Formular | `61c60ac` |
+| 1 | Benutzerverwaltung | Neue Seite «Benutzer» für die Rolle `Admin`; neue Benutzer erhalten eine E-Mail; ein gelöschter Benutzer wird der Benachrichtigungsadresse gemeldet | `61c60ac`, `4c8d167`, `c2c0eb2` |
+| 2 | Anmeldesperre | Nach 3 Fehlversuchen für 5 Minuten (bisher 5 Fehlversuche, 15 Minuten); Meldung im Login-Formular; Sperrkennzeichen am Benutzer und E-Mail bei einer Sperre | `61c60ac`, Commit mit der Fassung dieses Dokuments, die das Sperrkennzeichen beschreibt |
 | 3 | Einstellungen | Nach dem Speichern wechselt die Seite zur Adressliste | `b1d6d09`, `6e20e3c`, `9332d24` |
 | 4 | E-Mail-Versand | SMTP-Server und Absender eingetragen, Versand geprüft | `3491199` |
 | 5 | Version | Versionsnummer auf 2.5.0 gesetzt, Tutorial umbenannt | `ea60944` |
 
-Das Datenbankschema ändert sich nicht. Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose restart nginx`.
+Das Datenbankschema ändert sich: Die Tabelle `Users` erhält die Spalte `LockedUntil`. Das Backend ergänzt sie beim Start selbst. Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose restart nginx`.
 
 ---
 
@@ -51,16 +51,30 @@ Wird ein Benutzer gelöscht, geht eine E-Mail an die Benachrichtigungsadresse au
 
 Nach 3 fehlerhaften Anmeldungen ist eine E-Mail-Adresse für 5 Minuten gesperrt (bisher: nach 5 Fehlversuchen für 15 Minuten). Die 5 Minuten zählen ab dem dritten Fehlversuch; bisher lief die Frist ab dem ersten. Das Login-Formular zeigt während der Sperre eine eigene Meldung statt «Ungültige E-Mail-Adresse oder falsches Passwort». Das Änderungsprotokoll der Version 2.4.0 nennt noch die alten Werte.
 
-Unverändert: Gesperrt wird die E-Mail-Adresse, auch wenn es dazu keinen Benutzer gibt, und die Sperre liegt im Arbeitsspeicher des Backends. Ein Neustart hebt sie auf.
+Unverändert: Gesperrt wird die E-Mail-Adresse, auch wenn es dazu keinen Benutzer gibt. Der Fehlerzähler liegt im Arbeitsspeicher des Backends.
+
+### Neu: Sperrkennzeichen am Benutzer und E-Mail bei einer Sperre
+
+Gehört die gesperrte E-Mail-Adresse zu einem Benutzer, geschieht beim dritten Fehlversuch zusätzlich:
+
+1. Beim Benutzer wird das Sperrkennzeichen gesetzt: Die neue Spalte `Users.LockedUntil` enthält das Ende der Sperre.
+2. Die Benachrichtigungsadresse aus den Einstellungen erhält eine E-Mail mit Name, E-Mail-Adresse und Rolle des gesperrten Benutzers. Ist dort keine Adresse hinterlegt, wird nichts gesendet. Pro Sperre geht eine E-Mail hinaus, nicht eine pro weiterem Versuch.
+
+Das Kennzeichen lässt sich vor Ablauf der 5 Minuten von Hand löschen: auf der Seite «Benutzer» mit «Entsperren». Die Liste zeigt es als «Gesperrt bis …». Auch ein neues Passwort löscht es. Nach Ablauf sperrt es nicht mehr; die nächste erfolgreiche Anmeldung leert das Feld.
+
+Weil das Kennzeichen in der Datenbank steht, übersteht die Sperre eines Benutzers einen Neustart des Backends. Für eine Adresse ohne Benutzer gibt es weder Kennzeichen noch E-Mail; ihre Sperre liegt nur im Arbeitsspeicher.
+
+Das Datenbankschema ändert sich damit: Das Backend ergänzt die Spalte `Users.LockedUntil` beim Start selbst, bestehende Daten bleiben erhalten.
 
 ### Backend
 
 | Datei | Änderung |
 | --- | --- |
 | neu `Controllers/UsersController.cs`, `Dtos/UserDtos.cs` | `/users` nur für `Admin`: lesen, anlegen (409 bei vorhandener E-Mail-Adresse), ändern, löschen, `POST /users/{id}/unlock`. Antworten mit `lockedUntil` und `isSelf`, ohne Passwort-Hash |
-| `Services/ILoginThrottle.cs`, `Services/MemoryLoginThrottle.cs` | 3 Fehlversuche, 5 Minuten Sperre ab dem dritten; neu `BlockedUntil` für die Anzeige |
-| `Services/INotificationService.cs`, `Services/EmailNotificationService.cs` | `NotifyNewUserAsync`: E-Mail an den neuen Benutzer, ohne Passwort. `NotifyUserDeletedAsync`: Meldung an die Adresse aus den Einstellungen |
-| `Controllers/AuthController.cs` | `POST /auth/register` sendet die E-Mail ebenfalls; Kommentare |
+| `Services/ILoginThrottle.cs`, `Services/MemoryLoginThrottle.cs` | 3 Fehlversuche, 5 Minuten Sperre ab dem dritten; `RegisterFailure` meldet zurück, wenn der Versuch die Sperre auslöst |
+| `Models/User.cs`, `Data/AdresseDbContext.cs`, `SchemaUpgrader.cs` | Sperrkennzeichen `LockedUntil`; Spalte wird in einer bestehenden Datenbank ergänzt |
+| `Services/INotificationService.cs`, `Services/EmailNotificationService.cs` | `NotifyNewUserAsync`: E-Mail an den neuen Benutzer, ohne Passwort. `NotifyUserDeletedAsync` und `NotifyUserLockedAsync`: Meldung an die Adresse aus den Einstellungen |
+| `Controllers/AuthController.cs` | `POST /auth/register` sendet die E-Mail ebenfalls. Login setzt und prüft das Sperrkennzeichen und meldet die Sperre |
 | `Models/Roles.cs` | Kommentar |
 
 ### Frontend
@@ -79,7 +93,8 @@ Unverändert: Gesperrt wird die E-Mail-Adresse, auch wenn es dazu keinen Benutze
 | Datei | Änderung |
 | --- | --- |
 | `nginx/nginx.conf` | `location /users` zum Backend |
-| neu `AdressverwaltungApi.Tests/UsersTests.cs` | 26 Tests: Rechte, Anlegen, E-Mail an neue Benutzer, Ändern, Passwortwechsel, Löschen, E-Mail bei gelöschtem Benutzer, Sperre und Entsperren |
+| `scripts/reset_password.sh` | Löscht auch das Sperrkennzeichen |
+| neu `AdressverwaltungApi.Tests/UsersTests.cs` | 34 Tests: Rechte, Anlegen, E-Mail an neue Benutzer, Ändern, Passwortwechsel, Löschen, E-Mail bei gelöschtem Benutzer, Sperre mit Sperrkennzeichen und E-Mail, Entsperren |
 | `documentation/Tutorial_WebApp_v2.5.html` und `.pdf` | Abschnitt «Benutzerverwaltung», Anmeldesperre, geänderte Codebeispiele (auch die SMTP-Angaben aus `docker-compose.yml`) |
 | `documentation/Sequenzdiagramm.puml`, `Systemarchitektur.puml`, je mit `.svg` | Sperre 3 / 5 Minuten; `UsersController` |
 | `documentation/Schulungsunterlage_Sequenzdiagramm.html`, `.pdf`, PNG zum Login | Sperre 3 / 5 Minuten |
@@ -88,13 +103,14 @@ Unverändert: Gesperrt wird die E-Mail-Adresse, auch wenn es dazu keinen Benutze
 
 ### Nach dem Aktualisieren zu tun
 
-`docker compose up --build -d`, danach `docker compose restart nginx`. Die Datenbank ändert sich nicht.
+`docker compose up --build -d`, danach `docker compose restart nginx`. Die neue Spalte `Users.LockedUntil` entsteht beim Start des Backends.
 
 ### Prüfung
 
 | Prüfung | Ergebnis |
 | --- | --- |
-| `dotnet test` | 103 von 103 bestanden (26 neu) |
+| `dotnet test` | 111 von 111 bestanden (34 neu) |
+| Laufender Stack über die API: drei Fehlversuche, Neustart des Backends, Entsperren | Sperrkennzeichen gesetzt, E-Mail «Benutzer gesperrt» gesendet; nach dem Neustart weiterhin 429; nach dem Entsperren Kennzeichen leer und Anmeldung möglich |
 | Typprüfung und Lint des Frontends | erfolgreich |
 | Browser (Chromium, ferngesteuert) als `Admin`: Benutzer anlegen, doppelte E-Mail-Adresse, ändern, löschen | erfolgreich; Meldung des Backends bei doppelter Adresse sichtbar |
 | Browser: drei Fehlversuche, danach richtiges Passwort | Meldung zur Sperre; Liste zeigt «Gesperrt bis …»; nach «Entsperren» gelingt die Anmeldung |

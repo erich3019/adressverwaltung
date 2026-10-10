@@ -6,6 +6,7 @@ using AdressverwaltungApi.Models;
 using AdressverwaltungApi.Services;
 using AdressverwaltungApi.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AdressverwaltungApi.Tests;
 
@@ -321,6 +322,141 @@ public class UsersTests : ODataTestBase
         Assert.InRange(bis - DateTimeOffset.UtcNow, TimeSpan.FromMinutes(4.5), TimeSpan.FromMinutes(5));
     }
 
+    /// <summary>Drei Fehlversuche für die Adresse – danach ist sie gesperrt.</summary>
+    private async Task SperreAusloesenAsync(string email)
+    {
+        for (var i = 0; i < MemoryLoginThrottle.MaxFailures; i++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(email, "falsch")).StatusCode);
+    }
+
+    private async Task<DateTime?> SperrkennzeichenAsync(int id)
+    {
+        DateTime? wert = null;
+        await Factory.WithDbContextAsync(async db => wert = (await db.Users.AsNoTracking().SingleAsync(u => u.Id == id)).LockedUntil);
+        return wert;
+    }
+
+    [Fact]
+    public async Task Sperre_SetztDasSperrkennzeichenBeimBenutzer()
+    {
+        var email = NeueEmail();
+        var id    = (await ErstelleBenutzerAsync(email)).GetProperty("id").GetInt32();
+        Assert.Null(await SperrkennzeichenAsync(id));
+
+        await SperreAusloesenAsync(email);
+
+        var kennzeichen = await SperrkennzeichenAsync(id);
+        Assert.NotNull(kennzeichen);
+        Assert.InRange(kennzeichen.Value - DateTime.UtcNow, TimeSpan.FromMinutes(4.5), TimeSpan.FromMinutes(5));
+    }
+
+    [Fact]
+    public async Task Sperre_MeldetEsDerBenachrichtigungsadresse_GenauEinmal()
+    {
+        var email = NeueEmail();
+        await ErstelleBenutzerAsync(email, Roles.Admin);
+        await Client.PutAsJsonAsync("/settings", new { notificationEmail = "info@example.com" });
+        Factory.Emails.Reset();
+
+        await LoginAsync(email, "falsch");
+        await LoginAsync(email, "falsch");
+        Assert.Empty(Factory.Emails.Sent);
+        await LoginAsync(email, "falsch");
+        // Weitere Versuche während der Sperre lösen keine zweite E-Mail aus
+        await LoginAsync(email, "falsch");
+        await LoginAsync(email, Passwort);
+
+        var mail = Assert.Single(Factory.Emails.Sent);
+        Assert.Equal("info@example.com", mail.To);
+        Assert.Contains("Neuer Benutzer", mail.Subject);
+        Assert.Contains(email, mail.Body);
+        Assert.Contains(Roles.Admin, mail.Body);
+    }
+
+    [Fact]
+    public async Task Sperre_OhneBenachrichtigungsadresse_SendetNichts_UndSperrtTrotzdem()
+    {
+        var email = NeueEmail();
+        await ErstelleBenutzerAsync(email);
+        Factory.Emails.Reset();
+
+        await SperreAusloesenAsync(email);
+
+        Assert.Empty(Factory.Emails.Sent);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginAsync(email, Passwort)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Sperre_GiltAuch_WennDerVersandFehlschlaegt()
+    {
+        var email = NeueEmail();
+        var id    = (await ErstelleBenutzerAsync(email)).GetProperty("id").GetInt32();
+        await Client.PutAsJsonAsync("/settings", new { notificationEmail = "info@example.com" });
+        Factory.Emails.FailWith = new InvalidOperationException("SMTP nicht erreichbar");
+
+        await SperreAusloesenAsync(email);
+
+        Assert.NotNull(await SperrkennzeichenAsync(id));
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginAsync(email, Passwort)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Sperre_EinerUnbekanntenAdresse_SendetKeineEmail()
+    {
+        var email = NeueEmail();
+        await Client.PutAsJsonAsync("/settings", new { notificationEmail = "info@example.com" });
+
+        await SperreAusloesenAsync(email);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginAsync(email, Passwort)).StatusCode);
+        Assert.Empty(Factory.Emails.Sent);
+    }
+
+    [Fact]
+    public async Task Sperrkennzeichen_GiltAuchOhneZaehlerImArbeitsspeicher()
+    {
+        var email = NeueEmail();
+        await ErstelleBenutzerAsync(email);
+        await SperreAusloesenAsync(email);
+
+        // Wie nach einem Neustart des Backends: Der Zähler ist weg, das Kennzeichen bleibt
+        Factory.Services.GetRequiredService<ILoginThrottle>().Reset(email);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginAsync(email, Passwort)).StatusCode);
+    }
+
+    [Fact]
+    public async Task AbgelaufenesSperrkennzeichen_SperrtNichtMehr_UndWirdBeimLoginGeloescht()
+    {
+        var email = NeueEmail();
+        var id    = (await ErstelleBenutzerAsync(email)).GetProperty("id").GetInt32();
+        var vorEinerMinute = DateTime.SpecifyKind(DateTime.UtcNow.AddMinutes(-1), DateTimeKind.Unspecified);
+        await Factory.WithDbContextAsync(db => db.Users
+            .Where(u => u.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.LockedUntil, vorEinerMinute)));
+
+        var benutzer = await GetJsonAsync($"/users/{id}");
+        var login    = await LoginAsync(email, Passwort);
+
+        Assert.Equal(JsonValueKind.Null, benutzer.GetProperty("lockedUntil").ValueKind);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        Assert.Null(await SperrkennzeichenAsync(id));
+    }
+
+    [Fact]
+    public async Task NeuesPasswort_LoeschtDasSperrkennzeichen()
+    {
+        var email = NeueEmail();
+        var id    = (await ErstelleBenutzerAsync(email)).GetProperty("id").GetInt32();
+        await SperreAusloesenAsync(email);
+        const string neuesPasswort = "Ein-Neues-Passwort-2!";
+
+        await Client.PutAsJsonAsync($"/users/{id}", new { displayName = "Neuer Benutzer", role = Roles.User, password = neuesPasswort });
+
+        Assert.Null(await SperrkennzeichenAsync(id));
+        Assert.Equal(HttpStatusCode.OK, (await LoginAsync(email, neuesPasswort)).StatusCode);
+    }
+
     [Fact]
     public async Task Unlock_HebtDieSperreAuf()
     {
@@ -335,6 +471,7 @@ public class UsersTests : ODataTestBase
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var benutzer = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(JsonValueKind.Null, benutzer.GetProperty("lockedUntil").ValueKind);
+        Assert.Null(await SperrkennzeichenAsync(id));
         Assert.Equal(HttpStatusCode.OK, (await LoginAsync(email, Passwort)).StatusCode);
     }
 

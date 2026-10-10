@@ -9,10 +9,11 @@ public interface ILoginThrottle
     /// <summary>true, solange für diese E-Mail-Adresse keine Anmeldung möglich ist.</summary>
     bool IsBlocked(string email);
 
-    /// <summary>Ende der Sperre (UTC) oder null, wenn die Adresse nicht gesperrt ist.</summary>
-    DateTime? BlockedUntil(string email);
-
-    void RegisterFailure(string email);
+    /// <summary>
+    /// Zählt einen Fehlversuch. Löst genau dieser Versuch die Sperre aus, wird ihr
+    /// Ende (UTC) zurückgegeben, sonst null.
+    /// </summary>
+    DateTime? RegisterFailure(string email);
 
     /// <summary>Löscht Fehlerzähler und Sperre der Adresse.</summary>
     void Reset(string email);

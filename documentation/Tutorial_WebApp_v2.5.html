@@ -576,8 +576,18 @@ CSV_PATH=migration/AMTOVZ_CSV_LV95.csv python3 scripts/import_cities.py
     /// mit diesem Wert übereinstimmt – so lassen sich ausgestellte Tokens widerrufen.
     /// &lt;/summary&gt;
     public int TokenVersion { get; set; }
+
+    /// &lt;summary&gt;
+    /// Sperrkennzeichen: Ende der Anmeldesperre nach zu vielen Fehlversuchen (UTC),
+    /// sonst null. Ein Zeitpunkt in der Vergangenheit bedeutet «nicht mehr gesperrt».
+    /// Ein Administrator kann das Kennzeichen vorzeitig löschen.
+    /// &lt;/summary&gt;
+    public DateTime? LockedUntil { get; set; }
+
+    /// &lt;summary&gt;true, solange die Anmeldesperre läuft.&lt;/summary&gt;
+    public bool IsLocked(DateTime utcNow) =&gt; LockedUntil &gt; utcNow;
 }</code></pre></div>
-<p><code>Role</code> legt fest, was der Benutzer darf. <code>TokenVersion</code> ist ein Zähler, mit dem sich ausgestellte Tokens widerrufen lassen (Kapitel 5.5). Die erlaubten Rollen stehen als Konstanten an einer Stelle:</p>
+<p><code>Role</code> legt fest, was der Benutzer darf. <code>TokenVersion</code> ist ein Zähler, mit dem sich ausgestellte Tokens widerrufen lassen (Kapitel 5.5). <code>LockedUntil</code> ist das Sperrkennzeichen: Nach drei fehlerhaften Anmeldungen steht dort das Ende der Sperre, sonst ist das Feld leer (Kapitel 4.4). Die erlaubten Rollen stehen als Konstanten an einer Stelle:</p>
 <div class="code-block"><div class="code-label">Models/Roles.cs</div><pre><code>public static class Roles
 {
     public const string Admin = "Admin";
@@ -749,6 +759,9 @@ public override Task&lt;int&gt; SaveChangesAsync(CancellationToken cancellationT
         // (create_user.sh) gültige Zeilen anlegen
         entity.Property(u =&gt; u.Role).HasDefaultValue(Roles.User);
         entity.Property(u =&gt; u.TokenVersion).HasDefaultValue(0);
+
+        // Sperrkennzeichen: wie die Audit-Zeitstempel ohne Zeitzone gespeichert (UTC)
+        entity.Property(u =&gt; u.LockedUntil).HasColumnType("timestamp without time zone");
     });
 
     modelBuilder.Entity&lt;Settings&gt;(entity =&gt;
@@ -843,6 +856,11 @@ using (var scope = app.Services.CreateScope())
         // Token-Widerruf: Zähler, der bei der Abmeldung erhöht wird
         db.Database.ExecuteSqlRaw("""
             ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "TokenVersion" integer NOT NULL DEFAULT 0;
+            """);
+
+        // Sperrkennzeichen: Ende der Anmeldesperre nach Fehlversuchen (leer = nicht gesperrt)
+        db.Database.ExecuteSqlRaw("""
+            ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "LockedUntil" timestamp without time zone NULL;
             """);
 
         // Akzentfarbe der Oberfläche
@@ -1114,11 +1132,17 @@ public async Task&lt;IActionResult&gt; Login([FromBody] LoginRequest req)
     // auch für das richtige Passwort und auch für unbekannte Adressen.
     if (_throttle.IsBlocked(req.Email))
     {
-        return StatusCode(StatusCodes.Status429TooManyRequests,
-            new { message = "Zu viele Anmeldeversuche. Bitte später erneut versuchen." });
+        return TooManyRequests();
     }
 
     var user = await FindUserByEmailAsync(req.Email);
+
+    // Das Sperrkennzeichen des Benutzers gilt auch nach einem Neustart des Backends,
+    // bei dem der Zähler im Arbeitsspeicher verloren geht.
+    if (user is not null &amp;&amp; user.IsLocked(DateTime.UtcNow))
+    {
+        return TooManyRequests();
+    }
 
     // Passwort prüfen – bei ungültigem Benutzer trotzdem "prüfen"
     // (verhindert Timing-Angriffe durch gleiche Ausführungszeit)
@@ -1129,13 +1153,27 @@ public async Task&lt;IActionResult&gt; Login([FromBody] LoginRequest req)
 
     if (user is null || result == PasswordVerificationResult.Failed)
     {
-        _throttle.RegisterFailure(req.Email);
+        var lockedUntil = _throttle.RegisterFailure(req.Email);
+
+        // Dieser Fehlversuch hat die Sperre ausgelöst: beim Benutzer vermerken und melden.
+        // Für eine unbekannte Adresse gibt es keinen Benutzer und deshalb keine E-Mail.
+        if (lockedUntil is not null &amp;&amp; user is not null)
+        {
+            await LockUserAsync(user, lockedUntil.Value);
+        }
 
         // Bewusst generische Fehlermeldung
         return Unauthorized(new { message = "Ungültige Anmeldedaten." });
     }
 
     _throttle.Reset(req.Email);
+
+    // Abgelaufenes Sperrkennzeichen aufräumen
+    if (user.LockedUntil is not null)
+    {
+        user.LockedUntil = null;
+        await _context.SaveChangesAsync();
+    }
 
     return Ok(new LoginResponse(
         Id:    user.Id.ToString(),
@@ -1151,7 +1189,8 @@ public async Task&lt;IActionResult&gt; Login([FromBody] LoginRequest req)
     return _context.Users.FirstOrDefaultAsync(u =&gt; u.Email.ToUpper() == normalized);
 }</code></pre></div>
 <div class="box box-danger"><div class="box-title">Was ist ein Timing-Angriff?</div><p>Ein Angreifer misst die Antwortzeit. Antwortet die API bei unbekannter E-Mail schneller als bei falschem Passwort, verrät sie, welche Adressen registriert sind. Deshalb wird das Passwort immer geprüft – bei unbekannter E-Mail gegen einen festen, einmal berechneten Ersatz-Hash (<code>DummyHash</code>). Auch die Fehlermeldung ist in beiden Fällen dieselbe.</p></div>
-<p>Vor der Passwortprüfung fragt der Controller den <code>ILoginThrottle</code>. Nach drei Fehlversuchen ist eine E-Mail-Adresse fünf Minuten gesperrt, und das Backend antwortet mit 429 – auch auf das richtige Passwort. Die fünf Minuten zählen ab dem dritten Fehlversuch. Gezählt wird pro Adresse, unabhängig davon, ob es dazu ein Konto gibt. Die Sperre verrät also nicht, welche Konten existieren. Das Login-Formular zeigt bei 429 eine eigene Meldung, und ein Admin kann die Sperre in der Benutzerverwaltung vorzeitig aufheben.</p>
+<p>Vor der Passwortprüfung fragt der Controller den <code>ILoginThrottle</code>. Nach drei Fehlversuchen ist eine E-Mail-Adresse fünf Minuten gesperrt, und das Backend antwortet mit 429 – auch auf das richtige Passwort. Die fünf Minuten zählen ab dem dritten Fehlversuch. Gezählt wird pro Adresse, unabhängig davon, ob es dazu ein Konto gibt. Die Sperre verrät also nicht, welche Konten existieren. Das Login-Formular zeigt bei 429 eine eigene Meldung.</p>
+<p>Gibt es zur Adresse einen Benutzer, hält der Controller die Sperre zusätzlich bei ihm fest: Der dritte Fehlversuch setzt das Sperrkennzeichen <code>Users.LockedUntil</code> auf das Ende der Sperre und meldet sie per E-Mail der Adresse aus den Einstellungen (Kapitel 4.6). Das Kennzeichen steht in der Datenbank und gilt deshalb auch nach einem Neustart des Backends. Ein Admin kann es in der Benutzerverwaltung vor Ablauf der fünf Minuten löschen («Entsperren»); nach Ablauf sperrt es nicht mehr und wird bei der nächsten erfolgreichen Anmeldung geleert. Für eine unbekannte Adresse gibt es weder Kennzeichen noch E-Mail – sie ist nur über den Zähler im Arbeitsspeicher gesperrt.</p>
 <div class="code-block"><div class="code-label">Services/MemoryLoginThrottle.cs</div><pre><code>public sealed class MemoryLoginThrottle : ILoginThrottle, IDisposable
 {
     public const int MaxFailures = 3;
@@ -1171,19 +1210,17 @@ public async Task&lt;IActionResult&gt; Login([FromBody] LoginRequest req)
         public DateTime? BlockedUntil;
     }
 
-    public bool IsBlocked(string email) =&gt; BlockedUntil(email) is not null;
-
-    public DateTime? BlockedUntil(string email)
+    public bool IsBlocked(string email)
     {
-        if (!_cache.TryGetValue(Key(email), out Counter? counter)) return null;
+        if (!_cache.TryGetValue(Key(email), out Counter? counter)) return false;
 
         lock (counter!)
         {
-            return counter.BlockedUntil &gt; DateTime.UtcNow ? counter.BlockedUntil : null;
+            return counter.BlockedUntil &gt; DateTime.UtcNow;
         }
     }
 
-    public void RegisterFailure(string email)
+    public DateTime? RegisterFailure(string email)
     {
         var key     = Key(email);
         var counter = _cache.GetOrCreate(key, entry =&gt;
@@ -1196,7 +1233,7 @@ public async Task&lt;IActionResult&gt; Login([FromBody] LoginRequest req)
         lock (counter!)
         {
             counter.Failures++;
-            if (counter.Failures != MaxFailures) return;
+            if (counter.Failures != MaxFailures) return null;
 
             // Die Sperre beginnt jetzt: Eintrag mit neuer Ablaufzeit ablegen
             counter.BlockedUntil = DateTime.UtcNow.Add(LockDuration);
@@ -1205,6 +1242,8 @@ public async Task&lt;IActionResult&gt; Login([FromBody] LoginRequest req)
                 AbsoluteExpirationRelativeToNow = LockDuration,
                 Size = 1,
             });
+
+            return counter.BlockedUntil;
         }
     }
 
@@ -1254,7 +1293,7 @@ public async Task&lt;IActionResult&gt; Register([FromBody] RegisterRequest req)
 }</code></pre></div>
 <h3>Benutzerverwaltung</h3>
 <p>Für die Seite «Benutzer» gibt es einen eigenen Controller unter <code>/users</code>. Er ist als Ganzes der Rolle <code>Admin</code> vorbehalten (<code>[Authorize(Roles = Roles.Admin)]</code> an der Klasse) und gibt den Passwort-Hash nie heraus.</p>
-<table><thead><tr><th>Endpunkt</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>GET /users</code>, <code>GET /users/{id}</code></td><td>Benutzer lesen, je mit dem Ende einer Anmeldesperre (<code>lockedUntil</code>) und dem Kennzeichen <code>isSelf</code></td></tr><tr><td><code>POST /users</code></td><td>Benutzer anlegen; 409, wenn es die E-Mail-Adresse schon gibt. Der neue Benutzer erhält eine E-Mail (Kapitel 4.6)</td></tr><tr><td><code>PUT /users/{id}</code></td><td>Anzeigename, Rolle und optional Passwort ändern</td></tr><tr><td><code>POST /users/{id}/unlock</code></td><td>Anmeldesperre aufheben</td></tr><tr><td><code>DELETE /users/{id}</code></td><td>Benutzer löschen; sein Token gilt danach nicht mehr. Die Adresse aus den Einstellungen erhält eine E-Mail (Kapitel 4.6)</td></tr></tbody></table>
+<table><thead><tr><th>Endpunkt</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>GET /users</code>, <code>GET /users/{id}</code></td><td>Benutzer lesen, je mit dem Sperrkennzeichen (<code>lockedUntil</code>, Ende der Anmeldesperre) und dem Kennzeichen <code>isSelf</code></td></tr><tr><td><code>POST /users</code></td><td>Benutzer anlegen; 409, wenn es die E-Mail-Adresse schon gibt. Der neue Benutzer erhält eine E-Mail (Kapitel 4.6)</td></tr><tr><td><code>PUT /users/{id}</code></td><td>Anzeigename, Rolle und optional Passwort ändern</td></tr><tr><td><code>POST /users/{id}/unlock</code></td><td>Anmeldesperre aufheben: Sperrkennzeichen löschen und Fehlerzähler zurücksetzen</td></tr><tr><td><code>DELETE /users/{id}</code></td><td>Benutzer löschen; sein Token gilt danach nicht mehr. Die Adresse aus den Einstellungen erhält eine E-Mail (Kapitel 4.6)</td></tr></tbody></table>
 <div class="code-block"><div class="code-label">Controllers/UsersController.cs – Ändern</div><pre><code>// PUT /users/{id}
 [HttpPut("{id:int}")]
 public async Task&lt;IActionResult&gt; UpdateUser(int id, [FromBody] UserUpdateRequest req)
@@ -1290,6 +1329,7 @@ public async Task&lt;IActionResult&gt; UpdateUser(int id, [FromBody] UserUpdateR
 
         // Neues Passwort: bisherige Tokens widerrufen und eine Sperre aufheben
         user.TokenVersion++;
+        user.LockedUntil = null;
         _throttle.Reset(user.Email);
     }
 
@@ -1393,8 +1433,8 @@ public async Task NotifyNewUserAsync(User user)
     }
 }</code></pre></div>
 <div class="box box-danger"><div class="box-title">Kein Passwort per E-Mail</div><p>Eine E-Mail liegt unverschlüsselt in Postfächern und oft auf mehreren Servern. Die Nachricht nennt deshalb nur die E-Mail-Adresse für die Anmeldung und die Rolle. Das Passwort gibt der Administrator auf einem anderen Weg weiter.</p></div>
-<p>Die dritte Benachrichtigung meldet einen gelöschten Benutzer. Sie geht wie bei einer neuen Adresse an die Adresse aus den Einstellungen und nennt Name, E-Mail-Adresse und Rolle des Gelöschten sowie den Namen dessen, der gelöscht hat. Ist in den Einstellungen keine Adresse hinterlegt, wird nichts gesendet.</p>
-<table><thead><tr><th>Ereignis</th><th>Methode</th><th>Empfänger</th></tr></thead><tbody><tr><td>Neue Adresse</td><td><code>NotifyNewAdresseAsync</code></td><td>Adresse aus den Einstellungen</td></tr><tr><td>Neuer Benutzer</td><td><code>NotifyNewUserAsync</code></td><td>der neue Benutzer</td></tr><tr><td>Benutzer gelöscht</td><td><code>NotifyUserDeletedAsync</code></td><td>Adresse aus den Einstellungen</td></tr></tbody></table>
+<p>Zwei weitere Benachrichtigungen melden einen gelöschten und einen gesperrten Benutzer. Die erste meldet einen gelöschten Benutzer. Sie geht wie bei einer neuen Adresse an die Adresse aus den Einstellungen und nennt Name, E-Mail-Adresse und Rolle des Gelöschten sowie den Namen dessen, der gelöscht hat. Ist in den Einstellungen keine Adresse hinterlegt, wird nichts gesendet.</p>
+<table><thead><tr><th>Ereignis</th><th>Methode</th><th>Empfänger</th></tr></thead><tbody><tr><td>Neue Adresse</td><td><code>NotifyNewAdresseAsync</code></td><td>Adresse aus den Einstellungen</td></tr><tr><td>Neuer Benutzer</td><td><code>NotifyNewUserAsync</code></td><td>der neue Benutzer</td></tr><tr><td>Benutzer gelöscht</td><td><code>NotifyUserDeletedAsync</code></td><td>Adresse aus den Einstellungen</td></tr><tr><td>Benutzer nach drei Fehlversuchen gesperrt</td><td><code>NotifyUserLockedAsync</code></td><td>Adresse aus den Einstellungen</td></tr></tbody></table>
 <div class="chapter-summary"><h4>Zusammenfassung Kapitel 4</h4><ul><li>Ordner nach Aufgabe: <code>Controllers</code>, <code>Data</code>, <code>Dtos</code>, <code>Models</code>, <code>Options</code>, <code>Services</code>.</li><li>OData-Optionen und Eigenschaften in camelCase; <code>$top</code> ist auf 100 begrenzt.</li><li>Die CRUD-Logik steht einmal in <code>ODataCrudController&lt;T&gt;</code>; <code>[Authorize]</code> schützt alle abgeleiteten Controller.</li><li>Listen liefern höchstens 100 Zeilen; eine mitgeschickte <code>id</code> wird verworfen.</li><li>Login mit gleicher Antwortzeit und gleicher Meldung für alle Fehlerfälle; Sperre nach fünf Fehlversuchen.</li><li>Registrierung nur für die Rolle <code>Admin</code>; die Abmeldung widerruft die Tokens des Benutzers.</li><li>Konfiguration über typisierte Options-Klassen.</li></ul></div>
 </section>
 <section id="kap5">
@@ -2363,7 +2403,7 @@ public async Task Register_OhneToken_Liefert401_UndLegtKeinenBenutzerAn()
 <p>Befunde, Begründungen und Prüfergebnisse stehen im <code>documentation/Sicherheitsbericht.pdf</code>.</p>
 <h2 id="kap9-2">9.2 Offene Punkte</h2>
 <p>Die Adressverwaltung ist eine Demo-Anwendung. Einige Punkte sind deshalb bewusst einfach gehalten – manche eignen sich als Übungen (Anhang C):</p>
-<ul><li>Die Abmeldung widerruft alle Tokens eines Benutzers, auch die auf seinen anderen Geräten. Eine Abmeldung pro Gerät gibt es nicht.</li><li>Der Zähler der Kontosperre liegt im Arbeitsspeicher. Er geht bei einem Neustart verloren und lässt sich missbrauchen, um einen Benutzer für 5 Minuten auszusperren – schon mit drei falschen Passwörtern.</li><li>Die E-Mail-Adresse eines Benutzers lässt sich nicht ändern; dafür legt man einen neuen Benutzer an.</li><li>Die CSP erlaubt Inline-Styles (<code>style-src 'unsafe-inline'</code>).</li><li>Der Google-Login lässt sich konfigurieren, bleibt aber unbenutzbar: Das Backend kann für ein Google-Konto kein Token ausstellen, deshalb lehnt das Frontend die Anmeldung ab.</li><li><code>npm audit</code> meldet fünf Einträge in den Entwicklungswerkzeugen, für die es keine korrigierte Version gibt. Die ausgelieferten Abhängigkeiten sind ohne Befund.</li><li>Das Frontend hat keine Tests.</li></ul>
+<ul><li>Die Abmeldung widerruft alle Tokens eines Benutzers, auch die auf seinen anderen Geräten. Eine Abmeldung pro Gerät gibt es nicht.</li><li>Die Kontosperre lässt sich missbrauchen, um einen Benutzer für 5 Minuten auszusperren – schon mit drei falschen Passwörtern. Jede solche Sperre löst zudem eine E-Mail an die Adresse aus den Einstellungen aus. Der Fehlerzähler liegt im Arbeitsspeicher und geht bei einem Neustart verloren; das Sperrkennzeichen eines Benutzers bleibt.</li><li>Die E-Mail-Adresse eines Benutzers lässt sich nicht ändern; dafür legt man einen neuen Benutzer an.</li><li>Die CSP erlaubt Inline-Styles (<code>style-src 'unsafe-inline'</code>).</li><li>Der Google-Login lässt sich konfigurieren, bleibt aber unbenutzbar: Das Backend kann für ein Google-Konto kein Token ausstellen, deshalb lehnt das Frontend die Anmeldung ab.</li><li><code>npm audit</code> meldet fünf Einträge in den Entwicklungswerkzeugen, für die es keine korrigierte Version gibt. Die ausgelieferten Abhängigkeiten sind ohne Befund.</li><li>Das Frontend hat keine Tests.</li></ul>
 <div class="box box-tip"><div class="box-title">Prüfen statt glauben</div><p>Abhängigkeiten lassen sich jederzeit prüfen: <code>dotnet list package --vulnerable --include-transitive</code> im Ordner <code>backend</code> und <code>npm audit --omit=dev</code> im Ordner <code>frontend</code>.</p></div>
 <div class="chapter-summary"><h4>Zusammenfassung Kapitel 9</h4><ul><li>Die Daten schützt das Backend; nginx und das Frontend ergänzen den Schutz.</li><li>Geheimnisse stehen ausserhalb des Codes.</li><li>Offene Punkte sind dokumentiert und begründet.</li></ul></div>
 </section>
@@ -2524,7 +2564,7 @@ docker exec -it adressverwaltung-db psql -U postgres -d adressverwaltung       #
 <section id="kap12">
   <div class="chapter-num">Kapitel 12</div>
   <h1 id="kap12h">12. Häufige Fehler und Lösungen</h1>
-<table><thead><tr><th>Symptom</th><th>Ursache</th><th>Lösung</th></tr></thead><tbody><tr><td><code>docker compose up</code> meldet «POSTGRES_PASSWORD fehlt in .env»</td><td><code>.env</code> fehlt oder ist unvollständig</td><td><code>cp .env.example .env</code> und die vier Pflichtwerte setzen</td></tr><tr><td>Backend startet nicht: «JWT-Schlüssel … zu kurz oder ein Platzhalter»</td><td><code>JWT_KEY</code> kürzer als 32 Zeichen</td><td>Wert mit <code>openssl rand -base64 48</code> erzeugen</td></tr><tr><td>Backend-Log: <code>password authentication failed for user "adressverwaltung_app"</code> oder <code>role "adressverwaltung_app" does not exist</code></td><td>Die Datenbank bestand schon, bevor es die Rolle gab, oder <code>APP_DB_PASSWORD</code> wurde geändert</td><td><code>./scripts/create_db_role.sh</code> ausführen, danach <code>docker compose restart backend</code></td></tr><tr><td>Hilfsskript oder Import: <code>password authentication failed for user "postgres"</code></td><td><code>POSTGRES_PASSWORD</code> wurde geändert, aber das Volume enthält noch das alte Passwort</td><td>Passwort in der Datenbank mit <code>ALTER USER postgres PASSWORD '…'</code> anpassen oder <code>docker compose down -v</code></td></tr><tr><td>Browser zeigt «nicht sicher»</td><td>Zertifikat ist selbstsigniert oder die mkcert-Zertifizierungsstelle fehlt</td><td><code>mkcert -install</code>, Zertifikat neu ausstellen, nginx neu laden, Browser neu starten</td></tr><tr><td>Frontend-Build: <code>"/app/public": not found</code></td><td>Verzeichnis <code>frontend/public</code> fehlt</td><td>Aktuellen Stand holen (<code>git pull</code>); das Verzeichnis enthält eine Datei <code>.gitkeep</code></td></tr><tr><td>Login schlägt fehl, Passwort unbekannt</td><td>Zufallspasswort beim ersten Start</td><td><code>docker compose logs backend | grep "Admin-Benutzer"</code> oder <code>./scripts/reset_password.sh</code></td></tr><tr><td>Antwort 429 beim Anmelden</td><td>Mehr als 10 Versuche pro Minute (nginx) oder drei Fehlversuche für dieselbe E-Mail-Adresse (Backend)</td><td>Eine Minute beziehungsweise 5 Minuten warten; ein Admin hebt die Sperre in der Benutzerverwaltung auf, ein Neustart des Backends ebenfalls</td></tr><tr><td>Die Anwendung springt unerwartet zur Login-Seite</td><td>Das Backend hat mit 401 geantwortet: Token abgelaufen (8 Stunden), auf einem anderen Gerät abgemeldet, Passwort zurückgesetzt oder <code>JWT_KEY</code> geändert</td><td>Neu anmelden</td></tr><tr><td>«Fehler beim Speichern» im Formular</td><td>Validierung im Backend, oder die Rolle reicht nicht (403)</td><td>Netzwerk-Tab des Browsers und Backend-Log prüfen</td></tr><tr><td>Einstellungen lassen sich nicht ändern</td><td>Der Benutzer hat die Rolle <code>User</code></td><td>Als <code>Admin</code> anmelden</td></tr><tr><td>Die Login-Seite ist blau, obwohl eine andere Farbe gewählt ist</td><td>Ohne Anmeldung sind die Einstellungen nicht lesbar</td><td>Kein Fehler; nach dem Login gilt die gewählte Farbe</td></tr><tr><td>Aufruf von <code>/api/backend/…</code> liefert 403 «Aufruf nicht erlaubt.»</td><td>Der Header <code>x-adressverwaltung</code> fehlt, weil der Aufruf nicht über <code>apiFetch</code> läuft</td><td>Alle Aufrufe über <code>lib/api.ts</code> führen</td></tr><tr><td>Browser-Konsole: «Refused to load … Content Security Policy»</td><td>Eine Quelle von einer fremden Adresse</td><td>Quelle in <code>middleware.ts</code> und <code>nginx.conf</code> eintragen (Kapitel 7.2)</td></tr><tr><td>PLZ-Wertehilfe zeigt nichts</td><td>Städteverzeichnis nicht importiert</td><td>Import nach Anhang A ausführen</td></tr><tr><td>OData-Abfrage liefert 400</td><td>Eigenschaft in PascalCase geschrieben</td><td>camelCase verwenden: <code>ort</code>, <code>postalCode</code></td></tr><tr><td>Neues Feld im Modell fehlt in der Datenbank</td><td><code>EnsureCreated</code> ändert bestehende Datenbanken nicht</td><td>Spalte im <code>SchemaUpgrader</code> ergänzen oder <code>docker compose down -v</code> und neu starten</td></tr><tr><td>Keine Benachrichtigungs-E-Mail</td><td>Keine Adresse in den Einstellungen oder SMTP nicht konfiguriert</td><td>Adresse unter «Einstellungen» eintragen; <code>SMTP_*</code> in <code>.env</code> und <code>SmtpSettings__Host</code> in der Compose-Datei setzen; Backend-Log prüfen</td></tr><tr><td>502 Bad Gateway nach <code>docker compose up --build</code></td><td>nginx kennt noch die Adressen der alten Container</td><td><code>docker compose restart nginx</code></td></tr></tbody></table>
+<table><thead><tr><th>Symptom</th><th>Ursache</th><th>Lösung</th></tr></thead><tbody><tr><td><code>docker compose up</code> meldet «POSTGRES_PASSWORD fehlt in .env»</td><td><code>.env</code> fehlt oder ist unvollständig</td><td><code>cp .env.example .env</code> und die vier Pflichtwerte setzen</td></tr><tr><td>Backend startet nicht: «JWT-Schlüssel … zu kurz oder ein Platzhalter»</td><td><code>JWT_KEY</code> kürzer als 32 Zeichen</td><td>Wert mit <code>openssl rand -base64 48</code> erzeugen</td></tr><tr><td>Backend-Log: <code>password authentication failed for user "adressverwaltung_app"</code> oder <code>role "adressverwaltung_app" does not exist</code></td><td>Die Datenbank bestand schon, bevor es die Rolle gab, oder <code>APP_DB_PASSWORD</code> wurde geändert</td><td><code>./scripts/create_db_role.sh</code> ausführen, danach <code>docker compose restart backend</code></td></tr><tr><td>Hilfsskript oder Import: <code>password authentication failed for user "postgres"</code></td><td><code>POSTGRES_PASSWORD</code> wurde geändert, aber das Volume enthält noch das alte Passwort</td><td>Passwort in der Datenbank mit <code>ALTER USER postgres PASSWORD '…'</code> anpassen oder <code>docker compose down -v</code></td></tr><tr><td>Browser zeigt «nicht sicher»</td><td>Zertifikat ist selbstsigniert oder die mkcert-Zertifizierungsstelle fehlt</td><td><code>mkcert -install</code>, Zertifikat neu ausstellen, nginx neu laden, Browser neu starten</td></tr><tr><td>Frontend-Build: <code>"/app/public": not found</code></td><td>Verzeichnis <code>frontend/public</code> fehlt</td><td>Aktuellen Stand holen (<code>git pull</code>); das Verzeichnis enthält eine Datei <code>.gitkeep</code></td></tr><tr><td>Login schlägt fehl, Passwort unbekannt</td><td>Zufallspasswort beim ersten Start</td><td><code>docker compose logs backend | grep "Admin-Benutzer"</code> oder <code>./scripts/reset_password.sh</code></td></tr><tr><td>Antwort 429 beim Anmelden</td><td>Mehr als 10 Versuche pro Minute (nginx) oder drei Fehlversuche für dieselbe E-Mail-Adresse (Backend)</td><td>Eine Minute beziehungsweise 5 Minuten warten; ein Admin hebt die Sperre in der Benutzerverwaltung auf («Entsperren»). Ein Neustart des Backends hebt sie nur für unbekannte Adressen auf</td></tr><tr><td>Die Anwendung springt unerwartet zur Login-Seite</td><td>Das Backend hat mit 401 geantwortet: Token abgelaufen (8 Stunden), auf einem anderen Gerät abgemeldet, Passwort zurückgesetzt oder <code>JWT_KEY</code> geändert</td><td>Neu anmelden</td></tr><tr><td>«Fehler beim Speichern» im Formular</td><td>Validierung im Backend, oder die Rolle reicht nicht (403)</td><td>Netzwerk-Tab des Browsers und Backend-Log prüfen</td></tr><tr><td>Einstellungen lassen sich nicht ändern</td><td>Der Benutzer hat die Rolle <code>User</code></td><td>Als <code>Admin</code> anmelden</td></tr><tr><td>Die Login-Seite ist blau, obwohl eine andere Farbe gewählt ist</td><td>Ohne Anmeldung sind die Einstellungen nicht lesbar</td><td>Kein Fehler; nach dem Login gilt die gewählte Farbe</td></tr><tr><td>Aufruf von <code>/api/backend/…</code> liefert 403 «Aufruf nicht erlaubt.»</td><td>Der Header <code>x-adressverwaltung</code> fehlt, weil der Aufruf nicht über <code>apiFetch</code> läuft</td><td>Alle Aufrufe über <code>lib/api.ts</code> führen</td></tr><tr><td>Browser-Konsole: «Refused to load … Content Security Policy»</td><td>Eine Quelle von einer fremden Adresse</td><td>Quelle in <code>middleware.ts</code> und <code>nginx.conf</code> eintragen (Kapitel 7.2)</td></tr><tr><td>PLZ-Wertehilfe zeigt nichts</td><td>Städteverzeichnis nicht importiert</td><td>Import nach Anhang A ausführen</td></tr><tr><td>OData-Abfrage liefert 400</td><td>Eigenschaft in PascalCase geschrieben</td><td>camelCase verwenden: <code>ort</code>, <code>postalCode</code></td></tr><tr><td>Neues Feld im Modell fehlt in der Datenbank</td><td><code>EnsureCreated</code> ändert bestehende Datenbanken nicht</td><td>Spalte im <code>SchemaUpgrader</code> ergänzen oder <code>docker compose down -v</code> und neu starten</td></tr><tr><td>Keine Benachrichtigungs-E-Mail</td><td>Keine Adresse in den Einstellungen oder SMTP nicht konfiguriert</td><td>Adresse unter «Einstellungen» eintragen; <code>SMTP_*</code> in <code>.env</code> und <code>SmtpSettings__Host</code> in der Compose-Datei setzen; Backend-Log prüfen</td></tr><tr><td>502 Bad Gateway nach <code>docker compose up --build</code></td><td>nginx kennt noch die Adressen der alten Container</td><td><code>docker compose restart nginx</code></td></tr></tbody></table>
 </section>
 <section id="anhA">
   <div class="chapter-num">Anhang A</div>

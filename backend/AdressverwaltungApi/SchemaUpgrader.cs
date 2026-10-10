@@ -30,6 +30,11 @@ public static class SchemaUpgrader
             ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "TokenVersion" integer NOT NULL DEFAULT 0;
             """);
 
+        // Sperrkennzeichen: Ende der Anmeldesperre nach Fehlversuchen (leer = nicht gesperrt)
+        db.Database.ExecuteSqlRaw("""
+            ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "LockedUntil" timestamp without time zone NULL;
+            """);
+
         // Akzentfarbe der Oberfläche
         db.Database.ExecuteSqlRaw("""
             ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "AccentColor" character varying(20) NOT NULL DEFAULT 'blue';
