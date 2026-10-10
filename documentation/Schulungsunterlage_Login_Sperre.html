@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><title>Schulungsunterlage: Login mit Sperrmechanismus</title>
+<style>
+  @page { size: A4; margin: 2cm 1.8cm; }
+  body, p, li, td, th, h1, h2, h3 { font-family: 'Liberation Sans', Arial, sans-serif; }
+  body { font-size: 10pt; line-height: 1.4; color: #1a1a1a; }
+  h1 { font-size: 20pt; margin: 0 0 4pt 0; }
+  h2 { font-size: 14pt; margin: 18pt 0 6pt 0; }
+  h3 { font-size: 11pt; margin: 14pt 0 3pt 0; }
+  p { margin: 0 0 5pt 0; }
+  p.meta { color: #444; }
+  th, td { font-size: 9pt; text-align: left; }
+  th { background: #e6e6e6; }
+  code { font-family: 'Liberation Mono', monospace; font-size: 8.5pt; }
+</style></head><body>
+
+<h1>Login mit Sperrmechanismus Schritt für Schritt</h1>
+<p class="meta">Schulungsunterlage zur Adressverwaltung v2.5.0 · Technische Dokumentation zum Sequenzdiagramm · Stand 10. Oktober 2026</p>
+
+<h2>1. Ziel dieser Unterlage</h2>
+<p>Diese Unterlage erklärt jeden der 64 nummerierten Schritte im Sequenzdiagramm zum Login mit Sperrmechanismus (<code>documentation/Sequenzdiagramm_Login_Sperre.svg</code>, Quelle <code>Sequenzdiagramm_Login_Sperre.puml</code>). Das Diagramm zeigt, was bei falschen Passwörtern geschieht, wie die Sperre entsteht, wie sie wirkt und wie sie wieder endet.</p>
+<p>Nach dem Durcharbeiten können Sie erklären, wann ein Benutzer gesperrt wird, wo die Sperre gespeichert ist, wer davon erfährt und auf welchen Wegen sie endet – und Sie wissen zu jedem Schritt, wo er im Code steht.</p>
+<p>Zu jedem Schritt finden Sie drei Angaben: <b>Was passiert</b> beschreibt den Vorgang, <b>Im Code</b> nennt die Datei und die Stelle, <b>Warum so</b> begründet die Lösung oder weist auf eine Stolperfalle hin. Pfade im Frontend beziehen sich auf <code>frontend/</code>, Pfade im Backend auf <code>backend/AdressverwaltungApi/</code>.</p>
+<p>Den Login ohne Sperre und das Erfassen einer Adresse beschreibt die Unterlage <code>Schulungsunterlage_Sequenzdiagramm.pdf</code>. Die Schritte 1 bis 4 und 59 bis 64 sind dort ausführlicher erklärt.</p>
+
+<h2>2. So lesen Sie das Diagramm</h2>
+<p>Jede senkrechte Linie steht für einen Beteiligten, die Zeit läuft von oben nach unten. Ein durchgezogener Pfeil ist eine Anfrage, ein gestrichelter Pfeil eine Antwort. Ein Pfeil, der zum selben Beteiligten zurückführt, ist ein interner Arbeitsschritt. Ein Rahmen mit «alt» enthält zwei Alternativen, von denen genau eine abläuft; ein Rahmen mit «opt» läuft nur unter der genannten Bedingung ab. Ein Rahmen mit «ref» steht für Schritte, die an anderer Stelle des Diagramms schon gezeigt sind; er trägt keine eigenen Nummern.</p>
+
+<h2>3. Die Beteiligten</h2>
+<table border="1" cellpadding="4" cellspacing="0" width="100%"><tr><th width="24%">Beteiligter</th><th width="46%">Aufgabe in diesem Ablauf</th><th width="30%">Im Projekt</th></tr><tr><td valign="top">Benutzer</td><td valign="top">Die Person, die sich anmelden will.</td><td valign="top">–</td></tr><tr><td valign="top">Administrator</td><td valign="top">Ein Benutzer mit der Rolle <code>Admin</code>. Kann eine Sperre vorzeitig aufheben.</td><td valign="top">–</td></tr><tr><td valign="top">Browser (Client Components)</td><td valign="top">Zeigt das Login-Formular und die Benutzerverwaltung, sendet Anfragen.</td><td valign="top"><code>app/login</code>, <code>app/benutzer</code>, <code>lib/api.ts</code></td></tr><tr><td valign="top">nginx :443</td><td valign="top">Einziger Zugang von aussen. Beendet TLS, begrenzt die Anmeldeversuche pro Client-IP und verteilt Anfragen.</td><td valign="top"><code>nginx/nginx.conf</code></td></tr><tr><td valign="top">Next.js</td><td valign="top">NextAuth nimmt die Anmeldung entgegen und fragt das Backend. Der Proxy <code>/api/backend</code> hängt bei API-Aufrufen das Token an.</td><td valign="top"><code>lib/auth.ts</code>, <code>app/api/backend/[...pfad]/route.ts</code></td></tr><tr><td valign="top">Backend ASP.NET Core :8080</td><td valign="top">Prüft Passwörter, zählt Fehlversuche, setzt und löscht das Sperrkennzeichen, sendet Benachrichtigungen.</td><td valign="top"><code>AuthController</code>, <code>UsersController</code>, <code>MemoryLoginThrottle</code>, <code>EmailNotificationService</code></td></tr><tr><td valign="top">PostgreSQL</td><td valign="top">Speichert Benutzer (mit Sperrkennzeichen <code>LockedUntil</code>) und Einstellungen.</td><td valign="top">Tabellen <code>Users</code>, <code>Settings</code></td></tr><tr><td valign="top">SMTP-Server</td><td valign="top">Nimmt die E-Mail über die Sperre entgegen und stellt sie zu.</td><td valign="top"><code>SmtpSettings__*</code> in <code>docker-compose.yml</code></td></tr></table>
+
+<h2>4. Drei Grundideen vorab</h2>
+<p><b>Drei Bremsen, die man nicht verwechseln darf.</b> nginx begrenzt die Anmeldeversuche pro Client-IP auf 10 pro Minute. Das Backend zählt Fehlversuche pro E-Mail-Adresse im Arbeitsspeicher und sperrt nach dem dritten für 5 Minuten. Und beim betroffenen Benutzer steht die Sperre zusätzlich als Sperrkennzeichen in der Datenbank. Die zweite und dritte Bremse gehören zusammen und bilden den Sperrmechanismus dieses Diagramms.</p>
+<p><b>Das Sperrkennzeichen ist ein Zeitpunkt.</b> Die Spalte <code>Users.LockedUntil</code> enthält das Ende der Sperre. Leer oder in der Vergangenheit heisst «nicht gesperrt», in der Zukunft heisst «gesperrt». Deshalb braucht es keinen Dienst, der abgelaufene Sperren aufräumt.</p>
+<p><b>Gesperrt wird die E-Mail-Adresse, vermerkt wird beim Benutzer.</b> Der Zähler sperrt jede Adresse nach drei Fehlversuchen, auch eine unbekannte – so verrät die Sperre nicht, welche Konten es gibt. Sperrkennzeichen und E-Mail gibt es nur, wenn zur Adresse ein Benutzer gehört.</p>
+
+<h2 style="page-break-before: always">5. Ablauf A: Fehlversuch (erster und zweiter) (Schritte 1 bis 14)</h2>
+<p>Die ersten beiden falschen Passwörter laufen gleich ab: Das Backend prüft beide Sperren, findet keine, stellt das falsche Passwort fest und zählt den Fehlversuch. Der Benutzer sieht die übliche Fehlermeldung.</p>
+<p><img src="Schulungsunterlage_Login_Sperre_A.png" width="640" height="345"></p>
+
+<h3>Schritt 1: E-Mail und falsches Passwort eingeben</h3>
+<p class="dir"><b>Beteiligte:</b> Benutzer → Browser</p>
+<p><b>Was passiert:</b> Der Benutzer gibt auf der Login-Seite seine E-Mail-Adresse und ein falsches Passwort ein und klickt auf «Anmelden». Bis hierhin verlässt nichts den Browser.</p>
+<p><b>Im Code:</b> <code>frontend/app/login/LoginForm.tsx</code>: Die Felder sind Controlled Inputs (<code>useState</code>).</p>
+<p><b>Warum so:</b> Der Ablauf ist für das erste und das zweite falsche Passwort derselbe. Welcher Versuch es ist, weiss nur das Backend.</p>
+
+<h3>Schritt 2: POST /api/auth/callback/credentials</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → nginx</p>
+<p><b>Was passiert:</b> Das Formular ruft <code>signIn('credentials')</code> auf. NextAuth sendet E-Mail-Adresse und Passwort per POST an seinen eigenen Endpunkt. Die Verbindung endet verschlüsselt bei nginx.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>, Funktion <code>handleCredentials</code>: <code>signIn('credentials', { email, password, redirect: false, callbackUrl })</code>.</p>
+<p><b>Warum so:</b> Hier sitzt die erste von drei Bremsen: nginx lässt für diesen Pfad pro Client-IP höchstens 10 Anfragen pro Minute zu (<code>limit_req zone=anmeldung</code> in <code>nginx/nginx.conf</code>) und antwortet darüber selbst mit 429. Diese Bremse zählt Anfragen, nicht Fehlversuche, und hat mit dem Sperrkennzeichen nichts zu tun.</p>
+
+<h3>Schritt 3: Weiterleitung an Next.js</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Next.js</p>
+<p><b>Was passiert:</b> nginx leitet die Anfrage an den Next.js-Server weiter. <code>/api/auth/…</code> gehört zu NextAuth im Frontend, nicht zum Backend.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>: Block <code>location /api/auth/callback/credentials</code>.</p>
+<p><b>Warum so:</b> Verwechslungsgefahr: <code>/api/auth</code> ist NextAuth, <code>/auth/</code> ist das Backend.</p>
+
+<h3>Schritt 4: POST /auth/login</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → Backend</p>
+<p><b>Was passiert:</b> NextAuth ruft die Funktion <code>authorize()</code> auf. Sie läuft auf dem Next.js-Server und sendet E-Mail-Adresse und Passwort als JSON an den Login-Endpunkt des Backends – direkt über das Docker-Netz, ohne nginx.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>, <code>authorize()</code> im <code>CredentialsProvider</code>; Adresse aus <code>INTERNAL_API_URL</code>. Im Backend: <code>Controllers/AuthController.cs</code>, Methode <code>Login</code>.</p>
+<p><b>Warum so:</b> Das Passwort geht nie direkt vom Browser an das Backend. Der Endpunkt ist der einzige, der ohne Token erreichbar ist.</p>
+
+<h3>Schritt 5: Sperre im Arbeitsspeicher prüfen</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Als Erstes fragt der Controller den Fehlerzähler, ob die E-Mail-Adresse gesperrt ist. Beim ersten und zweiten Fehlversuch ist sie es nicht.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>_throttle.IsBlocked(req.Email)</code>. Schnittstelle <code>Services/ILoginThrottle.cs</code>, Umsetzung <code>Services/MemoryLoginThrottle.cs</code>.</p>
+<p><b>Warum so:</b> Diese Prüfung kommt vor dem Zugriff auf die Datenbank und gilt für jede E-Mail-Adresse, auch für eine, zu der es keinen Benutzer gibt. So verrät die Sperre nicht, welche Konten existieren. Gross- und Kleinschreibung der Adresse spielen keine Rolle.</p>
+
+<h3>Schritt 6: SELECT Users WHERE Email</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Das Backend sucht den Benutzer mit dieser E-Mail-Adresse.</p>
+<p><b>Im Code:</b> <code>AuthController.FindUserByEmailAsync</code>: Vergleich über <code>ToUpper()</code>, also unabhängig von Gross- und Kleinschreibung.</p>
+<p><b>Warum so:</b> Die Abfrage läuft über EF Core mit Parametern; die Eingabe gelangt nie als Text in das SQL.</p>
+
+<h3>Schritt 7: Benutzer mit PasswordHash und LockedUntil</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank liefert die Zeile des Benutzers. Für diesen Ablauf zählen zwei Spalten: <code>PasswordHash</code> und das Sperrkennzeichen <code>LockedUntil</code>. Es ist jetzt leer.</p>
+<p><b>Im Code:</b> <code>Models/User.cs</code>: <code>public DateTime? LockedUntil</code>. Die Spalte ist <code>timestamp without time zone</code> und enthält eine UTC-Zeit.</p>
+<p><b>Warum so:</b> Das Sperrkennzeichen ist kein Ja/Nein-Feld, sondern ein Zeitpunkt: das Ende der Sperre. Leer bedeutet «nicht gesperrt».</p>
+
+<h3>Schritt 8: Sperrkennzeichen prüfen</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Der Controller prüft, ob das Sperrkennzeichen des Benutzers in der Zukunft liegt. Es ist leer, also geht es weiter.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>user.IsLocked(DateTime.UtcNow)</code>; in <code>Models/User.cs</code> ist das <code>LockedUntil &gt; utcNow</code>.</p>
+<p><b>Warum so:</b> Diese zweite Prüfung braucht es, weil der Zähler aus Schritt 5 nur im Arbeitsspeicher liegt. Nach einem Neustart des Backends wäre eine Sperre sonst vergessen (siehe Schritte 28 bis 30).</p>
+
+<h3>Schritt 9: Passwort-Hash prüfen</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Das Backend berechnet aus dem eingegebenen Passwort und dem gespeicherten Salt den Hash und vergleicht ihn mit dem gespeicherten. Er stimmt nicht überein.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>_hasher.VerifyHashedPassword(…)</code> (PBKDF2, <code>PasswordHasher&lt;User&gt;</code>).</p>
+<p><b>Warum so:</b> Gibt es zur Adresse keinen Benutzer, prüft das Backend trotzdem – gegen einen festen Ersatz-Hash (<code>DummyHash</code>). So dauert die Antwort in beiden Fällen gleich lang.</p>
+
+<h3>Schritt 10: Fehlversuch zählen</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Der Controller meldet den Fehlversuch dem Zähler. Dieser steht danach auf 1 beziehungsweise 2. Die Grenze von 3 ist nicht erreicht, es wird nichts gesperrt.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>_throttle.RegisterFailure(req.Email)</code>; liefert hier <code>null</code>. In <code>MemoryLoginThrottle</code>: <code>MaxFailures = 3</code>, <code>Window</code> = 5 Minuten.</p>
+<p><b>Warum so:</b> Der Zähler lebt 5 Minuten ab dem ersten Fehlversuch. Wer innerhalb dieser Zeit keine drei Fehlversuche erreicht, beginnt danach wieder bei null. Eine erfolgreiche Anmeldung setzt den Zähler sofort zurück (Schritt 56).</p>
+
+<h3>Schritt 11: 401 «Ungültige Anmeldedaten.»</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → Next.js</p>
+<p><b>Was passiert:</b> Das Backend antwortet mit Status 401 und einer bewusst allgemeinen Meldung.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>return Unauthorized(new { message = "Ungültige Anmeldedaten." })</code>.</p>
+<p><b>Warum so:</b> Die Meldung ist für «Adresse unbekannt» und «Passwort falsch» dieselbe. Sie sagt auch nicht, wie viele Versuche noch bleiben.</p>
+
+<h3>Schritt 12: authorize() gibt null zurück</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → nginx</p>
+<p><b>Was passiert:</b> <code>authorize()</code> erhält die 401 und gibt <code>null</code> zurück. NextAuth wertet das als abgelehnte Anmeldung und meldet den Fehler <code>CredentialsSignin</code>. Es entsteht keine Sitzung und kein Cookie.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>: <code>if (!response.ok) return null;</code>.</p>
+<p><b>Warum so:</b> Für NextAuth gibt es bei den Anmeldedaten nur zwei Ausgänge: ein Benutzerobjekt oder kein Benutzerobjekt. Die Sperre braucht deshalb einen eigenen Weg (Schritt 32).</p>
+
+<h3>Schritt 13: Antwort von NextAuth</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> nginx reicht die Antwort von NextAuth unverändert an den Browser weiter.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>: <code>proxy_pass http://frontend:3000</code>.</p>
+<p><b>Warum so:</b> nginx verändert die Antwort nicht; es ergänzt nur Sicherheits-Header.</p>
+
+<h3>Schritt 14: Fehlermeldung im Formular</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → Benutzer</p>
+<p><b>Was passiert:</b> Das Formular zeigt «Ungültige E-Mail-Adresse oder falsches Passwort.». Die Felder bleiben ausgefüllt, der Benutzer kann es erneut versuchen.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>: <code>result?.error</code> ist gesetzt, also <code>setFehler(…)</code>; die Anzeige übernimmt die Komponente <code>Fehlermeldung</code>.</p>
+<p><b>Warum so:</b> Die Meldung erscheint im Formular, nicht in einem Browser-Dialog.</p>
+
+<h2 style="page-break-before: always">6. Ablauf B: Dritter Fehlversuch: Die Sperre wird ausgelöst (Schritte 15 bis 25)</h2>
+<p>Das dritte falsche Passwort beginnt wie die ersten beiden (Schritte 1 bis 9). Der Unterschied liegt im Zählen: Der dritte Fehlversuch löst die Sperre aus. Gehört die E-Mail-Adresse zu einem Benutzer, setzt das Backend dessen Sperrkennzeichen und meldet die Sperre per E-Mail. Der Benutzer selbst erfährt in diesem Moment noch nichts von der Sperre.</p>
+<p><img src="Schulungsunterlage_Login_Sperre_B.png" width="640" height="333"></p>
+
+<h3>Schritt 15: Fehlversuch zählen: Die Sperre beginnt</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Der Zähler erreicht 3. Damit ist die E-Mail-Adresse gesperrt, und zwar für 5 Minuten ab diesem Moment. Der Zähler gibt das Ende der Sperre zurück.</p>
+<p><b>Im Code:</b> <code>MemoryLoginThrottle.RegisterFailure</code>: <code>counter.BlockedUntil = DateTime.UtcNow.Add(LockDuration)</code>; der Eintrag wird mit neuer Ablaufzeit abgelegt. Rückgabe: das Ende der Sperre, sonst <code>null</code>.</p>
+<p><b>Warum so:</b> Genau ein Fehlversuch löst die Sperre aus – der dritte. Nur bei ihm liefert die Methode einen Wert. Darauf beruht, dass Kennzeichen und E-Mail pro Sperre nur einmal entstehen.</p>
+
+<h3>Schritt 16: UPDATE Users SET LockedUntil</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Gibt es zur Adresse einen Benutzer, schreibt das Backend das Ende der Sperre in dessen Zeile: Das Sperrkennzeichen ist gesetzt.</p>
+<p><b>Im Code:</b> <code>AuthController.LockUserAsync</code>: <code>user.LockedUntil = …</code>, danach <code>SaveChangesAsync()</code>. Aufruf nur, wenn <code>lockedUntil is not null &amp;&amp; user is not null</code>.</p>
+<p><b>Warum so:</b> Die Zeit wird als UTC gespeichert, aber mit <code>Kind=Unspecified</code>, weil Npgsql für diesen Spaltentyp nichts anderes annimmt. In den Audit-Feldern steht als Ändernder <code>system</code>, weil bei der Anmeldung noch niemand angemeldet ist.</p>
+
+<h3>Schritt 17: Sperrkennzeichen gespeichert</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank bestätigt die Änderung. Ab jetzt steht die Sperre dauerhaft beim Benutzer – unabhängig vom Arbeitsspeicher des Backends.</p>
+<p><b>Im Code:</b> Spalte <code>Users.LockedUntil</code>. In einer bestehenden Datenbank legt <code>SchemaUpgrader.Apply</code> die Spalte beim Start an.</p>
+<p><b>Warum so:</b> Erst wird gespeichert, dann benachrichtigt. Scheitert die E-Mail, gilt die Sperre trotzdem.</p>
+
+<h3>Schritt 18: SELECT Settings</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Für die Benachrichtigung liest das Backend die Einstellungen.</p>
+<p><b>Im Code:</b> <code>Services/EmailNotificationService.cs</code>, Methode <code>NotifyUserLockedAsync</code>: <code>_context.Settings.FirstOrDefaultAsync()</code>.</p>
+<p><b>Warum so:</b> Der Controller kennt weder Empfänger noch Text. Das ist Aufgabe des Benachrichtigungsdienstes.</p>
+
+<h3>Schritt 19: NotificationEmail</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank liefert die Benachrichtigungsadresse. Es ist dieselbe Adresse, die auch neue Adressen und gelöschte Benutzer gemeldet bekommt.</p>
+<p><b>Im Code:</b> <code>Models/Settings.cs</code>: <code>NotificationEmail</code>; gepflegt auf der Seite <code>/einstellungen</code>.</p>
+<p><b>Warum so:</b> Ist das Feld leer, endet die Benachrichtigung hier mit einem Eintrag im Log. Gesperrt wird trotzdem.</p>
+
+<h3>Schritt 20: E-Mail «Benutzer gesperrt»</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → SMTP-Server</p>
+<p><b>Was passiert:</b> Das Backend sendet eine E-Mail an die Benachrichtigungsadresse. Sie nennt Name, E-Mail-Adresse und Rolle des gesperrten Benutzers und weist darauf hin, dass die Sperre nach 5 Minuten endet oder in der Benutzerverwaltung aufgehoben werden kann.</p>
+<p><b>Im Code:</b> <code>NotifyUserLockedAsync</code> ruft <code>IEmailService.SendAsync</code> auf; Umsetzung <code>Services/EmailService.cs</code> über SMTP (Port 587, STARTTLS).</p>
+<p><b>Warum so:</b> Die E-Mail geht an die Adresse aus den Einstellungen, nicht an den gesperrten Benutzer. Wer Passwörter rät, soll nicht auch noch eine Bestätigung erhalten.</p>
+
+<h3>Schritt 21: SMTP-Server nimmt die E-Mail an</h3>
+<p class="dir"><b>Beteiligte:</b> SMTP-Server → Backend</p>
+<p><b>Was passiert:</b> Der SMTP-Server bestätigt die Annahme. Das Backend schreibt «E-Mail gesendet an …» in sein Log.</p>
+<p><b>Im Code:</b> <code>EmailService.SendAsync</code>: <code>_logger.LogInformation("E-Mail gesendet an {To}: {Subject}", …)</code>.</p>
+<p><b>Warum so:</b> Schlägt der Versand fehl, fängt <code>NotifyUserLockedAsync</code> den Fehler ab und schreibt ihn ins Log. Die Anmeldung antwortet trotzdem wie vorgesehen.</p>
+
+<h3>Schritt 22: 401 «Ungültige Anmeldedaten.»</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → Next.js</p>
+<p><b>Was passiert:</b> Auch der dritte Fehlversuch wird mit 401 beantwortet – nicht mit 429.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: dieselbe Stelle wie in Schritt 11.</p>
+<p><b>Warum so:</b> Die Antwort 429 gibt es erst beim nächsten Versuch. Der Versuch, der die Sperre auslöst, war selbst ein gewöhnlicher Fehlversuch.</p>
+
+<h3>Schritt 23: authorize() gibt null zurück</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → nginx</p>
+<p><b>Was passiert:</b> Wie in Schritt 12: keine Sitzung, kein Cookie.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>: <code>if (!response.ok) return null;</code>.</p>
+<p><b>Warum so:</b> Für das Frontend sieht der dritte Fehlversuch genau so aus wie die ersten beiden.</p>
+
+<h3>Schritt 24: Antwort von NextAuth</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> nginx reicht die Antwort an den Browser weiter.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>.</p>
+<p><b>Warum so:</b> Wie in Schritt 13.</p>
+
+<h3>Schritt 25: Fehlermeldung im Formular</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → Benutzer</p>
+<p><b>Was passiert:</b> Das Formular zeigt noch einmal «Ungültige E-Mail-Adresse oder falsches Passwort.». Von der Sperre erfährt der Benutzer erst beim nächsten Versuch.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>.</p>
+<p><b>Warum so:</b> Im Hintergrund ist jetzt dreierlei geschehen: Der Zähler sperrt, das Sperrkennzeichen ist gesetzt, die E-Mail ist unterwegs.</p>
+
+<h2 style="page-break-before: always">7. Ablauf C: Anmeldeversuch während der Sperre (Schritte 26 bis 35)</h2>
+<p>Jeder weitere Versuch innerhalb der 5 Minuten wird abgewiesen, bevor das Passwort geprüft wird – auch das richtige. Im Normalfall erkennt das Backend die Sperre am Zähler im Arbeitsspeicher (Schritt 27). Wurde das Backend inzwischen neu gestartet, ist der Zähler leer; dann greift das Sperrkennzeichen aus der Datenbank (Schritte 28 bis 30).</p>
+<p><img src="Schulungsunterlage_Login_Sperre_C.png" width="640" height="293"></p>
+
+<h3>Schritt 26: Erneuter Versuch während der Sperre</h3>
+<p class="dir"><b>Beteiligte:</b> Benutzer → Browser</p>
+<p><b>Was passiert:</b> Der Benutzer versucht es innerhalb der 5 Minuten noch einmal – diesmal vielleicht mit dem richtigen Passwort.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>; es folgen die Schritte 2 bis 4.</p>
+<p><b>Warum so:</b> Ob das Passwort jetzt stimmt, spielt keine Rolle: Es wird nicht mehr geprüft.</p>
+
+<h3>Schritt 27: Sperre im Arbeitsspeicher prüfen: gesperrt</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Im Normalfall erkennt der Zähler die Sperre sofort. Die Datenbank wird nicht gefragt.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>_throttle.IsBlocked(req.Email)</code> liefert <code>true</code>; in <code>MemoryLoginThrottle</code>: <code>counter.BlockedUntil &gt; DateTime.UtcNow</code>.</p>
+<p><b>Warum so:</b> Versuche während der Sperre zählen nicht weiter und verlängern die Sperre nicht. Sie lösen auch keine weitere E-Mail aus.</p>
+
+<h3>Schritt 28: SELECT Users WHERE Email (nach einem Neustart)</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Wurde das Backend seit der Sperre neu gestartet, ist der Zähler leer und Schritt 27 findet nichts. Der Controller liest dann wie gewohnt den Benutzer.</p>
+<p><b>Im Code:</b> <code>AuthController.FindUserByEmailAsync</code>.</p>
+<p><b>Warum so:</b> Das ist der Fall, für den es das Sperrkennzeichen in der Datenbank braucht.</p>
+
+<h3>Schritt 29: Benutzer mit LockedUntil in der Zukunft</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank liefert den Benutzer. Sein Sperrkennzeichen liegt noch in der Zukunft.</p>
+<p><b>Im Code:</b> Spalte <code>Users.LockedUntil</code>.</p>
+<p><b>Warum so:</b> Für eine E-Mail-Adresse ohne Benutzer gibt es kein Kennzeichen. Ihre Sperre ist nach einem Neustart tatsächlich weg.</p>
+
+<h3>Schritt 30: Sperrkennzeichen prüfen: gesperrt</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Der Controller stellt fest, dass der Benutzer gesperrt ist, und bricht ab.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>if (user is not null &amp;&amp; user.IsLocked(DateTime.UtcNow)) return TooManyRequests();</code>.</p>
+<p><b>Warum so:</b> Die Prüfung steht vor der Passwortprüfung. Ein Fehlversuch wird hier nicht gezählt.</p>
+
+<h3>Schritt 31: 429 «Zu viele Anmeldeversuche.»</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → Next.js</p>
+<p><b>Was passiert:</b> Das Backend antwortet mit Status 429. Das Passwort hat es nicht angesehen.</p>
+<p><b>Im Code:</b> <code>AuthController.TooManyRequests()</code>: <code>StatusCode(StatusCodes.Status429TooManyRequests, …)</code>.</p>
+<p><b>Warum so:</b> 429 statt 401 ist das Zeichen, an dem das Frontend die Sperre erkennt.</p>
+
+<h3>Schritt 32: authorize() wirft einen Fehler</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js (interner Schritt)</p>
+<p><b>Was passiert:</b> <code>authorize()</code> erkennt den Status 429 und wirft einen Fehler mit dem Text <code>AnmeldungGesperrt</code>, statt <code>null</code> zurückzugeben.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>: <code>if (response.status === 429) throw new Error(ANMELDUNG_GESPERRT);</code>. Die Konstante steht in <code>lib/anmeldung.ts</code>.</p>
+<p><b>Warum so:</b> Bei <code>null</code> meldet NextAuth immer denselben Fehler. Ein geworfener Fehler dagegen erreicht das Formular mit seinem eigenen Text – der einzige Weg, die Sperre vom falschen Passwort zu unterscheiden.</p>
+
+<h3>Schritt 33: Fehler AnmeldungGesperrt</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → nginx</p>
+<p><b>Was passiert:</b> NextAuth lehnt die Anmeldung ab und gibt den Fehlertext mit. Es entsteht keine Sitzung.</p>
+<p><b>Im Code:</b> NextAuth (Route <code>app/api/auth/[...nextauth]</code>).</p>
+<p><b>Warum so:</b> Der Text ist ein fester Code, keine Meldung für den Benutzer.</p>
+
+<h3>Schritt 34: Antwort von NextAuth</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> nginx reicht die Antwort an den Browser weiter.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>.</p>
+<p><b>Warum so:</b> Diese 429 kommt aus dem Backend und ist nicht mit der 429 von nginx aus Schritt 2 zu verwechseln: Jene betrifft zu viele Anfragen von einer IP.</p>
+
+<h3>Schritt 35: Meldung zur Sperre</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → Benutzer</p>
+<p><b>Was passiert:</b> Das Formular zeigt «Zu viele Fehlversuche. Die Anmeldung mit dieser E-Mail-Adresse ist für 5 Minuten gesperrt.».</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>: <code>if (result?.error === ANMELDUNG_GESPERRT)</code>; die Zahl stammt aus <code>SPERRE_MINUTEN</code> in <code>lib/anmeldung.ts</code>.</p>
+<p><b>Warum so:</b> <code>SPERRE_MINUTEN</code> dient nur dem Text. Massgebend ist <code>LockDuration</code> im Backend; beide Werte sind gemeinsam zu ändern.</p>
+
+<h2 style="page-break-before: always">8. Ablauf D: Ende der Sperre (Schritte 36 bis 49)</h2>
+<p>Die Sperre endet auf einem von zwei Wegen: Ein Administrator löscht das Sperrkennzeichen von Hand (Schritte 36 bis 48), oder die 5 Minuten laufen ab (Schritt 49).</p>
+<p><img src="Schulungsunterlage_Login_Sperre_D.png" width="640" height="344"></p>
+
+<h3>Schritt 36: «Entsperren» in der Benutzerverwaltung</h3>
+<p class="dir"><b>Beteiligte:</b> Administrator → Browser</p>
+<p><b>Was passiert:</b> Ein Administrator öffnet die Seite «Benutzer». Beim gesperrten Benutzer steht «Gesperrt bis …» und daneben die Aktion «Entsperren». Er klickt darauf.</p>
+<p><b>Im Code:</b> <code>frontend/app/benutzer/page.tsx</code>: Die Aktion erscheint nur, wenn <code>lockedUntil</code> in der Zukunft liegt (Funktion <code>gesperrtBis</code>).</p>
+<p><b>Warum so:</b> Von der Sperre weiss der Administrator aus der E-Mail (Schritt 20) oder aus der Liste.</p>
+
+<h3>Schritt 37: POST /api/backend/users/{id}/unlock</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → nginx</p>
+<p><b>Was passiert:</b> Der Browser ruft den Proxy der eigenen Anwendung auf. Er sendet das Session-Cookie und den Header <code>x-adressverwaltung</code> mit, aber kein Token.</p>
+<p><b>Im Code:</b> <code>frontend/lib/api.ts</code>: <code>entsperreBenutzer(id)</code> über <code>apiRequest</code> und <code>apiFetch</code>.</p>
+<p><b>Warum so:</b> Der Browser kennt das Backend-Token nicht. Er spricht nur mit Next.js.</p>
+
+<h3>Schritt 38: Weiterleitung an Next.js</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Next.js</p>
+<p><b>Was passiert:</b> nginx leitet <code>/api/backend/…</code> wie alle übrigen Pfade an Next.js.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>: <code>location /</code>.</p>
+<p><b>Warum so:</b> Der Pfad <code>/users</code> direkt ginge an das Backend; er ist für Werkzeuge mit eigenem Token gedacht.</p>
+
+<h3>Schritt 39: Proxy prüft und liest das Token</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js (interner Schritt)</p>
+<p><b>Was passiert:</b> Der Proxy prüft, ob der Bereich <code>users</code> erlaubt ist, ob der eigene Header vorhanden ist und ob die Herkunft stimmt. Dann liest er das Backend-JWT aus dem verschlüsselten Session-Cookie.</p>
+<p><b>Im Code:</b> <code>frontend/app/api/backend/[...pfad]/route.ts</code>: <code>ERLAUBTE_BEREICHE</code>, Prüfung von <code>API_HEADER</code> und <code>origin</code>, <code>getToken({ req })</code>.</p>
+<p><b>Warum so:</b> Header und Herkunft schützen vor Cross-Site-Request-Forgery: Eine fremde Seite kann diesen Aufruf nicht im Namen des Administrators auslösen.</p>
+
+<h3>Schritt 40: POST /users/{id}/unlock</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → Backend</p>
+<p><b>Was passiert:</b> Der Proxy sendet die Anfrage an das Backend und hängt das Token als <code>Authorization: Bearer …</code> an.</p>
+<p><b>Im Code:</b> <code>route.ts</code>: <code>fetch(`${INTERNAL_API}/…`)</code>. Im Backend: <code>Controllers/UsersController.cs</code>, Methode <code>UnlockUser</code>.</p>
+<p><b>Warum so:</b> Der Aufruf geht direkt über das Docker-Netz, ohne nginx.</p>
+
+<h3>Schritt 41: Token und Rolle prüfen</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Das Backend prüft Signatur und Ablauf des Tokens, liest Rolle und Token-Version des Aufrufers aus der Datenbank und verlangt die Rolle <code>Admin</code>.</p>
+<p><b>Im Code:</b> <code>TokenUserValidator.ValidateAsync</code>; an der Klasse <code>UsersController</code> steht <code>[Authorize(Roles = Roles.Admin)]</code>.</p>
+<p><b>Warum so:</b> Die Rolle kommt aus der Datenbank, nicht aus dem Token. Wer nicht <code>Admin</code> ist, erhält 403.</p>
+
+<h3>Schritt 42: UPDATE Users SET LockedUntil = NULL</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Das Backend löscht das Sperrkennzeichen des Benutzers.</p>
+<p><b>Im Code:</b> <code>UsersController.UnlockUser</code>: <code>user.LockedUntil = null;</code> und <code>SaveChangesAsync()</code>.</p>
+<p><b>Warum so:</b> Das ist das «manuelle Löschen vor Ablauf der 5 Minuten». Auch ein neues Passwort in der Benutzerverwaltung löscht das Kennzeichen.</p>
+
+<h3>Schritt 43: Sperrkennzeichen gelöscht</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank bestätigt die Änderung.</p>
+<p><b>Im Code:</b> Spalte <code>Users.LockedUntil</code> ist wieder leer; <code>ChangedBy</code> nennt den Administrator.</p>
+<p><b>Warum so:</b> Anders als beim Setzen (Schritt 16) ist hier jemand angemeldet, der in den Audit-Feldern erscheint.</p>
+
+<h3>Schritt 44: Fehlerzähler zurücksetzen</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Das Backend löscht auch den Eintrag im Arbeitsspeicher.</p>
+<p><b>Im Code:</b> <code>UsersController.UnlockUser</code>: <code>_throttle.Reset(user.Email)</code>.</p>
+<p><b>Warum so:</b> Beides ist nötig. Bliebe der Zähler stehen, wäre der Benutzer trotz gelöschtem Kennzeichen weiter gesperrt (Schritt 27).</p>
+
+<h3>Schritt 45: 200 mit lockedUntil: null</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → Next.js</p>
+<p><b>Was passiert:</b> Das Backend antwortet mit dem Benutzer; <code>lockedUntil</code> ist jetzt <code>null</code>.</p>
+<p><b>Im Code:</b> <code>UsersController.ToResponse</code>, Typ <code>UserResponse</code> in <code>Dtos/UserDtos.cs</code>.</p>
+<p><b>Warum so:</b> Der Passwort-Hash ist nie Teil der Antwort.</p>
+
+<h3>Schritt 46: 200 vom Proxy</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → nginx</p>
+<p><b>Was passiert:</b> Der Proxy reicht Status und Body weiter.</p>
+<p><b>Im Code:</b> <code>route.ts</code>: <code>new NextResponse(…)</code> mit <code>Cache-Control: no-store</code>.</p>
+<p><b>Warum so:</b> Die Antwort wird nirgends zwischengespeichert.</p>
+
+<h3>Schritt 47: 200 an den Browser</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> nginx reicht die Antwort an den Browser weiter.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>.</p>
+<p><b>Warum so:</b> Wie bei jeder Antwort ergänzt nginx die Sicherheits-Header.</p>
+
+<h3>Schritt 48: Liste zeigt «Aktiv»</h3>
+<p class="dir"><b>Beteiligte:</b> Browser → Administrator</p>
+<p><b>Was passiert:</b> Die Seite lädt die Benutzerliste neu. Der Benutzer erscheint mit dem Status «Aktiv», die Aktion «Entsperren» ist verschwunden. Er kann sich sofort wieder anmelden.</p>
+<p><b>Im Code:</b> <code>app/benutzer/page.tsx</code>: <code>ausfuehren(…)</code> ruft nach der Aktion <code>ladeDaten()</code> auf.</p>
+<p><b>Warum so:</b> Die Liste zeigt den Stand beim Laden. Eine Sperre, die inzwischen von selbst abgelaufen ist, gilt in der Anzeige ebenfalls als «Aktiv».</p>
+
+<h3>Schritt 49: Ablauf nach 5 Minuten</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Entsperrt niemand, endet die Sperre von selbst: Der Eintrag im Arbeitsspeicher verfällt. Das Sperrkennzeichen bleibt in der Datenbank stehen, liegt nun aber in der Vergangenheit.</p>
+<p><b>Im Code:</b> <code>MemoryLoginThrottle</code>: <code>AbsoluteExpirationRelativeToNow = LockDuration</code>. <code>User.IsLocked</code> vergleicht mit der aktuellen Zeit.</p>
+<p><b>Warum so:</b> Es gibt keinen Hintergrunddienst, der abgelaufene Kennzeichen löscht. Weil das Kennzeichen ein Zeitpunkt ist, braucht es auch keinen: Ein vergangener Zeitpunkt sperrt nicht.</p>
+
+<h2 style="page-break-before: always">9. Ablauf E: Erfolgreiche Anmeldung nach der Sperre (Schritte 50 bis 64)</h2>
+<p>Nach dem Ende der Sperre verläuft die Anmeldung wie jede erfolgreiche Anmeldung. Neu ist nur das Aufräumen: Ein abgelaufenes Sperrkennzeichen wird bei dieser Gelegenheit geleert (Schritte 57 und 58).</p>
+<p><img src="Schulungsunterlage_Login_Sperre_E.png" width="640" height="343"></p>
+
+<h3>Schritt 50: E-Mail und richtiges Passwort eingeben</h3>
+<p class="dir"><b>Beteiligte:</b> Benutzer → Browser</p>
+<p><b>Was passiert:</b> Der Benutzer meldet sich nach dem Ende der Sperre mit dem richtigen Passwort an.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>; es folgen die Schritte 2 bis 4.</p>
+<p><b>Warum so:</b> Nach dem Ablauf beginnt auch der Fehlerzähler wieder bei null: Es stehen erneut drei Versuche zur Verfügung.</p>
+
+<h3>Schritt 51: Sperre im Arbeitsspeicher prüfen: nicht gesperrt</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Der Zähler kennt keine Sperre mehr – er wurde zurückgesetzt (Schritt 44) oder ist abgelaufen (Schritt 49).</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>_throttle.IsBlocked(req.Email)</code> liefert <code>false</code>.</p>
+<p><b>Warum so:</b> Wie in Schritt 5.</p>
+
+<h3>Schritt 52: SELECT Users WHERE Email</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Das Backend liest den Benutzer.</p>
+<p><b>Im Code:</b> <code>AuthController.FindUserByEmailAsync</code>.</p>
+<p><b>Warum so:</b> Wie in Schritt 6.</p>
+
+<h3>Schritt 53: Benutzer mit PasswordHash und LockedUntil</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank liefert den Benutzer. Das Sperrkennzeichen ist leer (nach dem Entsperren) oder enthält einen vergangenen Zeitpunkt (nach dem Ablauf).</p>
+<p><b>Im Code:</b> Spalte <code>Users.LockedUntil</code>.</p>
+<p><b>Warum so:</b> Beide Zustände bedeuten dasselbe: nicht gesperrt.</p>
+
+<h3>Schritt 54: Sperrkennzeichen prüfen: nicht gesperrt</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Der Controller stellt fest, dass keine Sperre läuft.</p>
+<p><b>Im Code:</b> <code>user.IsLocked(DateTime.UtcNow)</code> liefert <code>false</code>.</p>
+<p><b>Warum so:</b> Der Vergleich <code>LockedUntil &gt; utcNow</code> ist für ein leeres Feld ebenfalls falsch.</p>
+
+<h3>Schritt 55: Passwort-Hash prüfen: richtig</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Der berechnete Hash stimmt mit dem gespeicherten überein.</p>
+<p><b>Im Code:</b> <code>_hasher.VerifyHashedPassword(…)</code>.</p>
+<p><b>Warum so:</b> Wie in Schritt 9, nur mit anderem Ergebnis.</p>
+
+<h3>Schritt 56: Fehlerzähler zurücksetzen</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Nach einer erfolgreichen Anmeldung löscht der Controller den Zähler der Adresse.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>_throttle.Reset(req.Email)</code>.</p>
+<p><b>Warum so:</b> So zählen frühere Fehlversuche nicht weiter. Zwei Fehlversuche, eine erfolgreiche Anmeldung und wieder zwei Fehlversuche führen nicht zur Sperre.</p>
+
+<h3>Schritt 57: UPDATE Users SET LockedUntil = NULL</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → PostgreSQL</p>
+<p><b>Was passiert:</b> Steht im Sperrkennzeichen noch ein abgelaufener Zeitpunkt, leert das Backend das Feld.</p>
+<p><b>Im Code:</b> <code>AuthController.Login</code>: <code>if (user.LockedUntil is not null) { user.LockedUntil = null; await _context.SaveChangesAsync(); }</code>.</p>
+<p><b>Warum so:</b> Reines Aufräumen: Gesperrt hat das Kennzeichen schon nicht mehr. Nach dem Entsperren durch einen Administrator entfällt der Schritt.</p>
+
+<h3>Schritt 58: Sperrkennzeichen geleert</h3>
+<p class="dir"><b>Beteiligte:</b> PostgreSQL → Backend</p>
+<p><b>Was passiert:</b> Die Datenbank bestätigt die Änderung.</p>
+<p><b>Im Code:</b> Spalte <code>Users.LockedUntil</code>.</p>
+<p><b>Warum so:</b> Damit ist der Benutzerstamm wieder im Ausgangszustand.</p>
+
+<h3>Schritt 59: JWT signieren</h3>
+<p class="dir"><b>Beteiligte:</b> Backend (interner Schritt)</p>
+<p><b>Was passiert:</b> Das Backend stellt das Token aus: gültig 8 Stunden, mit der Token-Version des Benutzers.</p>
+<p><b>Im Code:</b> <code>Services/JwtTokenService.cs</code>, Methode <code>CreateToken</code>.</p>
+<p><b>Warum so:</b> Ab hier verläuft die Anmeldung wie immer.</p>
+
+<h3>Schritt 60: 200 mit Token</h3>
+<p class="dir"><b>Beteiligte:</b> Backend → Next.js</p>
+<p><b>Was passiert:</b> Das Backend antwortet mit Id, Name, E-Mail-Adresse, Rolle und Token.</p>
+<p><b>Im Code:</b> <code>LoginResponse</code> in <code>Dtos/AuthDtos.cs</code>.</p>
+<p><b>Warum so:</b> Die Antwort bleibt auf dem Server von Next.js.</p>
+
+<h3>Schritt 61: jwt-Callback</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js (interner Schritt)</p>
+<p><b>Was passiert:</b> NextAuth übernimmt Id, Rolle und Backend-Token in seine eigene Sitzung.</p>
+<p><b>Im Code:</b> <code>frontend/lib/auth.ts</code>: Callback <code>jwt</code>.</p>
+<p><b>Warum so:</b> Das Backend-Token liegt nur im verschlüsselten Cookie.</p>
+
+<h3>Schritt 62: Set-Cookie: Session</h3>
+<p class="dir"><b>Beteiligte:</b> Next.js → nginx</p>
+<p><b>Was passiert:</b> NextAuth setzt das Session-Cookie.</p>
+<p><b>Im Code:</b> NextAuth (Route <code>app/api/auth/[...nextauth]</code>).</p>
+<p><b>Warum so:</b> Der Browser kann das Cookie mitsenden, aber nicht lesen.</p>
+
+<h3>Schritt 63: 200 an den Browser</h3>
+<p class="dir"><b>Beteiligte:</b> nginx → Browser</p>
+<p><b>Was passiert:</b> nginx reicht die Antwort an den Browser weiter.</p>
+<p><b>Im Code:</b> <code>nginx/nginx.conf</code>.</p>
+<p><b>Warum so:</b> Der Benutzer ist angemeldet.</p>
+
+<h3>Schritt 64: Weiterleitung zur gewünschten Seite</h3>
+<p class="dir"><b>Beteiligte:</b> Browser (interner Schritt)</p>
+<p><b>Was passiert:</b> Das Formular wechselt zur ursprünglich gewünschten Seite, sonst zur Adressliste.</p>
+<p><b>Im Code:</b> <code>app/login/LoginForm.tsx</code>: <code>router.push(callbackUrl)</code> und <code>router.refresh()</code>.</p>
+<p><b>Warum so:</b> Das Ziel wird geprüft: Weitergeleitet wird nur innerhalb der eigenen Anwendung.</p>
+
+<h2>10. Die Zustände einer Sperre im Überblick</h2>
+<table border="1" cellpadding="4" cellspacing="0" width="100%"><tr><th width="30%">Zustand</th><th width="25%">Zähler im Arbeitsspeicher</th><th width="22%">Sperrkennzeichen <code>LockedUntil</code></th><th width="23%">Anmeldung</th></tr><tr><td valign="top">Kein Fehlversuch</td><td valign="top">kein Eintrag</td><td valign="top">leer</td><td valign="top">möglich</td></tr><tr><td valign="top">1 oder 2 Fehlversuche</td><td valign="top">1 bzw. 2</td><td valign="top">leer</td><td valign="top">möglich</td></tr><tr><td valign="top">3 Fehlversuche (gesperrt)</td><td valign="top">3, Sperre bis in 5 Minuten</td><td valign="top">Ende der Sperre</td><td valign="top">abgewiesen mit 429</td></tr><tr><td valign="top">Gesperrt, Backend neu gestartet</td><td valign="top">kein Eintrag</td><td valign="top">Ende der Sperre</td><td valign="top">abgewiesen mit 429</td></tr><tr><td valign="top">Von einem Administrator entsperrt</td><td valign="top">kein Eintrag</td><td valign="top">leer</td><td valign="top">möglich</td></tr><tr><td valign="top">5 Minuten abgelaufen</td><td valign="top">kein Eintrag</td><td valign="top">vergangener Zeitpunkt</td><td valign="top">möglich</td></tr><tr><td valign="top">Erfolgreich angemeldet</td><td valign="top">kein Eintrag</td><td valign="top">leer</td><td valign="top">–</td></tr><tr><td valign="top">Unbekannte E-Mail-Adresse nach 3 Fehlversuchen</td><td valign="top">3, Sperre bis in 5 Minuten</td><td valign="top">gibt es nicht</td><td valign="top">abgewiesen mit 429; nach einem Neustart wieder 401</td></tr></table>
+
+<h2>11. Das Wichtigste in Kürze</h2>
+<ul><li>Drei falsche Passwörter innerhalb von 5 Minuten sperren die E-Mail-Adresse für 5 Minuten. Die 5 Minuten zählen ab dem dritten Fehlversuch.</li><li>Der dritte Fehlversuch wird noch mit der üblichen Fehlermeldung beantwortet. Erst der nächste Versuch zeigt die Meldung zur Sperre.</li><li>Gehört die Adresse zu einem Benutzer, setzt das Backend das Sperrkennzeichen <code>Users.LockedUntil</code> und sendet eine E-Mail an die Adresse aus den Einstellungen – einmal pro Sperre.</li><li>Während der Sperre wird das Passwort nicht geprüft. Auch das richtige Passwort hilft nicht.</li><li>Die Sperre eines Benutzers übersteht einen Neustart des Backends, weil das Sperrkennzeichen in der Datenbank steht.</li><li>Ein Administrator kann das Sperrkennzeichen auf der Seite «Benutzer» mit «Entsperren» vor Ablauf löschen. Ein neues Passwort löscht es ebenfalls.</li><li>Nach Ablauf sperrt das Kennzeichen nicht mehr; die nächste erfolgreiche Anmeldung leert das Feld.</li><li>Für eine E-Mail-Adresse ohne Benutzer gibt es weder Sperrkennzeichen noch E-Mail.</li></ul>
+
+<h2>12. Kontrollfragen</h2>
+<table border="1" cellpadding="4" cellspacing="0" width="100%"><tr><th width="45%">Frage</th><th width="55%">Antwort</th></tr><tr><td valign="top">1. Welche Meldung sieht ein Benutzer nach dem dritten falschen Passwort?</td><td valign="top">Noch die übliche: «Ungültige E-Mail-Adresse oder falsches Passwort.» (Schritte 22 bis 25). Die Meldung zur Sperre erscheint erst beim nächsten Versuch (Schritt 35).</td></tr><tr><td valign="top">2. Der Benutzer gibt während der Sperre das richtige Passwort ein. Was geschieht?</td><td valign="top">Das Backend antwortet mit 429, ohne das Passwort zu prüfen (Schritte 27 und 31).</td></tr><tr><td valign="top">3. Wozu braucht es das Sperrkennzeichen, wenn der Zähler die Sperre schon kennt?</td><td valign="top">Der Zähler liegt im Arbeitsspeicher und ist nach einem Neustart leer. Das Kennzeichen steht in der Datenbank und gilt weiter (Schritte 28 bis 30). Ausserdem macht es die Sperre in der Benutzerverwaltung sichtbar.</td></tr><tr><td valign="top">4. Wer erhält die E-Mail über eine Sperre?</td><td valign="top">Die Benachrichtigungsadresse aus den Einstellungen, nicht der gesperrte Benutzer (Schritte 18 bis 20). Ist keine hinterlegt, wird nichts gesendet.</td></tr><tr><td valign="top">5. Jemand versucht es während der Sperre zehnmal. Wie viele E-Mails gehen hinaus?</td><td valign="top">Eine. Nur der Fehlversuch, der die Sperre auslöst, führt zu Kennzeichen und E-Mail (Schritt 15); spätere Versuche werden vorher abgewiesen.</td></tr><tr><td valign="top">6. Welche zwei Dinge muss «Entsperren» tun?</td><td valign="top">Das Sperrkennzeichen löschen (Schritt 42) und den Zähler zurücksetzen (Schritt 44). Fehlt eines, bleibt der Benutzer gesperrt.</td></tr><tr><td valign="top">7. Niemand entsperrt. Wer löscht das Sperrkennzeichen nach 5 Minuten?</td><td valign="top">Zunächst niemand: Es liegt dann in der Vergangenheit und sperrt nicht mehr (Schritt 49). Die nächste erfolgreiche Anmeldung leert das Feld (Schritt 57).</td></tr><tr><td valign="top">8. Wie unterscheidet das Login-Formular die Sperre vom falschen Passwort?</td><td valign="top"><code>authorize()</code> gibt bei 401 <code>null</code> zurück, wirft aber bei 429 einen Fehler mit dem Text <code>AnmeldungGesperrt</code> (Schritt 32). Das Formular vergleicht <code>result.error</code> damit (Schritt 35).</td></tr><tr><td valign="top">9. Was geschieht bei drei Fehlversuchen für eine E-Mail-Adresse, zu der es keinen Benutzer gibt?</td><td valign="top">Die Adresse ist im Arbeitsspeicher gesperrt und erhält 429. Sperrkennzeichen und E-Mail gibt es nicht; ein Neustart des Backends hebt diese Sperre auf.</td></tr><tr><td valign="top">10. Beim Anmelden erscheint 429, obwohl noch kein Passwort falsch war. Woran kann das liegen?</td><td valign="top">An nginx: mehr als 10 Anmeldeversuche pro Minute von derselben IP (Schritt 2). Diese Antwort erreicht das Backend nicht.</td></tr></table>
+
+<h2>13. Glossar</h2>
+<table border="1" cellpadding="4" cellspacing="0" width="100%"><tr><th width="30%">Begriff</th><th width="70%">Bedeutung</th></tr><tr><td valign="top">Sperrkennzeichen</td><td valign="top">Die Spalte <code>Users.LockedUntil</code>: Ende der Anmeldesperre als UTC-Zeit, sonst leer.</td></tr><tr><td valign="top">Fehlerzähler (Throttle)</td><td valign="top"><code>MemoryLoginThrottle</code>: zählt Fehlversuche pro E-Mail-Adresse im Arbeitsspeicher und sperrt nach dem dritten.</td></tr><tr><td valign="top">Benachrichtigungsadresse</td><td valign="top"><code>Settings.NotificationEmail</code>; gepflegt auf der Seite «Einstellungen».</td></tr><tr><td valign="top">401</td><td valign="top">HTTP-Status «nicht angemeldet»: hier die Antwort auf falsche Anmeldedaten.</td></tr><tr><td valign="top">429</td><td valign="top">HTTP-Status «zu viele Anfragen»: vom Backend bei einer Sperre, von nginx bei zu vielen Anfragen pro IP.</td></tr><tr><td valign="top">authorize()</td><td valign="top">Funktion des NextAuth-Credentials-Providers, die die Anmeldedaten beim Backend prüft.</td></tr><tr><td valign="top">Proxy /api/backend</td><td valign="top">Route in Next.js, die API-Aufrufe des Browsers mit dem Token an das Backend weiterreicht.</td></tr></table>
+
+</body></html>

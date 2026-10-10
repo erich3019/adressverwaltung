@@ -28,9 +28,11 @@ nginx verteilt die Anfragen nach Pfad-Präfix:
 
 Jeder der 44 Schritte ist in der Schulungsunterlage `documentation/Schulungsunterlage_Sequenzdiagramm.pdf` erläutert.
 
+Den Login mit dem Sperrmechanismus zeigt ein eigenes Diagramm, `documentation/Sequenzdiagramm_Login_Sperre.svg`: Fehlversuche, Sperre nach dem dritten, Sperrkennzeichen und E-Mail, Versuch während der Sperre, Entsperren oder Ablauf, Anmeldung danach. Seine 64 Schritte erläutert `documentation/Schulungsunterlage_Login_Sperre.pdf`.
+
 Beim Login stellt das Backend ein JWT aus, das NextAuth im verschlüsselten Session-Cookie ablegt. Der Browser ruft die API über den Proxy `/api/backend` der eigenen Anwendung auf; dieser liest das Token aus dem Cookie und sendet es als `Authorization: Bearer` an das Backend. Im Browser ist das Token nie sichtbar.
 
-Die Quellen der Diagramme liegen in `documentation/Systemarchitektur.puml` und `documentation/Sequenzdiagramm.puml`. SVG neu erzeugen:
+Die Quellen der Diagramme liegen in `documentation/Systemarchitektur.puml`, `documentation/Sequenzdiagramm.puml` und `documentation/Sequenzdiagramm_Login_Sperre.puml`. SVG neu erzeugen:
 
 ```bash
 docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg "/data/*.puml"

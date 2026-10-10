@@ -1,0 +1,182 @@
+@startuml Sequenzdiagramm_Login_Sperre
+' ============================================================
+' Sequenzdiagramm – Adressverwaltung v2.5.0
+' Ablauf: Login mit Sperrmechanismus
+'   A  Fehlversuch (1. und 2.)
+'   B  Dritter Fehlversuch: Sperre, Sperrkennzeichen, E-Mail
+'   C  Anmeldeversuch während der Sperre
+'   D  Ende der Sperre: Entsperren durch einen Admin oder Ablauf
+'   E  Erfolgreiche Anmeldung nach der Sperre
+' Jeder Schritt ist in Schulungsunterlage_Login_Sperre.html erklärt.
+' SVG erzeugen:
+'   docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg /data/Sequenzdiagramm_Login_Sperre.puml
+' ============================================================
+
+title Adressverwaltung v2.5.0 – Login mit Sperrmechanismus
+
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+skinparam defaultFontSize 13
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 220
+skinparam sequence {
+  ArrowColor #475569
+  LifeLineBorderColor #94A3B8
+  LifeLineBackgroundColor #EFF6FF
+  ParticipantBorderColor #1E40AF
+  ParticipantBackgroundColor #EFF6FF
+  ActorBorderColor #1E40AF
+  ActorBackgroundColor #EFF6FF
+  DatabaseBorderColor #166534
+  DatabaseBackgroundColor #F0FDF4
+  GroupBorderColor #94A3B8
+  GroupBackgroundColor #F1F5F9
+  DividerBorderColor #94A3B8
+  DividerBackgroundColor #F8FAFC
+  ReferenceBorderColor #94A3B8
+  ReferenceBackgroundColor #F8FAFC
+}
+skinparam note {
+  BorderColor #94A3B8
+  BackgroundColor #FFFBEB
+}
+
+actor "Benutzer" as user
+actor "Administrator" as admin
+participant "Browser\n(Client Components)" as browser
+participant "nginx\n:443" as nginx
+participant "Next.js\nNextAuth · /api/auth/*\nProxy · /api/backend/*" as next
+participant "Backend\nASP.NET Core · :8080" as api
+database "PostgreSQL" as db
+participant "SMTP-Server" as smtp
+
+autonumber "<b>0"
+
+== A  Fehlversuch (erster und zweiter) ==
+
+user -> browser : E-Mail + falsches Passwort\nauf /login eingeben
+browser -> nginx : POST /api/auth/callback/credentials\n(signIn('credentials'))
+note right of nginx
+  Ratenbegrenzung: 10 Anfragen
+  pro Minute und Client-IP,
+  darüber 429 von nginx
+end note
+nginx -> next : Weiterleitung
+activate next
+next -> api : POST /auth/login\n(authorize(), direkt über INTERNAL_API_URL)
+activate api
+api -> api : Sperre im Arbeitsspeicher prüfen\n(ILoginThrottle.IsBlocked): nicht gesperrt
+api -> db : SELECT Users WHERE Email
+db --> api : User mit PasswordHash,\nLockedUntil (leer)
+api -> api : Sperrkennzeichen prüfen\n(User.IsLocked): nicht gesperrt
+api -> api : Passwort-Hash prüfen (PBKDF2):\nfalsch
+api -> api : Fehlversuch zählen\n(RegisterFailure): 1 bzw. 2 von 3
+api --> next : 401 «Ungültige Anmeldedaten.»
+deactivate api
+next --> nginx : authorize() = null\n→ Fehler CredentialsSignin
+deactivate next
+nginx --> browser : Antwort von NextAuth
+browser --> user : «Ungültige E-Mail-Adresse\noder falsches Passwort.»
+
+== B  Dritter Fehlversuch: Die Sperre wird ausgelöst ==
+
+ref over user, db : Schritte 1 bis 9 wie in Abschnitt A (drittes falsches Passwort)
+activate next
+activate api
+api -> api : Fehlversuch zählen (RegisterFailure):\n3 von 3 → Sperre für 5 Minuten,\ngibt das Ende der Sperre zurück
+api -> db : UPDATE Users SET LockedUntil = Ende der Sperre\n(Sperrkennzeichen, LockUserAsync)
+db --> api : gespeichert
+api -> db : SELECT Settings\n(NotifyUserLockedAsync)
+db --> api : NotificationEmail
+opt Benachrichtigungsadresse hinterlegt
+  api -> smtp : E-Mail «Benutzer gesperrt: Name»\nan die Adresse aus den Einstellungen
+  smtp --> api : angenommen
+end
+note right of api
+  Unbekannte E-Mail-Adresse: gesperrt nur
+  im Arbeitsspeicher, ohne Sperrkennzeichen
+  und ohne E-Mail (Schritte 16 bis 21 entfallen)
+end note
+api --> next : 401 «Ungültige Anmeldedaten.»
+deactivate api
+next --> nginx : authorize() = null
+deactivate next
+nginx --> browser : Antwort von NextAuth
+browser --> user : «Ungültige E-Mail-Adresse\noder falsches Passwort.»
+
+== C  Anmeldeversuch während der Sperre ==
+
+user -> browser : E-Mail + Passwort eingeben\n(auch das richtige)
+ref over browser, api : Schritte 2 bis 4 wie in Abschnitt A
+activate next
+activate api
+alt Zähler im Arbeitsspeicher kennt die Sperre
+  api -> api : Sperre im Arbeitsspeicher prüfen\n(IsBlocked): gesperrt
+else nach einem Neustart des Backends (Zähler leer)
+  api -> db : SELECT Users WHERE Email
+  db --> api : User mit LockedUntil\n(liegt in der Zukunft)
+  api -> api : Sperrkennzeichen prüfen\n(User.IsLocked): gesperrt
+end
+api --> next : 429 «Zu viele Anmeldeversuche.»\n(Passwort wird nicht geprüft)
+deactivate api
+next -> next : authorize() wirft\nError('AnmeldungGesperrt')
+next --> nginx : Fehler AnmeldungGesperrt
+deactivate next
+nginx --> browser : Antwort von NextAuth
+browser --> user : «Zu viele Fehlversuche. Die Anmeldung\nmit dieser E-Mail-Adresse ist\nfür 5 Minuten gesperrt.»
+
+== D  Ende der Sperre ==
+
+alt Ein Administrator entsperrt vor Ablauf der 5 Minuten
+  admin -> browser : auf /benutzer bei «Gesperrt bis …»\nauf «Entsperren» klicken
+  browser -> nginx : POST /api/backend/users/{id}/unlock\nSession-Cookie + Header x-adressverwaltung
+  nginx -> next : Weiterleitung
+  activate next
+  next -> next : Proxy: Pfad, Header und Origin prüfen,\nBackend-JWT aus dem Cookie lesen
+  next -> api : POST /users/{id}/unlock\nAuthorization: Bearer <JWT>
+  activate api
+  api -> api : JWT validieren, Rolle aus der Datenbank\n(TokenUserValidator): Admin verlangt
+  api -> db : UPDATE Users SET LockedUntil = NULL\n(Sperrkennzeichen löschen)
+  db --> api : gespeichert
+  api -> api : Fehlerzähler zurücksetzen\n(ILoginThrottle.Reset)
+  api --> next : 200 { …, lockedUntil: null }
+  deactivate api
+  next --> nginx : 200
+  deactivate next
+  nginx --> browser : 200
+  browser --> admin : Liste neu geladen:\nStatus «Aktiv»
+else Die 5 Minuten laufen ab
+  api -> api : Eintrag im Arbeitsspeicher\nverfällt von selbst
+  note right of api
+    Das Sperrkennzeichen bleibt stehen,
+    liegt aber in der Vergangenheit
+    und sperrt nicht mehr
+  end note
+end
+
+== E  Erfolgreiche Anmeldung nach der Sperre ==
+
+user -> browser : E-Mail + richtiges Passwort eingeben
+ref over browser, api : Schritte 2 bis 4 wie in Abschnitt A
+activate next
+activate api
+api -> api : Sperre im Arbeitsspeicher prüfen\n(IsBlocked): nicht gesperrt
+api -> db : SELECT Users WHERE Email
+db --> api : User mit PasswordHash, LockedUntil
+api -> api : Sperrkennzeichen prüfen (User.IsLocked):\nleer oder abgelaufen
+api -> api : Passwort-Hash prüfen (PBKDF2):\nrichtig
+api -> api : Fehlerzähler zurücksetzen\n(ILoginThrottle.Reset)
+opt Sperrkennzeichen noch gesetzt (abgelaufen)
+  api -> db : UPDATE Users SET LockedUntil = NULL
+  db --> api : gespeichert
+end
+api -> api : JWT signieren\n(HS256, 8 h, mit Token-Version)
+api --> next : 200 { id, name, email, role, token }
+deactivate api
+next -> next : jwt-Callback:\naccessToken = token, role
+next --> nginx : Set-Cookie: Session\n(verschlüsselt, enthält Backend-JWT)
+deactivate next
+nginx --> browser : 200
+browser -> browser : router.push(callbackUrl)
+
+@enduml

@@ -18,6 +18,7 @@ Version 2.5.0 fasst die Änderungen vom 10. Oktober 2026 zusammen. Die Abschnitt
 | 3 | Einstellungen | Nach dem Speichern wechselt die Seite zur Adressliste | `b1d6d09`, `6e20e3c`, `9332d24` |
 | 4 | E-Mail-Versand | SMTP-Server und Absender eingetragen, Versand geprüft | `3491199` |
 | 5 | Version | Versionsnummer auf 2.5.0 gesetzt, Tutorial umbenannt | `ea60944` |
+| 6 | Dokumentation | Neues Sequenzdiagramm zum Login mit Sperrmechanismus und Schulungsunterlage dazu | Commit mit der Fassung dieses Dokuments, die Abschnitt 6 enthält |
 
 Das Datenbankschema ändert sich: Die Tabelle `Users` erhält die Spalte `LockedUntil`. Das Backend ergänzt sie beim Start selbst. Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose restart nginx`.
 
@@ -161,5 +162,30 @@ Die Version 2.5.0 steht in `README.md`, `CLAUDE.md`, `frontend/package.json`, `f
 | `documentation/Tutorial_WebApp_v2.5.html` und `.pdf` | Umbenannt (vorher `Tutorial_WebApp_v2.4.*`); Titelseite |
 | neu `documentation/Aenderungsprotokoll_v2.5.0.md` und `.pdf` | Dieses Dokument |
 | `documentation/Aenderungsprotokoll_v2.4.0.md` und `.pdf` | Nachträge vom 10. Oktober 2026 in dieses Dokument verschoben |
+
+---
+
+## 6. Sequenzdiagramm und Schulungsunterlage zum Sperrmechanismus
+
+Ein eigenes Sequenzdiagramm zeigt den Login mit dem Sperrmechanismus in 64 nummerierten Schritten und fünf Abschnitten:
+
+| Abschnitt | Schritte | Inhalt |
+| --- | --- | --- |
+| A | 1 bis 14 | Erster und zweiter Fehlversuch |
+| B | 15 bis 25 | Dritter Fehlversuch: Sperre, Sperrkennzeichen, E-Mail |
+| C | 26 bis 35 | Anmeldeversuch während der Sperre, auch nach einem Neustart des Backends |
+| D | 36 bis 49 | Ende der Sperre: Entsperren durch einen Administrator oder Ablauf der 5 Minuten |
+| E | 50 bis 64 | Erfolgreiche Anmeldung nach der Sperre |
+
+Die Schulungsunterlage erklärt jeden Schritt mit «Was passiert», «Im Code» und «Warum so» und enthält dazu eine Übersicht der Zustände einer Sperre, Kontrollfragen und ein Glossar.
+
+| Datei | Inhalt |
+| --- | --- |
+| neu `documentation/Sequenzdiagramm_Login_Sperre.puml` und `.svg` | Das Diagramm |
+| neu `documentation/Schulungsunterlage_Login_Sperre.html` und `.pdf` | Erläuterung der 64 Schritte, 20 Seiten |
+| neu `documentation/Schulungsunterlage_Login_Sperre_A.png` bis `_E.png` | Die fünf Abschnitte des Diagramms für die Schulungsunterlage |
+| `README.md`, `CLAUDE.md`, `documentation/Tutorial_WebApp_v2.5.html` und `.pdf` | Verweis auf die neuen Dokumente |
+
+Am Code ändert sich nichts.
 
 Restrisiken und akzeptierte Punkte stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 4.
