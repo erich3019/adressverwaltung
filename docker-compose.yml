@@ -58,11 +58,11 @@ services:
       Jwt__Audience: AdressverwaltungFrontend
       Jwt__ExpiresInHours: "8"
       # SMTP-Einstellungen (optional – nur wenn E-Mail-Benachrichtigungen aktiviert)
-      SmtpSettings__Host: smtp.example.com
+      SmtpSettings__Host: asmtp.mail.hostpoint.ch
       SmtpSettings__Port: "587"
       SmtpSettings__Username: ${SMTP_USERNAME:-}
       SmtpSettings__Password: ${SMTP_PASSWORD:-}
-      SmtpSettings__FromAddress: noreply@example.com
+      SmtpSettings__FromAddress: erich.jost@orain.ch
       # Admin-Passwort für den ersten Start mit leerer Datenbank (leer = Zufallspasswort im Log)
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
     depends_on:
