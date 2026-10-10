@@ -1,12 +1,12 @@
 @startuml Sequenzdiagramm
 ' ============================================================
-' Sequenzdiagramm – Adressverwaltung v2.4.0
+' Sequenzdiagramm – Adressverwaltung v2.5.0
 ' Ablauf: Login und Erfassen einer neuen Adresse
 ' SVG erzeugen:
 '   docker run --rm -v "$PWD/documentation:/data" plantuml/plantuml -tsvg /data/Sequenzdiagramm.puml
 ' ============================================================
 
-title Adressverwaltung v2.4.0 – Login und neue Adresse erfassen
+title Adressverwaltung v2.5.0 – Login und neue Adresse erfassen
 
 skinparam shadowing false
 skinparam defaultFontName sans-serif

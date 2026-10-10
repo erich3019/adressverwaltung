@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Adressverwaltung is a tutorial-style address management web app (current version 2.4.0): Next.js 15 frontend, ASP.NET Core 10 OData API, PostgreSQL 16, fronted by nginx. Code comments, identifiers in the domain layer, UI text and documentation are in German (Swiss spelling: `ss` instead of `ß`, e.g. `Strasse`) — keep to that when adding code.
+Adressverwaltung is a tutorial-style address management web app (current version 2.5.0): Next.js 15 frontend, ASP.NET Core 10 OData API, PostgreSQL 16, fronted by nginx. Code comments, identifiers in the domain layer, UI text and documentation are in German (Swiss spelling: `ss` instead of `ß`, e.g. `Strasse`) — keep to that when adding code.
 
-`documentation/Aenderungsprotokoll_v2.*.md` records what changed in each version; `documentation/Tutorial_WebApp_v2.4.html` is the teaching document and quotes the source verbatim, so a change to quoted code needs the tutorial (and its PDF) updated too.
+`documentation/Aenderungsprotokoll_v2.*.md` records what changed in each version; `documentation/Tutorial_WebApp_v2.5.html` is the teaching document and quotes the source verbatim, so a change to quoted code needs the tutorial (and its PDF) updated too.
 
 ## Commands
 

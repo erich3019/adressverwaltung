@@ -15,11 +15,10 @@ Version 2.4.0 fasst die Änderungen vom 9. Oktober 2026 zusammen. Die Abschnitte
 | --- | --- | --- | --- |
 | 1 | Zweite Sicherheitsprüfung | 11 Befunde (S-19 bis S-29), alle behoben | `68d2789`, `dc6f6e4` |
 | 2 | Offene Punkte | O-03 bis O-08 aus dem Sicherheitsbericht bearbeitet | `594258d` |
-| 3 | Einstellungen | Fehler beim Ändern der E-Mail-Adresse behoben; Farbe der Oberfläche wählbar | `8f234fe`, `b1d6d09` |
+| 3 | Einstellungen | Fehler beim Ändern der E-Mail-Adresse behoben; Farbe der Oberfläche wählbar | `8f234fe` |
 | 4 | Dokumentation | Diagramme, Schulungsunterlage und Tutorial auf den Stand des Codes gebracht | `3484396` |
 | 5 | Aufräumen | Überholte Dokumente und Dateien gelöscht | `3484396` |
 | 6 | Version | Versionsnummer auf 2.4.0 gesetzt | `3484396` |
-| 7 | Benutzerverwaltung | Neue Seite «Benutzer»; Anmeldesperre nach 3 Fehlversuchen für 5 Minuten (Nachtrag vom 10. Oktober 2026) | Commit mit der Fassung dieses Dokuments, die Abschnitt 8 enthält |
 
 **Das Datenbankschema ändert sich:** Die Tabelle `Users` erhält die Spalten `Role` und `TokenVersion`, die Tabelle `Settings` die Spalte `AccentColor`. Das Backend ergänzt sie beim Start selbst; bestehende Daten bleiben erhalten.
 
@@ -215,20 +214,6 @@ Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose r
 
 Nicht geprüft: der Fall einer Session aus der Zeit vor den Rollen selbst (er liess sich nicht nachstellen; geprüft ist, dass die Seite die Rolle der Session nicht mehr verwendet), andere Browser als Chromium und der Kontrast jeder Farbe von Hand.
 
-### Nachtrag vom 10. Oktober 2026: Nach dem Speichern zur Adressliste
-
-Nach dem Speichern der Einstellungen wechselt die Seite zur Adressliste (`/`), wie es die Formulare für Adressen und Städte nach dem Speichern auch tun. Die Meldung «Einstellungen wurden gespeichert» entfällt damit. Schlägt das Speichern fehl, bleibt die Seite stehen und zeigt den Fehler.
-
-| Datei | Änderung |
-| --- | --- |
-| `frontend/app/einstellungen/page.tsx` | `router.push('/')` nach dem Speichern; Erfolgsmeldung entfernt |
-
-| Prüfung | Ergebnis |
-| --- | --- |
-| Typprüfung und Lint des Frontends | erfolgreich |
-| Browser (Chromium, ferngesteuert) als `Admin`: Farbe ändern und speichern | Wechsel zur Adressliste, neue Farbe gilt sofort |
-| Browser: Speichern schlägt fehl (Antwort 500 nachgestellt) | Seite bleibt stehen, Fehlermeldung sichtbar |
-
 ---
 
 ## 5. Dokumentation
@@ -269,72 +254,4 @@ Die Version 2.4.0 steht in `README.md`, `CLAUDE.md`, `frontend/package.json`, `f
 
 Restrisiken und akzeptierte Punkte stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 4.
 
----
-
-## 8. Nachtrag vom 10. Oktober 2026: Benutzerverwaltung und Anmeldesperre
-
-### Neu: Seite «Benutzer»
-
-In der Navigation steht neben «Einstellungen» der neue Punkt «Benutzer». Ein Benutzer mit der Rolle `Admin` kann dort:
-
-1. alle Benutzer mit Name, E-Mail-Adresse, Rolle und Status sehen,
-2. einen Benutzer anlegen (E-Mail-Adresse, Anzeigename, Rolle, Passwort mit mindestens 8 Zeichen),
-3. Anzeigename, Rolle und Passwort ändern – ein neues Passwort meldet den Benutzer überall ab,
-4. eine Anmeldesperre aufheben,
-5. einen Benutzer löschen – seine Sitzung endet mit dem nächsten Aufruf.
-
-Die E-Mail-Adresse lässt sich nicht ändern. Sich selbst kann ein Admin weder löschen noch die Rolle entziehen; so bleibt immer ein Admin übrig. Wer nicht `Admin` ist, sieht auf der Seite nur einen Hinweis. Das entscheidet das Backend (Antwort 403), nicht die Rolle in der Session.
-
-### Geändert: Anmeldesperre
-
-Nach 3 fehlerhaften Anmeldungen ist eine E-Mail-Adresse für 5 Minuten gesperrt (bisher: nach 5 Fehlversuchen für 15 Minuten). Die 5 Minuten zählen ab dem dritten Fehlversuch; bisher lief die Frist ab dem ersten. Das Login-Formular zeigt während der Sperre eine eigene Meldung statt «Ungültige E-Mail-Adresse oder falsches Passwort». Die Angaben zur Sperre in den Abschnitten 2 und 3 beschreiben den Stand vom 9. Oktober 2026.
-
-Unverändert: Gesperrt wird die E-Mail-Adresse, auch wenn es dazu keinen Benutzer gibt, und die Sperre liegt im Arbeitsspeicher des Backends. Ein Neustart hebt sie auf.
-
-### Backend
-
-| Datei | Änderung |
-| --- | --- |
-| neu `Controllers/UsersController.cs`, `Dtos/UserDtos.cs` | `/users` nur für `Admin`: lesen, anlegen (409 bei vorhandener E-Mail-Adresse), ändern, löschen, `POST /users/{id}/unlock`. Antworten mit `lockedUntil` und `isSelf`, ohne Passwort-Hash |
-| `Services/ILoginThrottle.cs`, `Services/MemoryLoginThrottle.cs` | 3 Fehlversuche, 5 Minuten Sperre ab dem dritten; neu `BlockedUntil` für die Anzeige |
-| `Controllers/AuthController.cs`, `Models/Roles.cs` | Kommentare |
-
-### Frontend
-
-| Datei | Änderung |
-| --- | --- |
-| neu `app/benutzer/page.tsx`, `app/benutzer/neu/page.tsx`, `app/benutzer/[id]/bearbeiten/page.tsx` | Liste, Anlegen, Bearbeiten |
-| neu `components/BenutzerForm.tsx`, `types/benutzer.ts` | Formular und Typen |
-| `components/NavBar.tsx` | Link «Benutzer» |
-| `lib/api.ts` | Funktionen für `/users`; `apiRequest` wirft neu einen `ApiFehler` mit Status und Meldung des Backends |
-| `app/api/backend/[...pfad]/route.ts` | Bereich `users` über den Proxy erreichbar |
-| neu `lib/anmeldung.ts`, `lib/auth.ts`, `app/login/LoginForm.tsx` | Meldung im Login-Formular, wenn die Adresse gesperrt ist |
-
-### Infrastruktur und Dokumentation
-
-| Datei | Änderung |
-| --- | --- |
-| `nginx/nginx.conf` | `location /users` zum Backend |
-| neu `AdressverwaltungApi.Tests/UsersTests.cs` | 19 Tests: Rechte, Anlegen, Ändern, Passwortwechsel, Löschen, Sperre und Entsperren |
-| `documentation/Tutorial_WebApp_v2.4.html` und `.pdf` | Abschnitt «Benutzerverwaltung», Anmeldesperre, geänderte Codebeispiele (auch die SMTP-Angaben aus `docker-compose.yml`) |
-| `documentation/Sequenzdiagramm.puml`, `Systemarchitektur.puml`, je mit `.svg` | Sperre 3 / 5 Minuten; `UsersController` |
-| `documentation/Schulungsunterlage_Sequenzdiagramm.html`, `.pdf`, PNG zum Login | Sperre 3 / 5 Minuten |
-| `documentation/Sicherheitsbericht.html` und `.pdf` | Angaben zur Kontosperre (S-22) |
-| `README.md`, `CLAUDE.md` | Seite «Benutzer», Endpunkte `/users`, Sperre |
-
-### Nach dem Aktualisieren zu tun
-
-`docker compose up --build -d`, danach `docker compose restart nginx`. Die Datenbank ändert sich nicht.
-
-### Prüfung
-
-| Prüfung | Ergebnis |
-| --- | --- |
-| `dotnet test` | 96 von 96 bestanden (19 neu) |
-| Typprüfung und Lint des Frontends | erfolgreich |
-| Browser (Chromium, ferngesteuert) als `Admin`: Benutzer anlegen, doppelte E-Mail-Adresse, ändern, löschen | erfolgreich; Meldung des Backends bei doppelter Adresse sichtbar |
-| Browser: drei Fehlversuche, danach richtiges Passwort | Meldung zur Sperre; Liste zeigt «Gesperrt bis …»; nach «Entsperren» gelingt die Anmeldung |
-| Browser als `User` | Seite «Benutzer» zeigt nur den Hinweis |
-| Browser: gelöschter Benutzer mit offener Sitzung | landet beim nächsten Aufruf auf der Login-Seite |
-
-Nicht geprüft: der Ablauf der Sperre nach 5 Minuten im Browser (durch den Test der Dauer im Backend abgedeckt) und andere Browser als Chromium.
+Änderungen ab dem 10. Oktober 2026 (Benutzerverwaltung, Anmeldesperre nach 3 Fehlversuchen für 5 Minuten, Wechsel zur Adressliste nach dem Speichern der Einstellungen) stehen im Änderungsprotokoll der Version 2.5.0.
