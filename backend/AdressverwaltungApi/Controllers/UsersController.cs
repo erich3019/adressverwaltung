@@ -14,7 +14,7 @@ namespace AdressverwaltungApi.Controllers;
 /// Benutzerverwaltung – nur für die Rolle Admin.
 /// GET    /users              – alle Benutzer, mit Stand der Anmeldesperre
 /// GET    /users/{id}         – ein Benutzer
-/// POST   /users              – Benutzer anlegen
+/// POST   /users              – Benutzer anlegen; der neue Benutzer erhält eine E-Mail
 /// PUT    /users/{id}         – Anzeigename, Rolle und optional Passwort ändern
 /// DELETE /users/{id}         – Benutzer löschen
 /// POST   /users/{id}/unlock  – Anmeldesperre aufheben
@@ -29,12 +29,18 @@ public class UsersController : ControllerBase
     private readonly AdresseDbContext _context;
     private readonly IPasswordHasher<User> _hasher;
     private readonly ILoginThrottle _throttle;
+    private readonly INotificationService _notificationService;
 
-    public UsersController(AdresseDbContext context, IPasswordHasher<User> hasher, ILoginThrottle throttle)
+    public UsersController(
+        AdresseDbContext context,
+        IPasswordHasher<User> hasher,
+        ILoginThrottle throttle,
+        INotificationService notificationService)
     {
-        _context  = context;
-        _hasher   = hasher;
-        _throttle = throttle;
+        _context             = context;
+        _hasher              = hasher;
+        _throttle            = throttle;
+        _notificationService = notificationService;
     }
 
     // GET /users
@@ -90,6 +96,7 @@ public class UsersController : ControllerBase
 
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
+        await _notificationService.NotifyNewUserAsync(user);
 
         return CreatedAtAction(nameof(GetUser), new { id = user.Id }, ToResponse(user));
     }

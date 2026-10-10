@@ -90,7 +90,46 @@ public class UsersTests : ODataTestBase
     }
 
     [Fact]
-    public async Task Post_MitVorhandenerEmail_Liefert409()
+    public async Task Post_SendetDemNeuenBenutzerEineEmail_OhnePasswort()
+    {
+        var email = NeueEmail();
+
+        await ErstelleBenutzerAsync(email, Roles.Admin);
+
+        var mail = Assert.Single(Factory.Emails.Sent);
+        Assert.Equal(email, mail.To);
+        Assert.Contains("Neuer Benutzer", mail.Body);
+        Assert.Contains(email, mail.Body);
+        Assert.Contains(Roles.Admin, mail.Body);
+        Assert.DoesNotContain(Passwort, mail.Body);
+    }
+
+    [Fact]
+    public async Task Post_LegtBenutzerAuchAn_WennDerVersandFehlschlaegt()
+    {
+        var email = NeueEmail();
+        Factory.Emails.FailWith = new InvalidOperationException("SMTP nicht erreichbar");
+
+        await ErstelleBenutzerAsync(email);
+
+        Assert.Equal(HttpStatusCode.OK, (await LoginAsync(email, Passwort)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_SendetNurFuerEinenNeuenBenutzerEineEmail()
+    {
+        var email = NeueEmail();
+        var body  = new { email, password = Passwort, displayName = "Registriert" };
+
+        await Client.PostAsJsonAsync("/auth/register", body);
+        await Client.PostAsJsonAsync("/auth/register", body);
+
+        var mail = Assert.Single(Factory.Emails.Sent);
+        Assert.Equal(email, mail.To);
+    }
+
+    [Fact]
+    public async Task Post_MitVorhandenerEmail_Liefert409_UndSendetNichts()
     {
         var email = NeueEmail();
         await ErstelleBenutzerAsync(email);
@@ -99,6 +138,7 @@ public class UsersTests : ODataTestBase
             new { email = email.ToUpperInvariant(), password = Passwort, displayName = "Doppelt" });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Single(Factory.Emails.Sent);
     }
 
     [Theory]

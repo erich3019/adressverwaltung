@@ -113,6 +113,7 @@ odata --> dbctx
 settingsc --> dbctx
 usersc --> dbctx
 usersc ..> authc : Kontosperre\nlesen, aufheben
+usersc --> notify : POST Benutzer
 authc --> dbctx : Benutzer prüfen,\nJWT ausstellen
 notify --> dbctx : NotificationEmail\nlesen
 notify ..> smtp : E-Mail\n«Neue Adresse»

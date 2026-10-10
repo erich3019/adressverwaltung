@@ -1,6 +1,6 @@
 # Adressverwaltung – Tutorial WebApp v2.5.0
 
-Adressverwaltungs-WebApp mit Login, CRUD für Adressen und Städte (PLZ-Verzeichnis), PLZ-Wertehilfe und E-Mail-Benachrichtigung bei neuen Adressen.
+Adressverwaltungs-WebApp mit Login, CRUD für Adressen und Städte (PLZ-Verzeichnis), PLZ-Wertehilfe, Benutzerverwaltung und E-Mail-Benachrichtigung bei neuen Adressen und an neue Benutzer.
 
 ## Tech-Stack
 
@@ -133,7 +133,7 @@ Der Sicherheitsbericht mit allen Befunden und Korrekturen liegt unter `documenta
 - **Adressen** (`/`): Liste, Erfassen, Bearbeiten, Löschen
 - **Städte** (`/cities`): PLZ-Verzeichnis pflegen; dient als Wertehilfe im Adressformular (Vorschläge ab zwei Ziffern)
 - **Einstellungen** (`/einstellungen`): E-Mail-Adresse für Benachrichtigungen bei neuen Adressen und Farbe der Oberfläche (ändern nur als `Admin`)
-- **Benutzer** (`/benutzer`): Benutzer anlegen, Name, Rolle und Passwort ändern, Anmeldesperre aufheben, löschen (nur als `Admin`)
+- **Benutzer** (`/benutzer`): Benutzer anlegen, Name, Rolle und Passwort ändern, Anmeldesperre aufheben, löschen (nur als `Admin`). Ein neuer Benutzer erhält eine E-Mail an seine Adresse – ohne Passwort
 - **Login** (`/login`): E-Mail und Passwort, optional Google. Nach 3 fehlerhaften Anmeldungen ist eine E-Mail-Adresse für 5 Minuten gesperrt
 - **Audit-Felder**: Alle Datensätze führen `CreateDate`, `CreatedBy`, `ChangeDate`, `ChangedBy`, `DateFrom`, `DateTo`; das Backend setzt sie automatisch
 
@@ -177,7 +177,7 @@ curl -s http://localhost:5000/odata/Adressen -H "Authorization: Bearer <JWT>"
 | GET/POST/PATCH/DELETE | `/odata/Cities` | Städte, gleiche Operationen wie Adressen |
 | GET | `/odata/Cities?$filter=startswith(postalCode,'80')&$top=10` | PLZ-Suche |
 | GET / PUT | `/settings` | Einstellungen lesen / speichern |
-| GET / POST | `/users` | Benutzer auflisten / anlegen (nur Rolle Admin) |
+| GET / POST | `/users` | Benutzer auflisten / anlegen (nur Rolle Admin; der neue Benutzer erhält eine E-Mail) |
 | GET / PUT / DELETE | `/users/{id}` | Benutzer lesen / ändern (Name, Rolle, optional Passwort) / löschen (nur Rolle Admin) |
 | POST | `/users/{id}/unlock` | Anmeldesperre eines Benutzers aufheben (nur Rolle Admin) |
 
@@ -259,7 +259,7 @@ adressverwaltung/
 
 | Version | Inhalt |
 |---------|--------|
-| 2.5.0 | Benutzerverwaltung, Anmeldesperre nach 3 Fehlversuchen für 5 Minuten, Wechsel zur Adressliste nach dem Speichern der Einstellungen |
+| 2.5.0 | Benutzerverwaltung mit E-Mail an neue Benutzer, Anmeldesperre nach 3 Fehlversuchen für 5 Minuten, Wechsel zur Adressliste nach dem Speichern der Einstellungen |
 | 2.4.0 | Zweite Sicherheitsprüfung: Rollen, Token-Widerruf, Proxy für API-Aufrufe, CSP mit Nonce, Blättern, eigene Datenbankrolle, wählbare Farbe |
 | 2.3.0 | .NET 10, Next.js 15, Backend-Tests, Sicherheitskorrekturen, Clean-Code-Nachprüfung |
 | 2.2.0 | JWT-Authentifizierung im Backend, Bearer-Token aus der NextAuth-Session |

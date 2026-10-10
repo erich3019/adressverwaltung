@@ -38,17 +38,20 @@ public class AuthController : ControllerBase
     private readonly IPasswordHasher<User> _hasher;
     private readonly ITokenService _tokenService;
     private readonly ILoginThrottle _throttle;
+    private readonly INotificationService _notificationService;
 
     public AuthController(
         AdresseDbContext context,
         IPasswordHasher<User> hasher,
         ITokenService tokenService,
-        ILoginThrottle throttle)
+        ILoginThrottle throttle,
+        INotificationService notificationService)
     {
-        _context      = context;
-        _hasher       = hasher;
-        _tokenService = tokenService;
-        _throttle     = throttle;
+        _context             = context;
+        _hasher              = hasher;
+        _tokenService        = tokenService;
+        _throttle            = throttle;
+        _notificationService = notificationService;
     }
 
     // POST /auth/register
@@ -82,6 +85,7 @@ public class AuthController : ControllerBase
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+            await _notificationService.NotifyNewUserAsync(user);
         }
 
         return Ok(new { message = RegisterMessage });

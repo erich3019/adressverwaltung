@@ -135,6 +135,7 @@ export default function BenutzerForm({ benutzer, onSubmit, submitLabel }: Props)
         />
         <p className="text-xs text-gray-500 mt-1">
           Mindestens {PASSWORT_MIN_LAENGE} Zeichen.
+          {neu && ' Der neue Benutzer erhält eine E-Mail an seine Adresse – ohne Passwort; gib es ihm auf anderem Weg weiter.'}
           {!neu && ' Leer lassen, um das Passwort zu behalten. Ein neues Passwort meldet den Benutzer überall ab.'}
         </p>
       </div>

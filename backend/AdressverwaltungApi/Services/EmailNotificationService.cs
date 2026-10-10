@@ -55,4 +55,31 @@ public class EmailNotificationService : INotificationService
             _logger.LogError(ex, "Fehler beim E-Mail-Versand für Adresse {Id}.", adresse.Id);
         }
     }
+
+    // Die E-Mail geht an den neuen Benutzer selbst. Sie enthält bewusst kein Passwort:
+    // E-Mails sind nicht vertraulich, das Passwort gibt der Administrator anders weiter.
+    public async Task NotifyNewUserAsync(User user)
+    {
+        try
+        {
+            var betreff = "Dein Zugang zur Adressverwaltung";
+            var inhalt  = $"""
+                Hallo {user.DisplayName}
+
+                Für dich wurde ein Benutzer in der Adressverwaltung angelegt.
+
+                Anmeldung: {user.Email}
+                Rolle:     {user.Role}
+
+                Das Passwort erhältst du von der Person, die den Benutzer angelegt hat.
+                """;
+
+            await _emailService.SendAsync(user.Email, betreff, inhalt);
+        }
+        catch (Exception ex)
+        {
+            // Der Benutzer ist angelegt; ein Fehler beim Versand ändert daran nichts
+            _logger.LogError(ex, "Fehler beim E-Mail-Versand für den neuen Benutzer {Id}.", user.Id);
+        }
+    }
 }

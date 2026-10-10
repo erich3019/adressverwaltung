@@ -10,4 +10,7 @@ namespace AdressverwaltungApi.Services;
 public interface INotificationService
 {
     Task NotifyNewAdresseAsync(Adresse adresse);
+
+    /// <summary>Teilt einem neu angelegten Benutzer mit, dass es seinen Zugang gibt.</summary>
+    Task NotifyNewUserAsync(User user);
 }

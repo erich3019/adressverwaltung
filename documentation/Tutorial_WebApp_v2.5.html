@@ -1247,13 +1247,14 @@ public async Task&lt;IActionResult&gt; Register([FromBody] RegisterRequest req)
 
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
+        await _notificationService.NotifyNewUserAsync(user);
     }
 
     return Ok(new { message = RegisterMessage });
 }</code></pre></div>
 <h3>Benutzerverwaltung</h3>
 <p>Für die Seite «Benutzer» gibt es einen eigenen Controller unter <code>/users</code>. Er ist als Ganzes der Rolle <code>Admin</code> vorbehalten (<code>[Authorize(Roles = Roles.Admin)]</code> an der Klasse) und gibt den Passwort-Hash nie heraus.</p>
-<table><thead><tr><th>Endpunkt</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>GET /users</code>, <code>GET /users/{id}</code></td><td>Benutzer lesen, je mit dem Ende einer Anmeldesperre (<code>lockedUntil</code>) und dem Kennzeichen <code>isSelf</code></td></tr><tr><td><code>POST /users</code></td><td>Benutzer anlegen; 409, wenn es die E-Mail-Adresse schon gibt</td></tr><tr><td><code>PUT /users/{id}</code></td><td>Anzeigename, Rolle und optional Passwort ändern</td></tr><tr><td><code>POST /users/{id}/unlock</code></td><td>Anmeldesperre aufheben</td></tr><tr><td><code>DELETE /users/{id}</code></td><td>Benutzer löschen; sein Token gilt danach nicht mehr</td></tr></tbody></table>
+<table><thead><tr><th>Endpunkt</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>GET /users</code>, <code>GET /users/{id}</code></td><td>Benutzer lesen, je mit dem Ende einer Anmeldesperre (<code>lockedUntil</code>) und dem Kennzeichen <code>isSelf</code></td></tr><tr><td><code>POST /users</code></td><td>Benutzer anlegen; 409, wenn es die E-Mail-Adresse schon gibt. Der neue Benutzer erhält eine E-Mail (Kapitel 4.6)</td></tr><tr><td><code>PUT /users/{id}</code></td><td>Anzeigename, Rolle und optional Passwort ändern</td></tr><tr><td><code>POST /users/{id}/unlock</code></td><td>Anmeldesperre aufheben</td></tr><tr><td><code>DELETE /users/{id}</code></td><td>Benutzer löschen; sein Token gilt danach nicht mehr</td></tr></tbody></table>
 <div class="code-block"><div class="code-label">Controllers/UsersController.cs – Ändern</div><pre><code>// PUT /users/{id}
 [HttpPut("{id:int}")]
 public async Task&lt;IActionResult&gt; UpdateUser(int id, [FromBody] UserUpdateRequest req)
@@ -1332,7 +1333,7 @@ public async Task&lt;IActionResult&gt; Logout()
 }</code></pre></div>
 <div class="box box-info"><div class="box-title">Doppelter Unterstrich in Umgebungsvariablen</div><p>ASP.NET Core trennt Konfigurationsebenen mit <code>:</code> (<code>Jwt:Key</code>). In Umgebungsvariablen steht dafür <code>__</code>: <code>Jwt__Key</code> entspricht <code>Jwt:Key</code>. So überschreibt <code>docker-compose.yml</code> die Werte aus <code>appsettings.json</code>.</p></div>
 <h2 id="kap4-6">4.6 E-Mail-Benachrichtigung</h2>
-<table><thead><tr><th>Interface</th><th>Implementierung</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>INotificationService</code></td><td><code>EmailNotificationService</code></td><td>Fachlogik: «Neue Adresse erfasst», kennt Empfänger und Text</td></tr><tr><td><code>IEmailService</code></td><td><code>EmailService</code></td><td>Technik: eine E-Mail über SMTP senden</td></tr></tbody></table>
+<table><thead><tr><th>Interface</th><th>Implementierung</th><th>Aufgabe</th></tr></thead><tbody><tr><td><code>INotificationService</code></td><td><code>EmailNotificationService</code></td><td>Fachlogik: «Neue Adresse erfasst» und «Neuer Benutzer angelegt», kennt Empfänger und Text</td></tr><tr><td><code>IEmailService</code></td><td><code>EmailService</code></td><td>Technik: eine E-Mail über SMTP senden</td></tr></tbody></table>
 <div class="code-block"><div class="code-label">Services/EmailNotificationService.cs</div><pre><code>public async Task NotifyNewAdresseAsync(Adresse adresse)
 {
     try
@@ -1364,6 +1365,34 @@ public async Task&lt;IActionResult&gt; Logout()
     }
 }</code></pre></div>
 <div class="box box-tip"><div class="box-title">Warum der Fehler nicht weitergegeben wird</div><p>Die Adresse ist bereits gespeichert, wenn die E-Mail versendet wird. Würde ein Fehler beim Versand die Anfrage scheitern lassen, sähe der Benutzer eine Fehlermeldung, obwohl seine Daten gespeichert sind. Deshalb wird der Fehler nur geloggt.</p></div>
+<p>Eine zweite Benachrichtigung geht an jeden neu angelegten Benutzer – aus der Benutzerverwaltung (<code>POST /users</code>) ebenso wie aus <code>POST /auth/register</code>. Empfänger ist hier nicht die Adresse aus den Einstellungen, sondern der neue Benutzer selbst.</p>
+<div class="code-block"><div class="code-label">Services/EmailNotificationService.cs – Neuer Benutzer</div><pre><code>// Die E-Mail geht an den neuen Benutzer selbst. Sie enthält bewusst kein Passwort:
+// E-Mails sind nicht vertraulich, das Passwort gibt der Administrator anders weiter.
+public async Task NotifyNewUserAsync(User user)
+{
+    try
+    {
+        var betreff = "Dein Zugang zur Adressverwaltung";
+        var inhalt  = $"""
+            Hallo {user.DisplayName}
+
+            Für dich wurde ein Benutzer in der Adressverwaltung angelegt.
+
+            Anmeldung: {user.Email}
+            Rolle:     {user.Role}
+
+            Das Passwort erhältst du von der Person, die den Benutzer angelegt hat.
+            """;
+
+        await _emailService.SendAsync(user.Email, betreff, inhalt);
+    }
+    catch (Exception ex)
+    {
+        // Der Benutzer ist angelegt; ein Fehler beim Versand ändert daran nichts
+        _logger.LogError(ex, "Fehler beim E-Mail-Versand für den neuen Benutzer {Id}.", user.Id);
+    }
+}</code></pre></div>
+<div class="box box-danger"><div class="box-title">Kein Passwort per E-Mail</div><p>Eine E-Mail liegt unverschlüsselt in Postfächern und oft auf mehreren Servern. Die Nachricht nennt deshalb nur die E-Mail-Adresse für die Anmeldung und die Rolle. Das Passwort gibt der Administrator auf einem anderen Weg weiter.</p></div>
 <div class="chapter-summary"><h4>Zusammenfassung Kapitel 4</h4><ul><li>Ordner nach Aufgabe: <code>Controllers</code>, <code>Data</code>, <code>Dtos</code>, <code>Models</code>, <code>Options</code>, <code>Services</code>.</li><li>OData-Optionen und Eigenschaften in camelCase; <code>$top</code> ist auf 100 begrenzt.</li><li>Die CRUD-Logik steht einmal in <code>ODataCrudController&lt;T&gt;</code>; <code>[Authorize]</code> schützt alle abgeleiteten Controller.</li><li>Listen liefern höchstens 100 Zeilen; eine mitgeschickte <code>id</code> wird verworfen.</li><li>Login mit gleicher Antwortzeit und gleicher Meldung für alle Fehlerfälle; Sperre nach fünf Fehlversuchen.</li><li>Registrierung nur für die Rolle <code>Admin</code>; die Abmeldung widerruft die Tokens des Benutzers.</li><li>Konfiguration über typisierte Options-Klassen.</li></ul></div>
 </section>
 <section id="kap5">
