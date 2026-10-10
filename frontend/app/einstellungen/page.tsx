@@ -14,7 +14,6 @@ export default function EinstellungenPage() {
   const [laden,      setLaden]      = useState(true);
   const [speichern,  setSpeichern]  = useState(false);
   const [fehler,     setFehler]     = useState<string | null>(null);
-  const [erfolg,     setErfolg]     = useState(false);
 
   // Ändern dürfen nur Administratoren. Ob der angemeldete Benutzer einer ist, meldet
   // das Backend mit den Einstellungen (canEdit) – es kennt die aktuelle Rolle aus der
@@ -36,13 +35,13 @@ export default function EinstellungenPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFehler(null);
-    setErfolg(false);
     setSpeichern(true);
 
     try {
       await speichereSettings({ notificationEmail: email.trim(), accentColor: farbe });
-      setErfolg(true);
-      // Das Layout liest die Farbe auf dem Server: neu laden, damit sie überall gilt
+      // Zurück zur Adressliste. Das Layout liest die Farbe auf dem Server:
+      // neu laden, damit sie überall gilt
+      router.push('/');
       router.refresh();
     } catch {
       setFehler('Fehler beim Speichern. Bitte versuche es erneut.');
@@ -131,12 +130,6 @@ export default function EinstellungenPage() {
           )}
 
           <Fehlermeldung meldung={fehler} />
-
-          {erfolg && (
-            <div role="status" className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg text-sm">
-              ✓ Einstellungen wurden gespeichert.
-            </div>
-          )}
 
           <button type="submit" disabled={speichern || !darfAendern} className={primaryButtonClass}>
             {speichern ? 'Wird gespeichert…' : 'Speichern'}

@@ -205,6 +205,14 @@ Auf der Einstellungsseite lässt sich die Farbe von Kopfzeile, Schaltflächen un
 
 Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose restart nginx`. Die neue Spalte entsteht beim Start des Backends.
 
+### Nachtrag vom 10. Oktober 2026: Nach dem Speichern zur Adressliste
+
+Nach dem Speichern der Einstellungen wechselt die Seite zur Adressliste (`/`), wie es die Formulare für Adressen und Städte nach dem Speichern auch tun. Die Meldung «Einstellungen wurden gespeichert» entfällt damit. Schlägt das Speichern fehl, bleibt die Seite stehen und zeigt den Fehler.
+
+| Datei | Änderung |
+| --- | --- |
+| `frontend/app/einstellungen/page.tsx` | `router.push('/')` nach dem Speichern; Erfolgsmeldung entfernt |
+
 | Prüfung | Ergebnis |
 | --- | --- |
 | `dotnet test` | 77 von 77 bestanden (8 neu) |
