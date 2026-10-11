@@ -115,6 +115,7 @@ Sicherheitsrelevante Werte stehen in `.env`; `docker-compose.yml` setzt sie als 
 | `SEED_ADMIN_PASSWORD` | `Seed__AdminPassword`: Admin-Passwort beim ersten Start | nein |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | `SmtpSettings__Username` / `SmtpSettings__Password` | nein |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google-Login (leer = deaktiviert) | nein |
+| `APP_URL` | Adresse der App im Browser (`NEXTAUTH_URL`); leer = `https://localhost`. Auf einem Server dessen Adresse eintragen, das Zertifikat muss darauf lauten | nein |
 
 Die übrige Konfiguration steht direkt in `docker-compose.yml`:
 

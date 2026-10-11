@@ -87,12 +87,13 @@ services:
     expose:
       - "3000"
     environment:
-      # Browser-seitige Requests laufen über nginx (HTTPS)
-      NEXT_PUBLIC_API_URL: https://localhost
+      # Browser-seitige Requests laufen über nginx (HTTPS).
+      # APP_URL (.env) = Adresse, unter der die App aufgerufen wird; Standard https://localhost
+      NEXT_PUBLIC_API_URL: ${APP_URL:-https://localhost}
       # Server-seitige Requests (Docker-intern, kein nginx)
       INTERNAL_API_URL: http://backend:8080
       # NextAuth-Konfiguration – URL muss mit nginx übereinstimmen
-      NEXTAUTH_URL: https://localhost
+      NEXTAUTH_URL: ${APP_URL:-https://localhost}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET fehlt in .env}
       # Google OAuth (optional – leer lassen, um Google-Login zu deaktivieren)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
