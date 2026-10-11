@@ -21,6 +21,13 @@ DB_USER="postgres"
 DB_NAME="adressverwaltung"
 TARGET_EMAIL="admin@example.com"
 
+# Adresse der App für den Hinweis am Schluss: APP_URL aus der .env im Projektstamm,
+# sonst https://localhost (wie in docker-compose.yml)
+ENV_FILE="$(dirname "$0")/../.env"
+APP_URL=$(grep -E '^APP_URL=' "$ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- || true)
+APP_URL="${APP_URL:-https://localhost}"
+APP_URL="${APP_URL%/}"
+
 # ── Passwort einlesen ────────────────────────────────────────
 if [ -n "$1" ]; then
     NEW_PASSWORD="$1"
@@ -135,5 +142,5 @@ echo ""
 echo "   E-Mail  : $TARGET_EMAIL"
 echo ""
 echo "   Bitte jetzt im Browser einloggen:"
-echo "   https://localhost/login"
+echo "   $APP_URL/login"
 echo ""

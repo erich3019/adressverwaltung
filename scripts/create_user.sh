@@ -27,6 +27,13 @@ DB_CONTAINER="adressverwaltung-db"
 DB_USER="postgres"
 DB_NAME="adressverwaltung"
 
+# Adresse der App für den Hinweis am Schluss: APP_URL aus der .env im Projektstamm,
+# sonst https://localhost (wie in docker-compose.yml)
+ENV_FILE="$(dirname "$0")/../.env"
+APP_URL=$(grep -E '^APP_URL=' "$ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- || true)
+APP_URL="${APP_URL:-https://localhost}"
+APP_URL="${APP_URL%/}"
+
 # ── Argumente oder interaktive Eingabe ───────────────────────
 if [ -n "$1" ] && [ -n "$2" ] && [ -n "$3" ]; then
     NEW_EMAIL="$1"
@@ -194,5 +201,5 @@ echo "   Rolle       : $NEW_ROLE"
 echo "   Erstellt am : $NOW_UTC UTC"
 echo "   Gültig ab   : $TODAY"
 echo ""
-echo "   Login unter: https://localhost/login"
+echo "   Login unter: $APP_URL/login"
 echo ""
