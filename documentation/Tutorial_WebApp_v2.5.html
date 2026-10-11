@@ -2409,7 +2409,7 @@ limit_req_status 429;</code></pre></div>
   <h1 id="kap8h">8. Tests</h1>
 <div class="learning-goals"><h4>Lernziele dieses Kapitels</h4><ul><li>Du kannst die Backend-Tests ausführen.</li><li>Du verstehst, wie ein Integrationstest die API gegen eine echte Datenbank prüft.</li></ul></div>
 <h2 id="kap8-1">8.1 Aufbau</h2>
-<p>Das Projekt <code>backend/AdressverwaltungApi.Tests</code> enthält 77 Integrationstests. Sie starten die API im Speicher (<code>WebApplicationFactory&lt;Program&gt;</code>) und senden echte HTTP-Anfragen. Die Datenbank ist eine PostgreSQL-Instanz, die <strong>Testcontainers</strong> für jeden Testlauf als Wegwerf-Container startet. Der E-Mail-Versand ist durch einen <code>FakeEmailService</code> ersetzt.</p>
+<p>Das Projekt <code>backend/AdressverwaltungApi.Tests</code> enthält 122 Integrationstests. Sie starten die API im Speicher (<code>WebApplicationFactory&lt;Program&gt;</code>) und senden echte HTTP-Anfragen. Die Datenbank ist eine PostgreSQL-Instanz, die <strong>Testcontainers</strong> für jeden Testlauf als Wegwerf-Container startet. Der E-Mail-Versand ist durch einen <code>FakeEmailService</code> ersetzt.</p>
 <div class="code-block"><div class="code-label">Terminal</div><pre><code>cd backend
 dotnet test                                                    # alle Tests (Docker muss laufen)
 dotnet test --filter "FullyQualifiedName~AdressenODataTests"   # eine Testklasse</code></pre></div>
@@ -2448,7 +2448,7 @@ public async Task Register_OhneToken_Liefert401_UndLegtKeinenBenutzerAn()
 }</code></pre></div>
 <table><thead><tr><th>Testklasse</th><th>Prüft</th></tr></thead><tbody><tr><td><code>AdressenODataTests</code></td><td>CRUD, Validierung, Audit-Felder, OData-Abfragen, Benachrichtigung</td></tr><tr><td><code>CitiesODataTests</code></td><td>CRUD und PLZ-Suche</td></tr><tr><td><code>AuthorizationTests</code></td><td>Endpunkte nur mit gültigem Token erreichbar</td></tr><tr><td><code>AuthSecurityTests</code></td><td>Registrierung, Login-Fehler, Audit-Felder nicht fälschbar</td></tr><tr><td><code>HardeningTests</code></td><td>Mitgeschickte Id, Fehlerdetails, <code>no-store</code>, Kontosperre</td></tr><tr><td><code>RolesAndRevocationTests</code></td><td>Rechte der Rollen, Rollenwechsel, Abmeldung, gelöschter Benutzer, Seitengrösse</td></tr><tr><td><code>SettingsTests</code></td><td>Einstellungen lesen und speichern, Akzentfarbe, Recht zum Ändern</td></tr><tr><td><code>MetadataTests</code></td><td><code>$metadata</code> und camelCase</td></tr></tbody></table>
 <div class="box box-info"><div class="box-title">Warum eine echte Datenbank?</div><p>Eine nachgebildete Datenbank verhält sich anders als PostgreSQL – etwa bei Zeitstempeln oder Gross- und Kleinschreibung. Mit Testcontainers laufen die Tests gegen dieselbe Datenbank wie im Betrieb.</p></div>
-<div class="chapter-summary"><h4>Zusammenfassung Kapitel 8</h4><ul><li><code>dotnet test</code> im Ordner <code>backend</code> führt alle 77 Tests aus; Docker muss laufen.</li><li>Die API läuft im Speicher, die Datenbank in einem Wegwerf-Container.</li><li>Das Frontend hat noch keine Tests – eine gute Übung (Anhang C).</li></ul></div>
+<div class="chapter-summary"><h4>Zusammenfassung Kapitel 8</h4><ul><li><code>dotnet test</code> im Ordner <code>backend</code> führt alle 122 Tests aus; Docker muss laufen.</li><li>Die API läuft im Speicher, die Datenbank in einem Wegwerf-Container.</li><li>Das Frontend hat noch keine Tests – eine gute Übung (Anhang C).</li></ul></div>
 </section>
 <section id="kap9">
   <div class="chapter-num">Kapitel 9</div>
