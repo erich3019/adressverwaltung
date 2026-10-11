@@ -226,4 +226,36 @@ Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose r
 
 ---
 
+## 8. Nachtrag vom 11. Oktober 2026: Adresse der App einstellbar, Dokumentation nachgeführt
+
+Die Anwendung wurde erstmals auf einem Server im lokalen Netz in Betrieb genommen. Dabei zeigte sich, dass die Adresse `https://localhost` fest in `docker-compose.yml` stand: Nach der Anmeldung leitete NextAuth auf `localhost` um. Die Adresse ist jetzt über die neue, freiwillige Variable `APP_URL` in `.env` einstellbar. Die Versionsnummer bleibt 2.5.0.
+
+| Bereich | Änderung | Commit |
+| --- | --- | --- |
+| Konfiguration | Neue Variable `APP_URL` in `.env`: Adresse, unter der die App im Browser aufgerufen wird. Sie setzt `NEXTAUTH_URL` und `NEXT_PUBLIC_API_URL` des Frontends. Ohne Wert bleibt es bei `https://localhost`; das Zertifikat in `nginx/ssl` muss auf die Adresse lauten | `e42dc3a` |
+| Hilfsskripte | `create_user.sh` und `reset_password.sh` nennen am Schluss die Login-Adresse aus `APP_URL` statt fest `https://localhost/login` | `209042a` |
+| Sequenzdiagramm | Im Ablauf «Neue Adresse erfassen» fehlte die Prüfung der eindeutigen E-Mail-Adresse aus Abschnitt 7. Neu sind die Schritte 29 bis 31 (Kleinbuchstaben, Abfrage, Antwort) mit einer Notiz zum 409; das Diagramm hat 47 statt 44 Schritte | `7774a6d` |
+| Schulungsunterlage | Schritte 29 bis 31 beschrieben, die folgenden Schritte und alle Verweise um drei verschoben; Texte zum Feld «E-Mail» und zum Bereich `/users` nachgeführt; 15 statt 14 Seiten | `7774a6d` |
+| Tutorial | `docker-compose.yml` und `.env.example` mit `APP_URL` zitiert; Schrittzahl 47; das Sequenzdiagramm in Kapitel 5.7 ist auf die Seitenhöhe begrenzt (es war unten abgeschnitten) | `7774a6d` |
+
+| Datei | Änderung |
+| --- | --- |
+| `docker-compose.yml` | `NEXT_PUBLIC_API_URL` und `NEXTAUTH_URL` als `${APP_URL:-https://localhost}` |
+| `.env.example` | Eintrag `APP_URL` mit Erläuterung |
+| `scripts/create_user.sh`, `scripts/reset_password.sh` | Lesen `APP_URL` aus der `.env` im Projektstamm |
+| `documentation/Sequenzdiagramm.puml` und `.svg` | Schritte 29 bis 31 |
+| `documentation/Schulungsunterlage_Sequenzdiagramm.html`, `.pdf`, PNG zur Adresserfassung | Siehe oben |
+| `documentation/Tutorial_WebApp_v2.5.html` und `.pdf` | Siehe oben |
+| `README.md`, `CLAUDE.md` | `APP_URL` beschrieben; 47 Schritte |
+
+Am Code von Backend und Frontend ändert sich nichts, das Datenbankschema bleibt gleich.
+
+Geprüft auf dem Server (Ubuntu, Docker Compose, `APP_URL` auf die Adresse des Servers gesetzt, Zertifikat von mkcert): Start aller vier Container, Umleitung von Port 80 auf 443, Anmeldung, Adressliste und Einstellungen über den Proxy, 401 ohne Token; Import des PLZ-Verzeichnisses (4073 Einträge); Versand der E-Mail «Neue Adresse erfasst» laut Backend-Log. Lokal: `docker compose config` mit und ohne `APP_URL`; alle Codeblöcke des Tutorials zeilenweise gegen die Quelldateien.
+
+Nicht geprüft: die Seiten auf dem Server in einem Browser (nur mit `curl`), die PLZ-Wertehilfe im Formular auf dem Server, der Eingang der E-Mail im Postfach und der Lauf der beiden geänderten Skripte.
+
+Für eine bestehende Installation unter `https://localhost` ist nichts zu tun. Auf einem Server: `APP_URL` in `.env` eintragen, ein Zertifikat für diese Adresse in `nginx/ssl` ablegen, danach `docker compose up -d`.
+
+---
+
 Restrisiken und akzeptierte Punkte stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 4.
