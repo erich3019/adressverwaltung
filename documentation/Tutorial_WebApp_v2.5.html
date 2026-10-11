@@ -107,6 +107,8 @@
        CODE BLOCKS – VS Code Dark
     ============================================================ */
     .code-block { margin: 0.3cm 0 0.5cm 0; page-break-inside: auto; }
+    /* Block auf der nächsten Seite beginnen, wenn sonst nur seine Überschrift am Seitenende stünde */
+    .code-block.neue-seite { page-break-before: always; }
     .code-label {
       background: #2d2d2d; color: #858585; font-size: 7.5pt;
       font-family: 'Courier New', monospace; padding: 3px 10px;
@@ -455,16 +457,21 @@ SMTP_PASSWORD=
 
 # Google OAuth (optional – leer lassen, um Google-Login zu deaktivieren)
 GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=</code></pre></div>
+GOOGLE_CLIENT_SECRET=
+
+# Adresse, unter der die App im Browser aufgerufen wird (ohne Schrägstrich am Ende).
+# Leer = https://localhost. Auf einem Server z.B. https://192.168.1.10 oder
+# https://adressen.example.ch – das Zertifikat in nginx/ssl muss auf diese Adresse lauten.
+APP_URL=</code></pre></div>
 <div class="code-block"><div class="code-label">Terminal – .env anlegen</div><pre><code>cp .env.example .env
 openssl rand -hex 24      # je ein Wert für POSTGRES_PASSWORD und APP_DB_PASSWORD
 openssl rand -base64 48   # je ein Wert für JWT_KEY und NEXTAUTH_SECRET</code></pre></div>
-<table><thead><tr><th>Variable</th><th>Verwendet für</th><th>Pflicht</th></tr></thead><tbody><tr><td><code>POSTGRES_PASSWORD</code></td><td>Passwort des Superusers <code>postgres</code> (Verwaltung, Hilfsskripte, PLZ-Import)</td><td>ja</td></tr><tr><td><code>APP_DB_PASSWORD</code></td><td>Passwort der Rolle <code>adressverwaltung_app</code>, mit der sich das Backend verbindet; nur Buchstaben und Ziffern</td><td>ja</td></tr><tr><td><code>JWT_KEY</code></td><td>Signaturschlüssel der Backend-Tokens, mindestens 32 Zeichen</td><td>ja</td></tr><tr><td><code>NEXTAUTH_SECRET</code></td><td>Verschlüsselung des Session-Cookies</td><td>ja</td></tr><tr><td><code>SEED_ADMIN_PASSWORD</code></td><td>Passwort des ersten Admin-Benutzers</td><td>nein</td></tr><tr><td><code>SMTP_USERNAME</code>, <code>SMTP_PASSWORD</code></td><td>Zugangsdaten für den Mailversand</td><td>nein</td></tr><tr><td><code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code></td><td>Google-Login</td><td>nein</td></tr></tbody></table>
+<table><thead><tr><th>Variable</th><th>Verwendet für</th><th>Pflicht</th></tr></thead><tbody><tr><td><code>POSTGRES_PASSWORD</code></td><td>Passwort des Superusers <code>postgres</code> (Verwaltung, Hilfsskripte, PLZ-Import)</td><td>ja</td></tr><tr><td><code>APP_DB_PASSWORD</code></td><td>Passwort der Rolle <code>adressverwaltung_app</code>, mit der sich das Backend verbindet; nur Buchstaben und Ziffern</td><td>ja</td></tr><tr><td><code>JWT_KEY</code></td><td>Signaturschlüssel der Backend-Tokens, mindestens 32 Zeichen</td><td>ja</td></tr><tr><td><code>NEXTAUTH_SECRET</code></td><td>Verschlüsselung des Session-Cookies</td><td>ja</td></tr><tr><td><code>SEED_ADMIN_PASSWORD</code></td><td>Passwort des ersten Admin-Benutzers</td><td>nein</td></tr><tr><td><code>SMTP_USERNAME</code>, <code>SMTP_PASSWORD</code></td><td>Zugangsdaten für den Mailversand</td><td>nein</td></tr><tr><td><code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code></td><td>Google-Login</td><td>nein</td></tr><tr><td><code>APP_URL</code></td><td>Adresse, unter der die App im Browser aufgerufen wird; leer = <code>https://localhost</code></td><td>nein</td></tr></tbody></table>
 <div class="box box-warn"><div class="box-title">Platzhalter ersetzen</div><p>Docker Compose bricht mit einer Meldung ab, wenn einer der vier Pflichtwerte fehlt. Das Backend startet ausserdem nicht, wenn <code>JWT_KEY</code> kürzer als 32 Zeichen ist. Der Wert <code>ERSETZEN</code> aus der Vorlage reicht also nicht.</p></div>
 <div class="box box-info"><div class="box-title">Zwei Datenbankbenutzer</div><p>Das Backend arbeitet nicht als Superuser <code>postgres</code>, sondern mit der Rolle <code>adressverwaltung_app</code>. Sie besitzt nur die Datenbank der Anwendung. Angelegt wird sie beim ersten Start mit leerem Volume (<code>db/init/10-app-rolle.sh</code>). Für eine bestehende Datenbank oder nach einem neuen <code>APP_DB_PASSWORD</code> genügt einmal <code>./scripts/create_db_role.sh</code>.</p></div>
 <h3>TLS-Zertifikat mit mkcert</h3>
 <p>nginx braucht ein Zertifikat. Ein selbstsigniertes Zertifikat zeigt der Browser als «nicht sicher» an. <strong>mkcert</strong> legt eine lokale Zertifizierungsstelle an, trägt sie bei Betriebssystem und Browser als vertrauenswürdig ein und stellt damit ein Zertifikat für <code>localhost</code> aus:</p>
-<div class="code-block"><div class="code-label">Terminal – Zertifikat erzeugen</div><pre><code>mkcert -install     # einmalig pro Rechner
+<div class="code-block neue-seite"><div class="code-label">Terminal – Zertifikat erzeugen</div><pre><code>mkcert -install     # einmalig pro Rechner
 mkdir -p nginx/ssl
 mkcert -cert-file nginx/ssl/cert.pem -key-file nginx/ssl/key.pem localhost 127.0.0.1 ::1</code></pre></div>
 <h2 id="kap2-4">2.4 Stack starten</h2>
@@ -1857,8 +1864,8 @@ async function apiFetch(url: string, init: RequestInit = {}): Promise&lt;Respons
 <table><thead><tr><th></th><th>Im Browser</th><th>Auf dem Server</th></tr></thead><tbody><tr><td>Ziel</td><td><code>/api/backend/…</code> (Proxy)</td><td><code>http://backend:8080/…</code> direkt</td></tr><tr><td>Anmeldung</td><td>Session-Cookie und Header <code>x-adressverwaltung</code></td><td><code>Authorization: Bearer …</code> aus <code>getServerSession</code></td></tr><tr><td>Bei 401</td><td><code>signOut</code> – zurück zur Login-Seite</td><td>Fehler an die aufrufende Seite</td></tr></tbody></table>
 <div class="box box-tip"><div class="box-title">Neuer Backend-Bereich?</div><p>Soll der Browser einen neuen Pfad des Backends erreichen, zum Beispiel <code>/berichte</code>, gehört der Bereich in <code>ERLAUBTE_BEREICHE</code> des Proxys.</p></div>
 <h2 id="kap5-7">5.7 Ablauf: Login bis API-Aufruf</h2>
-<p>Das Sequenzdiagramm zeigt den gesamten Ablauf in 44 Schritten. Jeder Schritt ist in der Schulungsunterlage <code>documentation/Schulungsunterlage_Sequenzdiagramm.pdf</code> einzeln erklärt.</p>
-<p><img src="Sequenzdiagramm.svg" style="width:100%"></p>
+<p>Das Sequenzdiagramm zeigt den gesamten Ablauf in 47 Schritten. Jeder Schritt ist in der Schulungsunterlage <code>documentation/Schulungsunterlage_Sequenzdiagramm.pdf</code> einzeln erklärt.</p>
+<p><img src="Sequenzdiagramm.svg" style="display:block; margin:0 auto; max-height:24cm"></p>
 <div class="chapter-summary"><h4>Zusammenfassung Kapitel 5</h4><ul><li>Ein JWT ist signiert, aber lesbar; es enthält Claims und ein Ablaufdatum.</li><li><code>JwtTokenService</code> stellt das Token aus; die JwtBearer-Middleware und <code>TokenUserValidator</code> prüfen es bei jeder Anfrage.</li><li>Rolle und Token-Version stehen in der Datenbank: Die Abmeldung widerruft Tokens, ein Rollenwechsel gilt sofort.</li><li>NextAuth legt das Backend-JWT im verschlüsselten Session-Cookie ab; der Browser sieht es nie.</li><li>Im Browser ruft <code>apiFetch</code> den Proxy <code>/api/backend</code> auf, auf dem Server sendet es das Token direkt als <code>Authorization: Bearer …</code>.</li><li>Sitzung und Token gelten beide 8 Stunden.</li></ul></div>
 </section>
 <section id="kap6">
@@ -2568,12 +2575,13 @@ services:
     expose:
       - "3000"
     environment:
-      # Browser-seitige Requests laufen über nginx (HTTPS)
-      NEXT_PUBLIC_API_URL: https://localhost
+      # Browser-seitige Requests laufen über nginx (HTTPS).
+      # APP_URL aus .env: Adresse der App im Browser (Standard https://localhost)
+      NEXT_PUBLIC_API_URL: ${APP_URL:-https://localhost}
       # Server-seitige Requests (Docker-intern, kein nginx)
       INTERNAL_API_URL: http://backend:8080
       # NextAuth-Konfiguration – URL muss mit nginx übereinstimmen
-      NEXTAUTH_URL: https://localhost
+      NEXTAUTH_URL: ${APP_URL:-https://localhost}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET fehlt in .env}
       # Google OAuth (optional – leer lassen, um Google-Login zu deaktivieren)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

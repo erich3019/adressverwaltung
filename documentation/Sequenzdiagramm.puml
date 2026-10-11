@@ -99,6 +99,16 @@ api -> api : Token-Version vergleichen,\nRolle übernehmen\n(TokenUserValidator)
 
 alt Token gültig
   api -> api : AdressenController.Post\nModelState prüfen, Id verwerfen
+  opt E-Mail-Adresse angegeben
+    api -> api : OnSavingAsync:\nE-Mail in Kleinbuchstaben
+    api -> db : SELECT Adressen WHERE Email\n(andere Adresse mit derselben E-Mail?)
+    db --> api : vergeben: ja / nein
+    note right of api
+      Bereits vergeben: sofort 409 Conflict
+      mit Meldung, das Formular zeigt sie an.
+      Es wird nichts gespeichert.
+    end note
+  end
   api -> api : SaveChangesAsync → ApplyAuditFields\n(CreateDate, CreatedBy, DateFrom)
   api -> db : INSERT INTO Adressen
   db --> api : Id

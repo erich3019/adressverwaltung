@@ -26,7 +26,7 @@ nginx verteilt die Anfragen nach Pfad-Präfix:
 
 ![Sequenzdiagramm](documentation/Sequenzdiagramm.svg)
 
-Jeder der 44 Schritte ist in der Schulungsunterlage `documentation/Schulungsunterlage_Sequenzdiagramm.pdf` erläutert.
+Jeder der 47 Schritte ist in der Schulungsunterlage `documentation/Schulungsunterlage_Sequenzdiagramm.pdf` erläutert.
 
 Den Login mit dem Sperrmechanismus zeigt ein eigenes Diagramm, `documentation/Sequenzdiagramm_Login_Sperre.svg`: Fehlversuche, Sperre nach dem dritten, Sperrkennzeichen und E-Mail, Versuch während der Sperre, Entsperren oder Ablauf, Anmeldung danach. Seine 64 Schritte erläutert `documentation/Schulungsunterlage_Login_Sperre.pdf`.
 
