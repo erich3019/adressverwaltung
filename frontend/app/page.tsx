@@ -144,6 +144,7 @@ export default function AdressenListePage() {
                 <th className="px-4 py-3 text-left font-semibold">Nr.</th>
                 <th className="px-4 py-3 text-left font-semibold">PLZ</th>
                 <th className="px-4 py-3 text-left font-semibold">Ort</th>
+                <th className="px-4 py-3 text-left font-semibold">E-Mail</th>
                 <th className="px-4 py-3 text-left font-semibold">Aktionen</th>
               </tr>
             </thead>
@@ -161,6 +162,16 @@ export default function AdressenListePage() {
                   <td className="px-4 py-3 text-gray-600">{adresse.strassennummer}</td>
                   <td className="px-4 py-3 text-gray-600">{adresse.plz}</td>
                   <td className="px-4 py-3 text-gray-600">{adresse.ort}</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {adresse.email && (
+                      <a
+                        href={`mailto:${adresse.email}`}
+                        className="text-akzent-600 hover:text-akzent-800 hover:underline"
+                      >
+                        {adresse.email}
+                      </a>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-3">
                       <Link

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AdresseCreate } from '@/types/adresse';
 import { City } from '@/types/city';
-import { sucheStaedteNachPlz, PLZ_SUCHE_MIN_LAENGE } from '@/lib/api';
+import { sucheStaedteNachPlz, PLZ_SUCHE_MIN_LAENGE, ApiFehler } from '@/lib/api';
 import Fehlermeldung from '@/components/Fehlermeldung';
 import { inputClass, labelClass, primaryButtonClass } from '@/components/formStyles';
 
@@ -29,6 +29,7 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
   const [strassennummer, setStrassennummer] = useState(initialWerte.strassennummer ?? '');
   const [plz,            setPlz]            = useState(initialWerte.plz            ?? '');
   const [ort,            setOrt]            = useState(initialWerte.ort            ?? '');
+  const [email,          setEmail]          = useState(initialWerte.email          ?? '');
 
   // PLZ-Wertehilfe: Vorschläge aus der Cities-API
   const [vorschlaege,   setVorschlaege]   = useState<City[]>([]);
@@ -87,12 +88,19 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
       strassennummer: strassennummer.trim(),
       plz:            plz.trim(),
       ort:            ort.trim(),
+      // Leeres Feld → null: das Backend lehnt '' als ungültige E-Mail-Adresse ab
+      email:          email.trim() || null,
     };
 
     try {
       await onSubmit(daten);
     } catch (err) {
-      setFehler('Fehler beim Speichern. Bitte versuche es erneut.');
+      // Meldungen des Backends (z.B. «E-Mail-Adresse bereits erfasst») direkt zeigen
+      setFehler(
+        err instanceof ApiFehler && err.meldung
+          ? err.meldung
+          : 'Fehler beim Speichern. Bitte versuche es erneut.'
+      );
       console.error(err);
     } finally {
       setSpeichert(false);
@@ -219,6 +227,20 @@ export default function AdresseForm({ initialWerte = {}, onSubmit, submitLabel }
             className={inputClass}
           />
         </div>
+      </div>
+
+      {/* E-Mail (freiwillig) */}
+      <div>
+        <label className={labelClass}>E-Mail</label>
+        <input
+          name="email"
+          type="email"
+          maxLength={256}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="z.B. anna.meier@example.com"
+          className={inputClass}
+        />
       </div>
 
       <div className="flex gap-3 pt-2">

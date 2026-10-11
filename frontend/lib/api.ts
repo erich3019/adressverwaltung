@@ -172,6 +172,7 @@ function normalizeAdresse(raw: RawEntity): Adresse {
     strassennummer: String(raw['strassennummer']  ?? raw['Strassennummer']  ?? ''),
     plz:            String(raw['plz']             ?? raw['Plz']             ?? ''),
     ort:            String(raw['ort']             ?? raw['Ort']             ?? ''),
+    email:          (raw['email']                 ?? raw['Email']           ?? null) as string | null,
     ...normalizeAuditFields(raw),
   };
 }

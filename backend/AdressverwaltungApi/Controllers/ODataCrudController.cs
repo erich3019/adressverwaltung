@@ -16,6 +16,7 @@ namespace AdressverwaltungApi.Controllers;
 /// Unterklassen definieren:
 ///   - Entities          → welches DbSet verwendet wird
 ///   - EntityDisplayName → für benutzerfreundliche Fehlermeldungen
+///   - OnSavingAsync     → optional: Bereinigung und Prüfung vor dem Speichern
 ///   - OnCreatedAsync    → optional: Folgeaktion nach dem Erstellen
 /// </summary>
 [Authorize]   // Alle abgeleiteten Controller (Adressen, Cities) erfordern gültigen JWT
@@ -68,6 +69,9 @@ public abstract class ODataCrudController<TEntity> : ODataController
         foreach (var name in KeyPropertyNames)
             entry.Property(name).CurrentValue = entry.Property(name).Metadata.Sentinel;
 
+        if (await OnSavingAsync(entity) is { } konflikt)
+            return Conflict(new { message = konflikt });
+
         Entities.Add(entity);
         await _context.SaveChangesAsync();
         await OnCreatedAsync(entity);
@@ -97,6 +101,9 @@ public abstract class ODataCrudController<TEntity> : ODataController
         if (!TryValidateModel(entity))
             return BadRequest(ModelState);
 
+        if (await OnSavingAsync(entity) is { } konflikt)
+            return Conflict(new { message = konflikt });
+
         await _context.SaveChangesAsync();
 
         return Updated(entity);
@@ -115,6 +122,13 @@ public abstract class ODataCrudController<TEntity> : ODataController
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Erweiterungspunkt: wird vor dem Speichern einer neuen oder geänderten Entität aufgerufen.
+    /// Unterklassen bereinigen hier Werte und prüfen, was sich mit DataAnnotations nicht
+    /// ausdrücken lässt. Eine zurückgegebene Meldung bricht mit 409 Conflict ab.
+    /// </summary>
+    protected virtual Task<string?> OnSavingAsync(TEntity entity) => Task.FromResult<string?>(null);
 
     /// <summary>
     /// Erweiterungspunkt: wird nach dem Speichern einer neuen Entität aufgerufen (B-11).

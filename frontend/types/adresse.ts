@@ -12,6 +12,8 @@ export interface Adresse extends AuditFields {
   strassennummer: string;
   plz: string;
   ort: string;
+  /** Freiwillig; null = keine E-Mail-Adresse hinterlegt. */
+  email: string | null;
 }
 
 /** Typ für das Erstellen einer neuen Adresse (siehe CreateOf). */

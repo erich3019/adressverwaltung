@@ -35,4 +35,10 @@ public class Adresse : AuditableEntity
     [Required]
     [MaxLength(100)]
     public string Ort { get; set; } = string.Empty;
+
+    // Freiwillig: Adressen aus früheren Versionen haben keine E-Mail-Adresse.
+    // Eindeutig: Index in AdresseDbContext, Prüfung in AdressenController.
+    [MaxLength(256)]
+    [EmailAddress]
+    public string? Email { get; set; }
 }

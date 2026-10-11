@@ -45,6 +45,7 @@ public class EmailNotificationService : INotificationService
                 Name:    {adresse.Vorname} {adresse.Name}
                 Strasse: {adresse.Strasse} {adresse.Strassennummer}
                 PLZ/Ort: {adresse.Plz} {adresse.Ort}
+                E-Mail:  {(string.IsNullOrWhiteSpace(adresse.Email) ? "–" : adresse.Email)}
                 """;
 
             await _emailService.SendAsync(settings.NotificationEmail, betreff, inhalt);

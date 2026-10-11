@@ -366,8 +366,8 @@
 <h2 id="kap1-1">1.1 Was wird gebaut?</h2>
 <p>Die <strong>Adressverwaltung</strong> ist eine vollständige Webapplikation mit CRUD-Funktionen (Create, Read, Update, Delete). Angemeldete Benutzer erfassen, bearbeiten und löschen Personenadressen. Dazu kommen ein Städteverzeichnis mit allen Schweizer Postleitzahlen, eine PLZ-Wertehilfe im Adressformular, eine Einstellungsseite mit wählbarer Farbe der Oberfläche und eine E-Mail-Benachrichtigung bei neuen Adressen.</p>
 <p>Es gibt zwei Rollen: <code>User</code> pflegt Adressen und Städte, <code>Admin</code> darf zusätzlich Benutzer verwalten und die Einstellungen ändern.</p>
-<p>Eine Adresse besteht aus sechs Fachfeldern:</p>
-<table><thead><tr><th>Feld</th><th>Typ</th><th>Beschreibung</th><th>Beispiel</th></tr></thead><tbody><tr><td><code>vorname</code></td><td>string, max. 100</td><td>Vorname der Person</td><td>Anna</td></tr><tr><td><code>name</code></td><td>string, max. 100</td><td>Nachname der Person</td><td>Meier</td></tr><tr><td><code>strasse</code></td><td>string, max. 200</td><td>Strassenname</td><td>Bahnhofstrasse</td></tr><tr><td><code>strassennummer</code></td><td>string, max. 20</td><td>Hausnummer, auch mit Zusatz</td><td>12a</td></tr><tr><td><code>plz</code></td><td>string, max. 10</td><td>Postleitzahl</td><td>8001</td></tr><tr><td><code>ort</code></td><td>string, max. 100</td><td>Ortsname</td><td>Zürich</td></tr></tbody></table>
+<p>Eine Adresse besteht aus sieben Fachfeldern. Sechs sind Pflichtfelder, die E-Mail-Adresse ist freiwillig:</p>
+<table><thead><tr><th>Feld</th><th>Typ</th><th>Beschreibung</th><th>Beispiel</th></tr></thead><tbody><tr><td><code>vorname</code></td><td>string, max. 100</td><td>Vorname der Person</td><td>Anna</td></tr><tr><td><code>name</code></td><td>string, max. 100</td><td>Nachname der Person</td><td>Meier</td></tr><tr><td><code>strasse</code></td><td>string, max. 200</td><td>Strassenname</td><td>Bahnhofstrasse</td></tr><tr><td><code>strassennummer</code></td><td>string, max. 20</td><td>Hausnummer, auch mit Zusatz</td><td>12a</td></tr><tr><td><code>plz</code></td><td>string, max. 10</td><td>Postleitzahl</td><td>8001</td></tr><tr><td><code>ort</code></td><td>string, max. 100</td><td>Ortsname</td><td>Zürich</td></tr><tr><td><code>email</code></td><td>string, max. 256, freiwillig</td><td>E-Mail-Adresse der Person, eindeutig über alle Adressen; <code>null</code>, wenn keine hinterlegt ist</td><td>anna.meier@example.com</td></tr></tbody></table>
 <p>Jeder Datensatz trägt zusätzlich <strong>Audit-Felder</strong>: wann und von wem er erstellt und zuletzt geändert wurde, sowie einen Gültigkeitszeitraum (<code>dateFrom</code>, <code>dateTo</code>). Diese Felder setzt das Backend selbst; das Frontend sendet sie nie.</p>
 <h2 id="kap1-2">1.2 Lernziele</h2>
 <p>Das Tutorial richtet sich an Lernende im 2. Lehrjahr Informatiker EFZ. Am Ende kannst du:</p>
@@ -530,6 +530,12 @@ CSV_PATH=migration/AMTOVZ_CSV_LV95.csv python3 scripts/import_cities.py
     [Required]
     [MaxLength(100)]
     public string Ort { get; set; } = string.Empty;
+
+    // Freiwillig: Adressen aus früheren Versionen haben keine E-Mail-Adresse.
+    // Eindeutig: Index in AdresseDbContext, Prüfung in AdressenController.
+    [MaxLength(256)]
+    [EmailAddress]
+    public string? Email { get; set; }
 }</code></pre></div>
 <div class="code-block"><div class="code-label">Models/City.cs</div><pre><code>public class City : AuditableEntity
 {
@@ -695,7 +701,7 @@ public override Task&lt;int&gt; SaveChangesAsync(CancellationToken cancellationT
 <div class="box box-warn"><div class="box-title">Der Benutzername kommt aus dem Token</div><p>Massgebend ist allein der Name aus dem geprüften JWT. Ein frei setzbarer Request-Header wird bewusst nicht gelesen, sonst liessen sich <code>CreatedBy</code> und <code>ChangedBy</code> fälschen. Controller setzen die Audit-Felder nie selbst.</p></div>
 <div class="box box-info"><div class="box-title">Kind=Unspecified</div><p>Die Zeitstempel liegen in Spalten vom Typ <code>timestamp without time zone</code>. Npgsql lehnt dafür Werte mit <code>Kind=Utc</code> ab, deshalb setzt <code>ApplyAuditFields</code> die Art ausdrücklich auf <code>Unspecified</code>.</p></div>
 <h2 id="kap3-3">3.3 AdresseDbContext</h2>
-<p>Der Kontext kennt die vier Tabellen und konfiguriert, was sich nicht über DataAnnotations ausdrücken lässt: die Audit-Spalten, die Tabellennamen, zwei Indizes und die Standardwerte für <code>Role</code>, <code>TokenVersion</code> und <code>AccentColor</code>.</p>
+<p>Der Kontext kennt die vier Tabellen und konfiguriert, was sich nicht über DataAnnotations ausdrücken lässt: die Audit-Spalten, die Tabellennamen, drei Indizes und die Standardwerte für <code>Role</code>, <code>TokenVersion</code> und <code>AccentColor</code>.</p>
 <div class="code-block"><div class="code-label">Data/AdresseDbContext.cs – OnModelCreating</div><pre><code>protected override void OnModelCreating(ModelBuilder modelBuilder)
 {
     base.OnModelCreating(modelBuilder);
@@ -738,7 +744,13 @@ public override Task&lt;int&gt; SaveChangesAsync(CancellationToken cancellationT
 
     // B-12: Pflichtfelder und Längen stehen als DataAnnotations an den Modellen (B-07).
     // Hier folgt nur, was sich dort nicht ausdrücken lässt: Tabellennamen und Indizes.
-    modelBuilder.Entity&lt;Adresse&gt;().ToTable("Adressen");
+    modelBuilder.Entity&lt;Adresse&gt;(entity =&gt;
+    {
+        entity.ToTable("Adressen");
+
+        // E-Mail muss eindeutig sein; Adressen ohne E-Mail (NULL) sind beliebig oft erlaubt
+        entity.HasIndex(a =&gt; a.Email).IsUnique();
+    });
 
     modelBuilder.Entity&lt;City&gt;(entity =&gt;
     {
@@ -861,6 +873,16 @@ using (var scope = app.Services.CreateScope())
         // Sperrkennzeichen: Ende der Anmeldesperre nach Fehlversuchen (leer = nicht gesperrt)
         db.Database.ExecuteSqlRaw("""
             ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "LockedUntil" timestamp without time zone NULL;
+            """);
+
+        // E-Mail-Adresse einer Adresse (freiwillig, leer = keine)
+        db.Database.ExecuteSqlRaw("""
+            ALTER TABLE "Adressen" ADD COLUMN IF NOT EXISTS "Email" character varying(256) NULL;
+            """);
+
+        // Eindeutige E-Mail-Adresse: mehrere Adressen ohne E-Mail (NULL) bleiben erlaubt
+        db.Database.ExecuteSqlRaw("""
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_Adressen_Email" ON "Adressen" ("Email");
             """);
 
         // Akzentfarbe der Oberfläche
@@ -1001,6 +1023,9 @@ public abstract class ODataCrudController&lt;TEntity&gt; : ODataController
         foreach (var name in KeyPropertyNames)
             entry.Property(name).CurrentValue = entry.Property(name).Metadata.Sentinel;
 
+        if (await OnSavingAsync(entity) is { } konflikt)
+            return Conflict(new { message = konflikt });
+
         Entities.Add(entity);
         await _context.SaveChangesAsync();
         await OnCreatedAsync(entity);
@@ -1030,6 +1055,9 @@ public abstract class ODataCrudController&lt;TEntity&gt; : ODataController
         if (!TryValidateModel(entity))
             return BadRequest(ModelState);
 
+        if (await OnSavingAsync(entity) is { } konflikt)
+            return Conflict(new { message = konflikt });
+
         await _context.SaveChangesAsync();
 
         return Updated(entity);
@@ -1048,6 +1076,13 @@ public abstract class ODataCrudController&lt;TEntity&gt; : ODataController
 
         return NoContent();
     }
+
+    /// &lt;summary&gt;
+    /// Erweiterungspunkt: wird vor dem Speichern einer neuen oder geänderten Entität aufgerufen.
+    /// Unterklassen bereinigen hier Werte und prüfen, was sich mit DataAnnotations nicht
+    /// ausdrücken lässt. Eine zurückgegebene Meldung bricht mit 409 Conflict ab.
+    /// &lt;/summary&gt;
+    protected virtual Task&lt;string?&gt; OnSavingAsync(TEntity entity) =&gt; Task.FromResult&lt;string?&gt;(null);
 
     /// &lt;summary&gt;
     /// Erweiterungspunkt: wird nach dem Speichern einer neuen Entität aufgerufen (B-11).
@@ -1070,11 +1105,13 @@ public abstract class ODataCrudController&lt;TEntity&gt; : ODataController
 
     public CitiesController(AdresseDbContext context) : base(context) { }
 }</code></pre></div>
-<p>Der <code>AdressenController</code> braucht zusätzlich die Benachrichtigung. Er kopiert dafür nicht die <code>Post</code>-Methode, sondern hängt sich an den Erweiterungspunkt <code>OnCreatedAsync</code>:</p>
+<p>Der <code>AdressenController</code> braucht zusätzlich zwei Dinge: Die E-Mail-Adresse einer Adresse muss eindeutig sein, und eine neue Adresse löst die Benachrichtigung aus. Er kopiert dafür weder <code>Post</code> noch <code>Patch</code>, sondern hängt sich an die Erweiterungspunkte <code>OnSavingAsync</code> und <code>OnCreatedAsync</code>:</p>
 <div class="code-block"><div class="code-label">Controllers/AdressenController.cs</div><pre><code>public class AdressenController : ODataCrudController&lt;Adresse&gt;
 {
     protected override DbSet&lt;Adresse&gt; Entities    =&gt; _context.Adressen;
     protected override string EntityDisplayName   =&gt; "Adresse";
+
+    private const string EmailVergebenMessage = "Diese E-Mail-Adresse ist bereits bei einer anderen Adresse erfasst.";
 
     private readonly INotificationService _notificationService;
 
@@ -1085,9 +1122,25 @@ public abstract class ODataCrudController&lt;TEntity&gt; : ODataController
         _notificationService = notificationService;
     }
 
+    // Die E-Mail-Adresse ist eindeutig, ohne Rücksicht auf Gross- und Kleinschreibung:
+    // gespeichert wird sie deshalb wie bei den Benutzern in Kleinbuchstaben.
+    protected override async Task&lt;string?&gt; OnSavingAsync(Adresse adresse)
+    {
+        if (adresse.Email is null)
+            return null;
+
+        adresse.Email = adresse.Email.Trim().ToLowerInvariant();
+
+        var vergeben = await _context.Adressen
+            .AnyAsync(a =&gt; a.Email == adresse.Email &amp;&amp; a.Id != adresse.Id);
+
+        return vergeben ? EmailVergebenMessage : null;
+    }
+
     protected override Task OnCreatedAsync(Adresse adresse)
         =&gt; _notificationService.NotifyNewAdresseAsync(adresse);
 }</code></pre></div>
+<div class="box box-info"><div class="box-title">Zwei Sicherungen für die eindeutige E-Mail-Adresse</div><p>Die Prüfung im Controller liefert eine verständliche Antwort: 409 mit einer Meldung, die das Formular anzeigt. Der eindeutige Index in der Datenbank ist die eigentliche Garantie – er gilt auch für Skripte mit eigenem SQL und für zwei Anfragen, die gleichzeitig eintreffen. Adressen ohne E-Mail-Adresse (<code>NULL</code>) betrifft er nicht.</p></div>
 <div class="box box-tip"><div class="box-title">Neue Entität über OData anbieten</div><p>Vier Schritte: Modell anlegen, <code>DbSet</code> im <code>AdresseDbContext</code> ergänzen, <code>modelBuilder.EntitySet&lt;T&gt;("Name")</code> in <code>Program.cs</code> eintragen und einen Controller schreiben, dessen Name zum EntitySet passt.</p></div>
 <h2 id="kap4-4">4.4 AuthController – Login, Registrierung und Abmeldung</h2>
 <div class="code-block"><div class="code-label">Dtos/AuthDtos.cs</div><pre><code>/// &lt;summary&gt;Request-Body für POST /auth/register&lt;/summary&gt;
@@ -1394,6 +1447,7 @@ public async Task&lt;IActionResult&gt; Logout()
             Name:    {adresse.Vorname} {adresse.Name}
             Strasse: {adresse.Strasse} {adresse.Strassennummer}
             PLZ/Ort: {adresse.Plz} {adresse.Ort}
+            E-Mail:  {(string.IsNullOrWhiteSpace(adresse.Email) ? "–" : adresse.Email)}
             """;
 
         await _emailService.SendAsync(settings.NotificationEmail, betreff, inhalt);
@@ -2102,6 +2156,8 @@ export interface Adresse extends AuditFields {
   strassennummer: string;
   plz: string;
   ort: string;
+  /** Freiwillig; null = keine E-Mail-Adresse hinterlegt. */
+  email: string | null;
 }
 
 /** Typ für das Erstellen einer neuen Adresse (siehe CreateOf). */

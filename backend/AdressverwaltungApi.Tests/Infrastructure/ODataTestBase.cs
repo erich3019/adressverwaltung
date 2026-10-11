@@ -57,7 +57,8 @@ public abstract class ODataTestBase : IAsyncLifetime
         string vorname = "Max",
         string name = "Muster",
         string ort = "Baar",
-        string plz = "6340") => new
+        string plz = "6340",
+        string? email = null) => new
     {
         vorname,
         name,
@@ -65,5 +66,6 @@ public abstract class ODataTestBase : IAsyncLifetime
         strassennummer = "99",
         plz,
         ort,
+        email,
     };
 }

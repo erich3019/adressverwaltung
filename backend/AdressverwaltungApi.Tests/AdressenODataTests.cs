@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using AdressverwaltungApi.Models;
 using AdressverwaltungApi.Tests.Infrastructure;
 
@@ -195,6 +197,85 @@ public class AdressenODataTests : ODataTestBase
         Assert.Empty(await GetListAsync("/odata/Adressen"));
     }
 
+    // ── POST: E-Mail-Adresse der Adresse ────────────────────────────────────
+
+    [Fact]
+    public async Task Post_MitEmail_SpeichertEmail()
+    {
+        var erstellt = await CreateAsync("Adressen", NeueAdresse(email: "anna.meier@example.com"));
+        var id = erstellt.GetProperty("id").GetInt32();
+
+        var adresse = await GetJsonAsync($"/odata/Adressen({id})");
+
+        Assert.Equal("anna.meier@example.com", adresse.GetProperty("email").GetString());
+    }
+
+    [Fact]
+    public async Task Post_OhneEmail_SpeichertNull()
+    {
+        var erstellt = await CreateAsync("Adressen", NeueAdresse());
+
+        Assert.Equal(JsonValueKind.Null, erstellt.GetProperty("email").ValueKind);
+    }
+
+    [Fact]
+    public async Task Post_UngueltigeEmail_Liefert400()
+    {
+        var response = await Client.PostAsJsonAsync("/odata/Adressen", NeueAdresse(email: "keine-adresse"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await GetListAsync("/odata/Adressen"));
+    }
+
+    [Fact]
+    public async Task Post_VergebeneEmail_Liefert409()
+    {
+        await CreateAsync("Adressen", NeueAdresse(name: "Meier", email: "anna.meier@example.com"));
+
+        // Gross- und Kleinschreibung unterscheidet zwei Adressen nicht
+        var response = await Client.PostAsJsonAsync("/odata/Adressen",
+            NeueAdresse(name: "Huber", email: "Anna.Meier@Example.com"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("E-Mail-Adresse", body.GetProperty("message").GetString());
+        Assert.Single(await GetListAsync("/odata/Adressen"));
+    }
+
+    [Fact]
+    public async Task Post_Email_WirdInKleinbuchstabenGespeichert()
+    {
+        var erstellt = await CreateAsync("Adressen", NeueAdresse(email: " Anna.Meier@Example.com "));
+
+        Assert.Equal("anna.meier@example.com", erstellt.GetProperty("email").GetString());
+    }
+
+    [Fact]
+    public async Task Post_MehrereAdressenOhneEmail_SindErlaubt()
+    {
+        await CreateAsync("Adressen", NeueAdresse(name: "Meier"));
+        await CreateAsync("Adressen", NeueAdresse(name: "Huber"));
+
+        Assert.Equal(2, (await GetListAsync("/odata/Adressen")).Count);
+    }
+
+    [Fact]
+    public async Task Email_IstInDerDatenbankEindeutig()
+    {
+        await CreateAsync("Adressen", NeueAdresse(email: "anna.meier@example.com"));
+
+        // Am Controller vorbei: der eindeutige Index weist die zweite Zeile ab
+        await Assert.ThrowsAsync<DbUpdateException>(() => Factory.WithDbContextAsync(async db =>
+        {
+            db.Adressen.Add(new Adresse
+            {
+                Vorname = "Max", Name = "Muster", Strasse = "Dorfstrasse", Strassennummer = "1",
+                Plz = "6340", Ort = "Baar", Email = "anna.meier@example.com",
+            });
+            await db.SaveChangesAsync();
+        }));
+    }
+
     // ── POST: E-Mail-Benachrichtigung ───────────────────────────────────────
 
     [Fact]
@@ -281,6 +362,64 @@ public class AdressenODataTests : ODataTestBase
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var adresse = await GetJsonAsync($"/odata/Adressen({id})");
         Assert.Equal("6340", adresse.GetProperty("plz").GetString());
+    }
+
+    [Fact]
+    public async Task Patch_Email_SetztUndEntferntEmail()
+    {
+        var erstellt = await CreateAsync("Adressen", NeueAdresse());
+        var id = erstellt.GetProperty("id").GetInt32();
+
+        var gesetzt = await Client.PatchAsJsonAsync($"/odata/Adressen({id})", new { email = "max@example.com" });
+
+        Assert.True(gesetzt.IsSuccessStatusCode, $"Status: {gesetzt.StatusCode}");
+        var adresse = await GetJsonAsync($"/odata/Adressen({id})");
+        Assert.Equal("max@example.com", adresse.GetProperty("email").GetString());
+
+        var entfernt = await Client.PatchAsJsonAsync($"/odata/Adressen({id})", new { email = (string?)null });
+
+        Assert.True(entfernt.IsSuccessStatusCode, $"Status: {entfernt.StatusCode}");
+        adresse = await GetJsonAsync($"/odata/Adressen({id})");
+        Assert.Equal(JsonValueKind.Null, adresse.GetProperty("email").ValueKind);
+    }
+
+    [Fact]
+    public async Task Patch_UngueltigeEmail_Liefert400_UndAendertNichts()
+    {
+        var erstellt = await CreateAsync("Adressen", NeueAdresse(email: "max@example.com"));
+        var id = erstellt.GetProperty("id").GetInt32();
+
+        var response = await Client.PatchAsJsonAsync($"/odata/Adressen({id})", new { email = "keine-adresse" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var adresse = await GetJsonAsync($"/odata/Adressen({id})");
+        Assert.Equal("max@example.com", adresse.GetProperty("email").GetString());
+    }
+
+    [Fact]
+    public async Task Patch_VergebeneEmail_Liefert409_UndAendertNichts()
+    {
+        await CreateAsync("Adressen", NeueAdresse(name: "Meier", email: "anna.meier@example.com"));
+        var erstellt = await CreateAsync("Adressen", NeueAdresse(name: "Huber", email: "max@example.com"));
+        var id = erstellt.GetProperty("id").GetInt32();
+
+        var response = await Client.PatchAsJsonAsync($"/odata/Adressen({id})", new { email = "anna.meier@example.com" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var adresse = await GetJsonAsync($"/odata/Adressen({id})");
+        Assert.Equal("max@example.com", adresse.GetProperty("email").GetString());
+    }
+
+    [Fact]
+    public async Task Patch_EigeneEmailUnveraendert_IstErlaubt()
+    {
+        var erstellt = await CreateAsync("Adressen", NeueAdresse(email: "max@example.com"));
+        var id = erstellt.GetProperty("id").GetInt32();
+
+        var response = await Client.PatchAsJsonAsync($"/odata/Adressen({id})",
+            new { ort = "Winterthur", email = "max@example.com" });
+
+        Assert.True(response.IsSuccessStatusCode, $"Status: {response.StatusCode}");
     }
 
     [Fact]

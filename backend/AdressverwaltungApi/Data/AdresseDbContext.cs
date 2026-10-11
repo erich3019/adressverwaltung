@@ -129,7 +129,13 @@ public class AdresseDbContext : DbContext
 
         // B-12: Pflichtfelder und Längen stehen als DataAnnotations an den Modellen (B-07).
         // Hier folgt nur, was sich dort nicht ausdrücken lässt: Tabellennamen und Indizes.
-        modelBuilder.Entity<Adresse>().ToTable("Adressen");
+        modelBuilder.Entity<Adresse>(entity =>
+        {
+            entity.ToTable("Adressen");
+
+            // E-Mail muss eindeutig sein; Adressen ohne E-Mail (NULL) sind beliebig oft erlaubt
+            entity.HasIndex(a => a.Email).IsUnique();
+        });
 
         modelBuilder.Entity<City>(entity =>
         {

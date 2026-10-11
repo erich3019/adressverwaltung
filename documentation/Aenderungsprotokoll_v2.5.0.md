@@ -188,4 +188,42 @@ Die Schulungsunterlage erklärt jeden Schritt mit «Was passiert», «Im Code» 
 
 Am Code ändert sich nichts.
 
+---
+
+## 7. Nachtrag vom 11. Oktober 2026: Feld «E-Mail» an der Adresse
+
+Eine Adresse hat neu ein siebtes Fachfeld `email`. Es ist freiwillig; Adressen, die es schon gab, bleiben ohne E-Mail-Adresse. Eine E-Mail-Adresse darf nur bei einer einzigen Adresse stehen, ohne Rücksicht auf Gross- und Kleinschreibung; Adressen ohne E-Mail-Adresse gibt es beliebig viele. Die Versionsnummer bleibt 2.5.0.
+
+| Bereich | Änderung |
+| --- | --- |
+| Datenbank | Neue Spalte `Adressen.Email` (`character varying(256)`, leer erlaubt) mit dem eindeutigen Index `IX_Adressen_Email`. Das Backend ergänzt beides beim Start selbst (`SchemaUpgrader`) |
+| API | `email` in `/odata/Adressen` lesen, setzen (`POST`, `PATCH`) und mit `null` entfernen; als Feld in `$filter`, `$orderby` und `$select` verwendbar. Ein Wert, der keine E-Mail-Adresse ist, oder mehr als 256 Zeichen: 400. Gespeichert wird die Adresse ohne Leerzeichen am Rand und in Kleinbuchstaben. Steht sie schon bei einer anderen Adresse: 409 mit einer Meldung |
+| Formular | Neues Eingabefeld «E-Mail» ohne Pflichtstern; der Browser prüft die Form der Adresse. Ein leeres Feld wird als `null` gesendet. Die Meldung des Backends zu einer bereits erfassten E-Mail-Adresse erscheint im Formular |
+| Adressliste | Neue Spalte «E-Mail»; die Adresse ist ein `mailto:`-Link |
+| Benachrichtigung | Die E-Mail «Neue Adresse erfasst» nennt zusätzlich die E-Mail-Adresse («–», wenn keine erfasst ist) |
+
+| Datei | Änderung |
+| --- | --- |
+| `backend/AdressverwaltungApi/Models/Adresse.cs` | Eigenschaft `Email` mit `[MaxLength(256)]` und `[EmailAddress]` |
+| `backend/AdressverwaltungApi/Data/AdresseDbContext.cs` | Eindeutiger Index auf `Email` |
+| `backend/AdressverwaltungApi/SchemaUpgrader.cs` | Spalte `Email` und den Index in einer bestehenden Datenbank nachziehen |
+| `backend/AdressverwaltungApi/Controllers/ODataCrudController.cs` | Neuer Erweiterungspunkt `OnSavingAsync` vor dem Speichern in `Post` und `Patch`; eine Meldung führt zu 409 |
+| `backend/AdressverwaltungApi/Controllers/AdressenController.cs` | `OnSavingAsync`: E-Mail-Adresse in Kleinbuchstaben, Prüfung auf eine andere Adresse mit derselben E-Mail-Adresse |
+| `backend/AdressverwaltungApi/Services/EmailNotificationService.cs` | Zeile «E-Mail» in der Benachrichtigung |
+| `frontend/types/adresse.ts`, `frontend/lib/api.ts` | Feld `email` im Typ und in `normalizeAdresse` |
+| `frontend/components/AdresseForm.tsx` | Eingabefeld «E-Mail»; zeigt die Meldung des Backends |
+| `frontend/app/page.tsx` | Spalte «E-Mail» in der Adressliste |
+| `backend/AdressverwaltungApi.Tests/` | 11 neue Tests (122 statt 111) |
+| `CLAUDE.md`, `documentation/Tutorial_WebApp_v2.5.html` und `.pdf` | Feld nachgeführt |
+
+Geprüft: alle 122 Backend-Tests; im Browser (Chromium ohne Oberfläche) das Formular «Neue Adresse», das Setzen und Entfernen der E-Mail-Adresse über «Bearbeiten», die Anzeige in der Adressliste und die Meldung bei einer bereits erfassten E-Mail-Adresse; die neue Spalte und der Index in der bestehenden Datenbank.
+
+Nicht geprüft: das Anlegen einer Adresse mit E-Mail-Adresse über die Oberfläche (nur über die Tests) und die Benachrichtigung mit der neuen Zeile im Postfach.
+
+Enthält eine bestehende Datenbank dieselbe E-Mail-Adresse bei zwei Adressen, lässt sich der Index nicht anlegen und das Backend startet nicht; die doppelten Werte sind dann zuerst zu bereinigen.
+
+Nach dem Aktualisieren: `docker compose up --build -d`, danach `docker compose restart nginx`.
+
+---
+
 Restrisiken und akzeptierte Punkte stehen in `documentation/Sicherheitsbericht.pdf`, Abschnitt 4.

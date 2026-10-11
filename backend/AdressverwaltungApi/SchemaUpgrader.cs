@@ -35,6 +35,16 @@ public static class SchemaUpgrader
             ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "LockedUntil" timestamp without time zone NULL;
             """);
 
+        // E-Mail-Adresse einer Adresse (freiwillig, leer = keine)
+        db.Database.ExecuteSqlRaw("""
+            ALTER TABLE "Adressen" ADD COLUMN IF NOT EXISTS "Email" character varying(256) NULL;
+            """);
+
+        // Eindeutige E-Mail-Adresse: mehrere Adressen ohne E-Mail (NULL) bleiben erlaubt
+        db.Database.ExecuteSqlRaw("""
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_Adressen_Email" ON "Adressen" ("Email");
+            """);
+
         // Akzentfarbe der Oberfläche
         db.Database.ExecuteSqlRaw("""
             ALTER TABLE "Settings" ADD COLUMN IF NOT EXISTS "AccentColor" character varying(20) NOT NULL DEFAULT 'blue';
